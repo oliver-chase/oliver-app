@@ -2,16 +2,22 @@
 import { useRef } from 'react'
 import { today, newId, upsertBackground } from '@/lib/db'
 import type { AppState, Account, Background } from '@/types'
+import ActionsSection from './ActionsSection'
+import OpportunitiesSection from './OpportunitiesSection'
+import ProjectsSection from './ProjectsSection'
+import PeopleSection from './PeopleSection'
+import NotesSection from './NotesSection'
 
 interface Props {
   accountId: string
   data: AppState
+  setData: React.Dispatch<React.SetStateAction<AppState>>
   onUpdateAccount: (account: Account) => void
   onArchive: () => void
   onDelete: () => void
 }
 
-export default function AccountView({ accountId, data, onUpdateAccount, onArchive, onDelete }: Props) {
+export default function AccountView({ accountId, data, setData, onUpdateAccount, onArchive, onDelete }: Props) {
   const acct = data.accounts.find(a => a.account_id === accountId)
   if (!acct) return null
 
@@ -43,42 +49,42 @@ export default function AccountView({ accountId, data, onUpdateAccount, onArchiv
         <div className="app-section-header">
           <div className="app-section-title">Overview</div>
         </div>
-        <OverviewSection accountId={accountId} data={data} />
+        <OverviewSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="people" className="section">
         <div className="app-section-header">
           <div className="app-section-title">People</div>
         </div>
-        <div className="section-placeholder">People section coming soon</div>
+        <PeopleSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="actions" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Actions</div>
         </div>
-        <div className="section-placeholder">Actions section coming soon</div>
+        <ActionsSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="opportunities" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Opportunities</div>
         </div>
-        <div className="section-placeholder">Opportunities section coming soon</div>
+        <OpportunitiesSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="projects" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Projects</div>
         </div>
-        <div className="section-placeholder">Projects section coming soon</div>
+        <ProjectsSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="notes" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Notes</div>
         </div>
-        <div className="section-placeholder">Notes section coming soon</div>
+        <NotesSection accountId={accountId} data={data} setData={setData} />
       </div>
     </div>
   )
@@ -110,7 +116,7 @@ function ContentEditable({ className, value, ariaLabel, onSave }: {
   )
 }
 
-function OverviewSection({ accountId, data }: { accountId: string; data: AppState }) {
+function OverviewSection({ accountId, data, setData }: { accountId: string; data: AppState; setData: React.Dispatch<React.SetStateAction<AppState>> }) {
   let bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
 
   const ensureBg = (): Background => {
@@ -129,6 +135,15 @@ function OverviewSection({ accountId, data }: { accountId: string; data: AppStat
 
   const saveBgField = async (field: keyof Background, value: string) => {
     const b = { ...ensureBg(), [field]: value, last_updated: today() }
+    setData(prev => {
+      const exists = prev.background.some(x => x.background_id === b.background_id)
+      return {
+        ...prev,
+        background: exists
+          ? prev.background.map(x => x.background_id === b.background_id ? b : x)
+          : [...prev.background, b],
+      }
+    })
     await upsertBackground(b)
   }
 
@@ -162,7 +177,7 @@ function OverviewStat({ label, value, placeholder, onSave }: {
       <div className="overview-stat-label">{label}</div>
       <div
         ref={ref}
-        className={`overview-stat-val${!value ? ' faded' : ''}`}
+        className={'overview-stat-val' + (!value ? ' faded' : '')}
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
@@ -193,7 +208,7 @@ function OverviewTextArea({ label, value, placeholder, onSave }: {
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
-        className={`overview-text-body${!value ? ' faded' : ''}`}
+        className={'overview-text-body' + (!value ? ' faded' : '')}
         onFocus={() => { if (!value && ref.current) { ref.current.textContent = ''; ref.current.classList.remove('faded') } }}
         onBlur={() => {
           const v = ref.current?.textContent?.trim() || ''

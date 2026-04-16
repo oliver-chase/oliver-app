@@ -8,7 +8,7 @@ import AccountView from './AccountView'
 import type { Account } from '@/types'
 
 export default function AccountsApp() {
-  const { data, loading, error, syncState, saveAccount, addAccount } = useAccountsData()
+  const { data, setData, loading, error, syncState, saveAccount, addAccount } = useAccountsData()
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -91,6 +91,7 @@ export default function AccountsApp() {
             <AccountView
               accountId={currentAccountId}
               data={data}
+              setData={setData}
               onUpdateAccount={handleUpdateAccount}
               onArchive={() => {
                 const acct = currentAccount
