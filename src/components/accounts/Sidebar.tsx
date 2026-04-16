@@ -89,7 +89,9 @@ function SidebarAccount({ account, active, onSelect, onRename }: {
         aria-label="Account name"
         role="textbox"
         onMouseDown={e => e.stopPropagation()}
+        onFocus={() => { if (spanRef.current) spanRef.current.style.background = 'var(--color-bg-sidebar-focus)' }}
         onBlur={() => {
+          if (spanRef.current) spanRef.current.style.background = ''
           const v = spanRef.current?.textContent?.trim() || ''
           if (v && v !== account.account_name) onRename(v)
           else if (spanRef.current) spanRef.current.textContent = account.account_name
