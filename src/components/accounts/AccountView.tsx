@@ -24,18 +24,20 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
   const isArchived = acct.status === 'Archived'
 
   return (
-    <div>
+    <div id="account-content">
       <div className="account-header-row">
         <div>
           <ContentEditable
+            id="account-name-heading"
             className="account-name-heading"
+            title="Click to edit account name"
             value={acct.account_name}
             ariaLabel="Account name"
             onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
           />
           <div className="page-last-updated" id="page-last-updated" />
         </div>
-        <div className="account-header-actions">
+        <div className="account-header-actions" id="account-header-actions">
           <button className="btn-acct-action" onClick={onArchive}>
             {isArchived ? 'Unarchive Account' : 'Archive Account'}
           </button>
@@ -75,8 +77,10 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
   )
 }
 
-function ContentEditable({ className, value, ariaLabel, onSave }: {
+function ContentEditable({ id, className, title, value, ariaLabel, onSave }: {
+  id?: string
   className?: string
+  title?: string
   value: string
   ariaLabel?: string
   onSave: (v: string) => void
@@ -85,7 +89,9 @@ function ContentEditable({ className, value, ariaLabel, onSave }: {
   return (
     <div
       ref={ref}
+      id={id}
       className={className}
+      title={title}
       contentEditable
       suppressContentEditableWarning
       aria-label={ariaLabel}
@@ -136,14 +142,14 @@ function OverviewSection({ accountId, data, setData }: { accountId: string; data
 
   return (
     <div>
-      <div className="overview-stats">
+      <div className="overview-stats" id="overview-stats">
         <OverviewStat label="Account Tier" value={b.account_tier} placeholder="Growth" onSave={v => saveBgField('account_tier', v)} />
         <OverviewStat label="Account Director" value={b.account_director} placeholder="Name" onSave={v => saveBgField('account_director', v)} />
         <OverviewStat label="Account Manager" value={b.account_manager} placeholder="Name" onSave={v => saveBgField('account_manager', v)} />
         <OverviewStat label="Account Team" value={b.account_team} placeholder="Names (semicolon separated)" onSave={v => saveBgField('account_team', v)} />
         <OverviewStat label="Next Meeting" value={b.next_meeting} placeholder="Date or description" onSave={v => saveBgField('next_meeting', v)} />
       </div>
-      <div className="overview-grid">
+      <div className="overview-grid" id="overview-grid">
         <OverviewTextArea label="Overview" value={b.overview} placeholder="Account overview..." onSave={v => saveBgField('overview', v)} />
         <OverviewTextArea label="Strategic Context" value={b.strategic_context} placeholder="Strategic context..." onSave={v => saveBgField('strategic_context', v)} />
         <OverviewTextArea label="Key Dates" value={b.key_dates} placeholder="Key dates..." onSave={v => saveBgField('key_dates', v)} />
