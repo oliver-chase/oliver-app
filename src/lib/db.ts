@@ -10,50 +10,50 @@ async function fetchTable<T>(table: string): Promise<T[]> {
 export async function loadAllData() {
   const [accounts, engagements, stakeholders, actions, notes, opportunities, projects, background] =
     await Promise.all([
-      fetchTable<Account>('Accounts'),
-      fetchTable<Engagement>('Engagements'),
-      fetchTable<Stakeholder>('Stakeholders'),
-      fetchTable<Action>('Actions'),
-      fetchTable<Note>('Notes'),
-      fetchTable<Opportunity>('Opportunities'),
-      fetchTable<Project>('Projects'),
-      fetchTable<Background>('Background'),
+      fetchTable<Account>('accounts'),
+      fetchTable<Engagement>('engagements'),
+      fetchTable<Stakeholder>('stakeholders'),
+      fetchTable<Action>('actions'),
+      fetchTable<Note>('notes'),
+      fetchTable<Opportunity>('opportunities'),
+      fetchTable<Project>('projects'),
+      fetchTable<Background>('background'),
     ])
   return { accounts, engagements, stakeholders, actions, notes, opportunities, projects, background }
 }
 
 export async function upsertAccount(account: Account) {
-  const { error } = await supabase.from('Accounts').upsert(account, { onConflict: 'account_id' })
+  const { error } = await supabase.from('accounts').upsert(account, { onConflict: 'account_id' })
   if (error) throw error
 }
 
 export async function upsertBackground(bg: Background) {
-  const { error } = await supabase.from('Background').upsert(bg, { onConflict: 'background_id' })
+  const { error } = await supabase.from('background').upsert(bg, { onConflict: 'background_id' })
   if (error) throw error
 }
 
 export async function upsertStakeholder(s: Stakeholder) {
-  const { error } = await supabase.from('Stakeholders').upsert(s, { onConflict: 'stakeholder_id' })
+  const { error } = await supabase.from('stakeholders').upsert(s, { onConflict: 'stakeholder_id' })
   if (error) throw error
 }
 
 export async function upsertAction(a: Action) {
-  const { error } = await supabase.from('Actions').upsert(a, { onConflict: 'action_id' })
+  const { error } = await supabase.from('actions').upsert(a, { onConflict: 'action_id' })
   if (error) throw error
 }
 
 export async function upsertNote(n: Note) {
-  const { error } = await supabase.from('Notes').upsert(n, { onConflict: 'note_id' })
+  const { error } = await supabase.from('notes').upsert(n, { onConflict: 'note_id' })
   if (error) throw error
 }
 
 export async function upsertOpportunity(o: Opportunity) {
-  const { error } = await supabase.from('Opportunities').upsert(o, { onConflict: 'opportunity_id' })
+  const { error } = await supabase.from('opportunities').upsert(o, { onConflict: 'opportunity_id' })
   if (error) throw error
 }
 
 export async function upsertProject(p: Project) {
-  const { error } = await supabase.from('Projects').upsert(p, { onConflict: 'project_id' })
+  const { error } = await supabase.from('projects').upsert(p, { onConflict: 'project_id' })
   if (error) throw error
 }
 
