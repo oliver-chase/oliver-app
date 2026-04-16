@@ -70,15 +70,10 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
     >
       <div className="account-card-name-row">
-        <div
-          className="account-card-name"
-          data-placeholder="Company"
-        >
+        <div className="account-card-name" data-placeholder="Company">
           {account.account_name || ''}
         </div>
-        {isArchived && (
-          <span className="badge-archived">Archived</span>
-        )}
+        {isArchived && <span className="badge-archived">Archived</span>}
       </div>
       <div
         ref={companyRef}
@@ -102,9 +97,7 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
         {statDiv(projectCount, 'project')}
       </div>
       <div className="account-card-note">Last updated {lastUpdate}</div>
-      {teamNames.length > 0 && (
-        <div className="last-updated-tip">Team: {teamNames.join(', ')}</div>
-      )}
+      <div className="last-updated-tip">{teamNames.length > 0 ? 'Team: ' + teamNames.join(', ') : ''}</div>
     </div>
   )
 }
@@ -140,10 +133,17 @@ export default function PortfolioView({ accounts, background, stakeholders, acti
     )
   }
 
+  const header = (
+    <div className="app-section-header portfolio-section-header">
+      <div className="app-section-title">All Accounts</div>
+    </div>
+  )
+
   if (!accounts.length) {
     return (
-      <div className="portfolio-wrap">
-        <div className="portfolio-grid">
+      <div id="portfolio-view">
+        {header}
+        <div className="portfolio-grid" id="portfolio-grid">
           <div className="empty-state">No accounts yet.</div>
         </div>
       </div>
@@ -151,8 +151,9 @@ export default function PortfolioView({ accounts, background, stakeholders, acti
   }
 
   return (
-    <div className="portfolio-wrap">
-      <div className="portfolio-grid">
+    <div id="portfolio-view">
+      {header}
+      <div className="portfolio-grid" id="portfolio-grid">
         {Object.values(tiers).flat().map(acct => renderCard(acct, false))}
         {archived.length > 0 && (
           <>

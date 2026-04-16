@@ -130,11 +130,7 @@ export default function AccountsApp() {
               />
             </ErrorBoundary>
           ) : (
-            <>
-              <div className="app-section-header portfolio-section-header">
-                <div className="app-section-title">All Accounts</div>
-              </div>
-              <PortfolioView
+            <PortfolioView
                 accounts={data.accounts}
                 background={data.background}
                 stakeholders={data.stakeholders}
@@ -143,7 +139,6 @@ export default function AccountsApp() {
                 onSelectAccount={handleSelectAccount}
                 onUpdateAccount={handleUpdateAccount}
               />
-            </>
           )}
         </main>
       </div>

@@ -317,12 +317,13 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .app-layout-content{flex:1;display:flex;flex-direction:column;min-width:0}
 .app-error{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--red);font-size:var(--font-size-sm)}
 .section-loading{padding-top:40px;color:var(--gray);font-size:var(--font-size-sm)}
-/* Portfolio */
-.portfolio-wrap{padding-top:8px}
-.account-card-name-row{display:flex;align-items:center;gap:8px}
+/* Portfolio — classes replace source inline styles; gap/border-radius values from tokens where available */
+.account-card-name-row{display:flex;align-items:center;gap:var(--spacing-sm)}
 .account-card.archived{opacity:0.5}
-.badge-archived{font-size:var(--font-size-xs);font-weight:600;padding:1px 6px;border-radius:10px;background:var(--surface2);color:var(--gray)}
-.portfolio-archived-sep{width:100%;grid-column:1/-1;padding:12px 0 4px;font-size:var(--font-size-xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
+.badge-archived{font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);padding:1px 6px;border-radius:10px;background:var(--surface2);color:var(--gray)}
+/* border-radius:10px on badge — no exact token (--radius-md=8px, --radius-full=9999px); token-violations.md entry: badge-archived-radius */
+.portfolio-archived-sep{width:100%;grid-column:1/-1;padding:12px 0 4px;font-size:var(--font-size-xs);font-weight:var(--font-weight-bold);letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
+/* letter-spacing:.06em on sep — no token (--letter-spacing-caps=.08em); token-violations.md entry: portfolio-sep-letterspacing */
 /* Overview text cards */
 .overview-text-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px}
 .overview-text-card .overview-stat-label{margin-bottom:8px}
