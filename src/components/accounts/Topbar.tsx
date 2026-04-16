@@ -1,3 +1,5 @@
+// DEPRECATED — AccountsApp now uses src/components/layout/Topbar.tsx
+// Kept for reference during migration. Delete after visual QA passes.
 'use client'
 import { useRef } from 'react'
 import Link from 'next/link'

@@ -2,7 +2,7 @@
 import { useState, useCallback, Component } from 'react'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import Sidebar from './Sidebar'
-import Topbar from './Topbar'
+import Topbar from '@/components/layout/Topbar'
 import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
 import type { Account } from '@/types'
@@ -60,6 +60,8 @@ export default function AccountsApp() {
     : null
 
   const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'Account Strategy'
+  const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
+  const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'
 
   if (error) {
     return (
@@ -84,15 +86,13 @@ export default function AccountsApp() {
 
       <div className="app-layout-content">
         <Topbar
-          title={topbarTitle}
-          editable={!!currentAccountId}
-          onTitleChange={v => {
-            if (currentAccount) handleUpdateAccount({ ...currentAccount, account_name: v })
-          }}
+          accountName={topbarTitle}
           engagementName={engagement?.engagement_name}
-          showNav={!!currentAccountId}
-          syncState={syncState}
-          onHamburger={() => setSidebarOpen(s => !s)}
+          currentAccountId={currentAccountId}
+          syncStatus={syncStatus}
+          syncText={syncText}
+          onExportClick={() => {}}
+          onHamburgerClick={() => setSidebarOpen(s => !s)}
         />
 
         <main

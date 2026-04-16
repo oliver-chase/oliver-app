@@ -19,10 +19,10 @@ interface TopbarProps {
   syncText: string;
   onExportClick: () => void;
   currentAccountId: string | null;
-  // Additional props required by the source structure — not in original spec
-  accountName?: string;           // shown in topbar-account; defaults to 'Account Strategy'
-  onHamburgerClick?: () => void;  // mobile sidebar toggle
-  activeSection?: string;         // e.g. 'overview' — drives .active on nav links
+  accountName?: string;
+  engagementName?: string;
+  onHamburgerClick?: () => void;
+  activeSection?: string;
   // NOTE: source makes accountName contentEditable with blur-save.
   // Add onAccountNameChange?: (name: string) => void when implementing editable account name.
 }
@@ -33,6 +33,7 @@ export default function Topbar({
   onExportClick,
   currentAccountId,
   accountName,
+  engagementName,
   onHamburgerClick,
   activeSection,
 }: TopbarProps) {
@@ -42,6 +43,7 @@ export default function Topbar({
   return (
     <header className="topbar">
       <button
+        id="btn-hamburger"
         className="topbar-hamburger"
         aria-label="Open navigation"
         aria-expanded="false"
@@ -52,35 +54,53 @@ export default function Topbar({
         &#9776;
       </button>
 
-      <div className="topbar-account">{title}</div>
+      <div id="topbar-account" className="topbar-account">{title}</div>
 
-      {showDetail && (
-        <nav className="topbar-nav" id="topbar-nav">
-          {NAV_ITEMS.map(({ label, href }) => (
-            <Link
-              key={href}
-              href={href}
-              className={activeSection === href.slice(1) ? 'active' : undefined}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-      )}
+      <span
+        id="topbar-sep"
+        className="topbar-sep"
+        style={{ display: engagementName ? '' : 'none' }}
+      >
+        /
+      </span>
+      <div
+        id="topbar-engagement"
+        className="topbar-engagement"
+        style={{ display: engagementName ? '' : 'none' }}
+      >
+        {engagementName}
+      </div>
+
+      <nav
+        id="topbar-nav"
+        className="topbar-nav"
+        aria-label="Account sections"
+        style={{ display: showDetail ? '' : 'none' }}
+      >
+        {NAV_ITEMS.map(({ label, href }) => (
+          <a
+            key={href}
+            href={href}
+            className={activeSection === href.slice(1) ? 'active' : undefined}
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
 
       <div className="topbar-right">
-        {showDetail && (
-          <button
-            className="btn-link"
-            id="btn-export-plan"
-            onClick={onExportClick}
-            type="button"
-          >
-            Export Plan
-          </button>
-        )}
+        <button
+          className="btn-link"
+          id="btn-export-plan"
+          style={{ display: showDetail ? '' : 'none' }}
+          onClick={onExportClick}
+          type="button"
+        >
+          Export Plan
+        </button>
         <SyncDot status={syncStatus} />
         <span
+          id="sync-text"
           className="sync-text"
           aria-live="polite"
           aria-atomic="true"
