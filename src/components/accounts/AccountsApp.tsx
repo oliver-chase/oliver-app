@@ -3,6 +3,7 @@ import { useState, useCallback, Component } from 'react'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import Sidebar from './Sidebar'
 import Topbar from '@/components/layout/Topbar'
+import Filterbar from './Filterbar'
 import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
 import type { Account } from '@/types'
@@ -26,6 +27,7 @@ export default function AccountsApp() {
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [filterSearch, setFilterSearch] = useState('')
 
   const handleSelectAccount = useCallback((id: string) => {
     setCurrentAccountId(id)
@@ -95,7 +97,14 @@ export default function AccountsApp() {
           onHamburgerClick={() => setSidebarOpen(s => !s)}
         />
 
-        <main className="main">
+        <Filterbar
+          show={currentAccountId !== null}
+          search={filterSearch}
+          onSearch={setFilterSearch}
+          onReset={() => setFilterSearch('')}
+        />
+
+        <main className="main" id="main-content">
           {loading ? (
             <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (
