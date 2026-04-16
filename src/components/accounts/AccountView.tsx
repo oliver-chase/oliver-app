@@ -53,37 +53,22 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
       </div>
 
       <div id="people" className="section">
-        <div className="app-section-header">
-          <div className="app-section-title">People</div>
-        </div>
         <PeopleSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="actions" className="section">
-        <div className="app-section-header">
-          <div className="app-section-title">Actions</div>
-        </div>
         <ActionsSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="opportunities" className="section">
-        <div className="app-section-header">
-          <div className="app-section-title">Opportunities</div>
-        </div>
         <OpportunitiesSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="projects" className="section">
-        <div className="app-section-header">
-          <div className="app-section-title">Projects</div>
-        </div>
         <ProjectsSection accountId={accountId} data={data} setData={setData} />
       </div>
 
       <div id="notes" className="section">
-        <div className="app-section-header">
-          <div className="app-section-title">Notes</div>
-        </div>
         <NotesSection accountId={accountId} data={data} setData={setData} />
       </div>
     </div>

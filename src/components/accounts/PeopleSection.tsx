@@ -49,13 +49,17 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const owners = getTeamNames(bg)
   const [adding, setAdding] = useState(false)
-
-  const people = data.stakeholders
-    .filter(s => s.account_id === accountId)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const [sortBy, setSortBy] = useState('name')
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
+
+  const people = data.stakeholders
+    .filter(s => s.account_id === accountId)
+    .sort((a, b) => {
+      if (sortBy === 'department') return (a.department || '').localeCompare(b.department || '')
+      return a.name.localeCompare(b.name)
+    })
 
   const save = async (s: Stakeholder) => {
     setData(prev => ({ ...prev, stakeholders: prev.stakeholders.map(x => x.stakeholder_id === s.stakeholder_id ? s : x) }))
@@ -75,9 +79,24 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
-      <div className="section-header-row2" style={{ marginBottom: 10 }}>
-        <div />
-        <button className="btn-acct-action" onClick={() => setAdding(true)}>+ Add Person</button>
+      <div className="app-section-header">
+        <div className="app-section-title">People</div>
+        <div className="section-header-row2">
+          <div className="section-header-left">
+            <button className="btn-ghost btn--compact" onClick={() => setAdding(true)}>+ Add person</button>
+          </div>
+          <div className="section-actions">
+            <select
+              className="sort-select"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              aria-label="Sort people"
+            >
+              <option value="name">Name A–Z</option>
+              <option value="department">Department</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {people.length === 0 && !adding && <div className="empty-state">No results</div>}

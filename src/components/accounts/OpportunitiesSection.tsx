@@ -32,11 +32,15 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
   const owners = getTeamNames(bg)
   const [showLost, setShowLost] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [sortBy, setSortBy] = useState('created_date')
 
   const opps = data.opportunities
     .filter(o => o.account_id === accountId)
     .filter(o => showLost || o.status !== 'Lost')
-    .sort((a, b) => b.created_date.localeCompare(a.created_date))
+    .sort((a, b) => {
+      if (sortBy === 'status') return a.status.localeCompare(b.status)
+      return b.created_date.localeCompare(a.created_date)
+    })
 
   const save = async (o: Opportunity) => {
     setData(prev => ({ ...prev, opportunities: prev.opportunities.map(x => x.opportunity_id === o.opportunity_id ? o : x) }))
@@ -72,16 +76,29 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
 
   return (
     <div>
-      <div className="section-header-row2" style={{ marginBottom: 10 }}>
-        <div />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            className={'btn-acct-action' + (showLost ? '' : '')}
-            onClick={() => setShowLost(s => !s)}
-          >
-            {showLost ? 'Hide Lost' : 'Show Lost'}
-          </button>
-          <button className="btn-acct-action" onClick={() => setAdding(true)}>+ Add Opportunity</button>
+      <div className="app-section-header">
+        <div className="app-section-title">Opportunities</div>
+        <div className="section-header-row2">
+          <div className="section-header-left">
+            <button className="btn-link" onClick={() => setAdding(true)}>+ Add opportunity</button>
+          </div>
+          <div className="section-actions">
+            <select
+              className="sort-select"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              aria-label="Sort opportunities"
+            >
+              <option value="created_date">Newest first</option>
+              <option value="status">By status</option>
+            </select>
+            <button
+              className={'filter-chip' + (showLost ? ' on' : '')}
+              onClick={() => setShowLost(s => !s)}
+            >
+              {showLost ? 'Hide Lost' : 'Show Lost'}
+            </button>
+          </div>
         </div>
       </div>
 

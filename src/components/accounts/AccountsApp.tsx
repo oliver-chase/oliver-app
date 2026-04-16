@@ -83,7 +83,7 @@ export default function AccountsApp() {
 
         <main
           className="main"
-          style={!currentAccountId ? { paddingTop: 'var(--topbar-h)' } : undefined}
+          style={{ paddingTop: 'var(--topbar-h)' }}
         >
           {loading ? (
             <div className="section-loading">Loading…</div>

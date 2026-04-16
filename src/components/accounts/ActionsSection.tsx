@@ -33,16 +33,25 @@ interface Props {
   setData: React.Dispatch<React.SetStateAction<AppState>>
 }
 
+type StatusFilter = 'open-progress' | 'all' | 'Open' | 'Done'
+
 export default function ActionsSection({ accountId, data, setData }: Props) {
-  const actions = data.actions.filter(a => a.account_id === accountId)
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const owners = getTeamNames(bg)
   const [sortCol, setSortCol] = useState<SortCol>('created_date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [adding, setAdding] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open-progress')
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
+
+  const actions = data.actions.filter(a => {
+    if (a.account_id !== accountId) return false
+    if (statusFilter === 'open-progress') return a.status === 'Open' || a.status === 'In Progress'
+    if (statusFilter === 'all') return true
+    return a.status === statusFilter
+  })
 
   const engLabel = (id: string) => {
     if (!id) return 'Account-wide'
@@ -95,9 +104,26 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
-      <div className="section-header-row2" style={{ marginBottom: 10 }}>
-        <div />
-        <button className="btn-acct-action" onClick={() => setAdding(true)}>+ Add Action</button>
+      <div className="app-section-header">
+        <div className="app-section-title">Actions</div>
+        <div className="section-header-row2">
+          <div className="section-header-left">
+            <button className="btn-link" onClick={() => setAdding(true)}>+ Add action</button>
+          </div>
+          <div className="section-actions">
+            <select
+              className="sort-select"
+              aria-label="Filter by action status"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+            >
+              <option value="open-progress">Open + In Progress</option>
+              <option value="all">All statuses</option>
+              <option value="Open">Open only</option>
+              <option value="Done">Done only</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div className="table-wrap">
         <table className="data-table">

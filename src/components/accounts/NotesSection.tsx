@@ -69,10 +69,20 @@ interface Props {
 export default function NotesSection({ accountId, data, setData }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const teamNames = getTeamNames(bg)
+  const [search, setSearch] = useState('')
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
   const notes = data.notes
     .filter(n => n.account_id === accountId)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.created_date.localeCompare(a.created_date))
+    .filter(n => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
+    })
+    .sort((a, b) => {
+      const cmp = b.date.localeCompare(a.date) || b.created_date.localeCompare(a.created_date)
+      return sortDir === 'desc' ? cmp : -cmp
+    })
 
   const save = async (n: Note) => {
     setData(prev => ({ ...prev, notes: prev.notes.map(x => x.note_id === n.note_id ? n : x) }))
@@ -111,9 +121,33 @@ export default function NotesSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
-      <div className="section-header-row2" style={{ marginBottom: 10 }}>
-        <div />
-        <button className="btn-acct-action" onClick={createNote}>+ New Note</button>
+      <div className="app-section-header">
+        <div className="app-section-title">Notes</div>
+        <div className="section-header-row2">
+          <div className="section-header-left">
+            <button className="btn-link" onClick={createNote}>+ Add note</button>
+          </div>
+          <div className="section-actions">
+            <input
+              type="text"
+              className="notes-search"
+              placeholder="Search notes..."
+              aria-label="Search notes"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <select
+              className="sort-select"
+              id="notes-sort-btn"
+              value={sortDir}
+              onChange={e => setSortDir(e.target.value as 'desc' | 'asc')}
+              aria-label="Sort notes"
+            >
+              <option value="desc">Newest first</option>
+              <option value="asc">Oldest first</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {notes.length === 0 && <div className="empty-state">No results</div>}

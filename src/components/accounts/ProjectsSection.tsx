@@ -20,10 +20,17 @@ interface Props {
 
 export default function ProjectsSection({ accountId, data, setData }: Props) {
   const [adding, setAdding] = useState(false)
+  const [hideComplete, setHideComplete] = useState(false)
+  const [sortBy, setSortBy] = useState('created_date')
 
   const projects = data.projects
     .filter(p => p.account_id === accountId)
-    .sort((a, b) => b.created_date.localeCompare(a.created_date))
+    .filter(p => !hideComplete || p.status !== 'Complete')
+    .sort((a, b) => {
+      if (sortBy === 'project_name') return a.project_name.localeCompare(b.project_name)
+      if (sortBy === 'status') return a.status.localeCompare(b.status)
+      return b.created_date.localeCompare(a.created_date)
+    })
 
   const clientStakeholders = data.stakeholders.filter(
     s => s.account_id === accountId && (s.organization || '').toLowerCase() !== 'v.two'
@@ -64,9 +71,31 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
-      <div className="section-header-row2" style={{ marginBottom: 10 }}>
-        <div />
-        <button className="btn-acct-action" onClick={() => setAdding(true)}>+ Add Project</button>
+      <div className="app-section-header">
+        <div className="app-section-title">Projects</div>
+        <div className="section-header-row2">
+          <div className="section-header-left">
+            <button className="btn-link" onClick={() => setAdding(true)}>+ Add project</button>
+          </div>
+          <div className="section-actions">
+            <select
+              className="sort-select"
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              aria-label="Sort projects"
+            >
+              <option value="created_date">Newest first</option>
+              <option value="project_name">Name A–Z</option>
+              <option value="status">By status</option>
+            </select>
+            <button
+              className={'filter-chip' + (hideComplete ? ' on' : '')}
+              onClick={() => setHideComplete(s => !s)}
+            >
+              {hideComplete ? 'Show Complete' : 'Hide Complete'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {projects.length === 0 && !adding && <div className="empty-state">No results</div>}
