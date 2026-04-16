@@ -1,11 +1,25 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, Component } from 'react'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
 import type { Account } from '@/types'
+
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { error: string | null }
+> {
+  state = { error: null }
+  static getDerivedStateFromError(e: Error) { return { error: e.message } }
+  render() {
+    if (this.state.error) {
+      return <pre style={{ color: 'red', padding: 16, whiteSpace: 'pre-wrap' }}>AccountView crash: {this.state.error}</pre>
+    }
+    return this.props.children
+  }
+}
 
 export default function AccountsApp() {
   const { data, setData, loading, error, syncState, saveAccount, addAccount } = useAccountsData()
@@ -88,25 +102,27 @@ export default function AccountsApp() {
           {loading ? (
             <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (
-            <AccountView
-              accountId={currentAccountId}
-              data={data}
-              setData={setData}
-              onUpdateAccount={handleUpdateAccount}
-              onArchive={() => {
-                const acct = currentAccount
-                if (!acct) return
-                const isArchived = acct.status === 'Archived'
-                saveAccount({ ...acct, status: isArchived ? 'Active' : 'Archived' })
-              }}
-              onDelete={async () => {
-                if (!currentAccount) return
-                const confirmed = window.confirm(`Delete "${currentAccount.account_name}"? This cannot be undone.`)
-                if (!confirmed) return
-                // TODO: delete account + related records
-                setCurrentAccountId(null)
-              }}
-            />
+            <ErrorBoundary>
+              <AccountView
+                accountId={currentAccountId}
+                data={data}
+                setData={setData}
+                onUpdateAccount={handleUpdateAccount}
+                onArchive={() => {
+                  const acct = currentAccount
+                  if (!acct) return
+                  const isArchived = acct.status === 'Archived'
+                  saveAccount({ ...acct, status: isArchived ? 'Active' : 'Archived' })
+                }}
+                onDelete={async () => {
+                  if (!currentAccount) return
+                  const confirmed = window.confirm(`Delete "${currentAccount.account_name}"? This cannot be undone.`)
+                  if (!confirmed) return
+                  // TODO: delete account + related records
+                  setCurrentAccountId(null)
+                }}
+              />
+            </ErrorBoundary>
           ) : (
             <>
               <div className="app-section-header portfolio-section-header">
