@@ -1,0 +1,16 @@
+/* shared/components.css — V.Two Ops component library entry point.
+ *
+ * Load order: tokens.css -> components.css -> (page stylesheet).
+ * All values sourced from tokens.css via var(--...). No hardcoded hex, px
+ * sizes/radii/durations, or fonts. Add tokens to tokens.css before using here.
+ *
+ * Sub-files (each under 400 lines):
+ *   components-base.css        — a11y focus, buttons, cards, chips, badges, forms, section headers
+ *   components-interactive.css — picker trigger, popover, modal, toast
+ *   components-layout.css      — sidebar, org chart, responsive overrides
+ */
+
+@import "./tokens.css";
+@import "./components-base.css";
+@import "./components-interactive.css";
+@import "./components-layout.css";

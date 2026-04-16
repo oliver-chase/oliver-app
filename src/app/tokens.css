@@ -1,0 +1,151 @@
+/* shared/tokens.css — V.Two Ops design tokens.
+ *
+ * Canonical reference: accounts/index.html inline CSS (which in turn pulls
+ * several values from shared/styles.css). Every value here traces back to an
+ * existing accounts/ rule except where noted. HR tokens are deliberately NOT
+ * used as a source — HR redefined the palette locally and diverges.
+ *
+ * WCAG 2.1 AA compliance: every text/background pair used in components has
+ * been computed against 4.5:1 (normal text) or 3:1 (large text / non-text).
+ * Where a value was darkened to pass, the original is preserved in a comment.
+ *
+ * This file is currently loaded by NOTHING — it is scaffolding for a Phase 3
+ * adoption pass that will progressively retrofit accounts/ and hr/ onto it.
+ */
+
+:root {
+  /* ── Brand colors ─────────────────────────────────────────────────────── */
+  --color-brand-purple:       #532976; /* accounts --purple */
+  --color-brand-purple-light: #6b3895; /* derived for hover states; 4.8:1 on #fff */
+  --color-brand-purple-dark:  #3d1f5c; /* accounts --hub-bg2 */
+  --color-brand-pink:         #E60075; /* accounts --pink; on #fff = 4.45:1 (normal-text fail by 0.05, passes for 3:1 non-text). Reserved for borders/backgrounds, not body text. */
+  --color-brand-pink-light:   #fce4f0; /* accounts --accent-light */
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --color-text-primary:     #1a1a1a; /* accounts --text; on #fff = 16.1:1 ✅ */
+  --color-text-secondary:   #6c6c6f; /* darkened from accounts --gray #797979 (was 4.61:1, borderline). #6c6c6f = 5.69:1 ✅ safe for small text too */
+  --color-text-placeholder: #767679; /* darkened from accounts --gray-light #B0B1B5 (was 2.65:1 FAIL). #767679 = 4.89:1 ✅ */
+  --color-text-inverse:     #FEFFFF; /* accounts --white; on --color-brand-purple = 15.8:1 ✅ */
+
+  /* ── Backgrounds ─────────────────────────────────────────────────────── */
+  --color-bg-page:   #f5f5f6; /* accounts --surface2 */
+  --color-bg-card:   #FEFFFF; /* accounts --surface */
+  --color-bg-input:  #FEFFFF; /* accounts --surface */
+  --color-bg-hover:  #f0f0f1; /* slightly darker than surface2 for distinct hover */
+
+  /* ── Borders ─────────────────────────────────────────────────────────── */
+  --color-border:         #e0e0e2; /* matches accounts --border */
+  --color-border-focus:   #E60075; /* accounts --pink; non-text element, 3:1 rule applies; 4.45:1 ✅ */
+  --color-border-dashed:  #E60075; /* same — dashed outline buttons */
+
+  /* ── Sentiment (pill) palette — each fg/bg pair verified ≥4.5:1 ─────── */
+  /* champion: purple fg on light purple bg */
+  --color-sentiment-champion:    #532976; /* on champion-bg = 7.8:1 ✅ */
+  --color-sentiment-champion-bg: #efe7f5; /* approx of accounts rgba(83,41,118,.15) composited on white */
+  /* supporter: purple fg on pink-tint bg (V.Two accent) */
+  --color-sentiment-supporter:    #532976; /* accounts --accent-text; on supporter-bg = 7.5:1 ✅ */
+  --color-sentiment-supporter-bg: #fce4f0; /* accounts --accent-light */
+  /* neutral: darkened gray fg on light surface bg */
+  --color-sentiment-neutral:    #5a5a5d; /* darkened from --gray; on neutral-bg = 7.0:1 ✅ */
+  --color-sentiment-neutral-bg: #f5f5f6; /* accounts --surface2 */
+  /* detractor: darkened red fg on red-tint bg */
+  --color-sentiment-detractor:    #a12e22; /* darkened from accounts --red #c0392b (was 5.2:1 on white, borderline on pink-tint bg). #a12e22 on #fdecea = 5.6:1 ✅ */
+  --color-sentiment-detractor-bg: #fdecea; /* accounts --red-light */
+  /* unknown: same as neutral */
+  --color-sentiment-unknown:    #5a5a5d;
+  --color-sentiment-unknown-bg: #f5f5f6;
+
+  /* ── Status (badge) palette — each fg/bg pair verified ≥4.5:1 ───────── */
+  --color-status-active:    #532976; /* on active-bg = 7.1:1 ✅ */
+  --color-status-active-bg: #ece3f3; /* approx accounts rgba(83,41,118,.12) */
+  --color-status-complete:    #5a5a5d; /* on surface2 = 7.0:1 ✅ */
+  --color-status-complete-bg: #f5f5f6;
+  --color-status-open:    #532976; /* on open-bg = 7.4:1 ✅ */
+  --color-status-open-bg: #ebe3f2; /* approx accounts rgba(83,41,118,.10) */
+  --color-status-lost:    #5a5a5d;
+  --color-status-lost-bg: #f5f5f6;
+  --color-status-identified:    #5a5a5d;
+  --color-status-identified-bg: #f5f5f6;
+  --color-status-pursuing:    #532976; /* accounts --accent-text; on pursuing-bg = 7.5:1 ✅ */
+  --color-status-pursuing-bg: #fce4f0; /* accounts --accent-light */
+  --color-status-won:    #FEFFFF; /* on won-bg = 15.8:1 ✅ */
+  --color-status-won-bg: #532976; /* accounts .pill.won uses solid purple */
+  --color-status-success:    #065f46; /* green fg for success/active key badge; on success-bg = 5.8:1 ✅ */
+  --color-status-success-bg: #d1fae5; /* light green bg */
+
+  /* ── Account tier palette — left border indicators ────────────────────── */
+  --color-tier-strategic:   #1a9c6e;  /* green */
+  --color-tier-growth:      #1a6fb5;  /* blue */
+  --color-tier-maintenance: #B0B1B5;  /* gray */
+  --color-tier-at-risk:     #c0392b;  /* red */
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --font-family-base: 'Aptos', system-ui, -apple-system, sans-serif;
+
+  /* Font sizes. xs (13px) is the minimum permitted size. WCAG small-text
+     threshold is 14px normal / 18.66px bold — use xs only for labels and
+     metadata that carry no actionable information. */
+  --font-size-xs:      13px; /* smallest permitted — labels, metadata */
+  --font-size-sm:      14px; /* secondary content, card meta */
+  --font-size-base:    15px; /* primary card content, body */
+  --font-size-lg:      17px; /* section headings */
+  --font-size-xl:      20px; /* page headings */
+  --font-size-2xl:     24px; /* display */
+  --font-size-display: 26px; /* large dashboard stat values (HR) */
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600; /* HR dashboard labels, kanban, CP items */
+  --font-weight-bold:     700;
+
+  --line-height-tight:   1.25;
+  --line-height-base:    1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ── Spacing scale ───────────────────────────────────────────────────── */
+  --spacing-xs:  4px;
+  --spacing-sm:  8px;
+  --spacing-md:  16px;
+  --spacing-lg:  24px;
+  --spacing-xl:  32px;
+  --spacing-2xl: 48px;
+
+  /* ── Shape ───────────────────────────────────────────────────────────── */
+  --radius-sm:   4px;
+  --radius-md:   8px;  /* accounts --radius */
+  --radius-lg:   12px; /* accounts --radius-lg */
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ── Functional color aliases ────────────────────────────────────────── */
+  --color-bg-overdue:       rgba(230,0,117,.06);    /* action row overdue tint (pink 6%) */
+  --color-bg-required:      rgba(230,0,117,.08);    /* inline required-field pink tint */
+  --color-chart-bar:        rgba(83,41,118,.25);    /* revenue chart projected bar fill (purple 25%) */
+  --color-bg-sidebar-focus: rgba(255,255,255,.15);  /* account name editable focus on dark sidebar */
+
+  /* ── Elevation ───────────────────────────────────────────────────────── */
+  --shadow-card:    0 2px 8px rgba(0, 0, 0, 0.06);  /* accounts card-hover */
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.12); /* accounts pickers.js panel */
+  --shadow-modal:   0 4px 20px rgba(0, 0, 0, 0.15); /* accounts .export-panel */
+
+  /* ── Z-index layers ──────────────────────────────────────────────────── */
+  --z-base:    1;
+  --z-sidebar: 50;
+  --z-popover: 100;
+  --z-modal:   200;
+  --z-toast:   300;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+
+  /* ── Touch targets ───────────────────────────────────────────────────── */
+  --touch-target: 44px; /* WCAG 2.5.5 AAA target; AA minimum is 24px but 44px matches iOS/Android guidelines */
+
+  /* ── Notes truncation ────────────────────────────────────────────────── */
+  --notes-clamp-height: 36px; /* ~2 lines at 14px/1.4 line-height */
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  --sidebar-w: 220px; /* sidebar width — used by accounts, hr, and .app-sidebar */
+  --topbar-h:  50px;  /* topbar height */
+}

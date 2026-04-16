@@ -1,0 +1,219 @@
+'use client'
+import { useRef } from 'react'
+import { today, newId, upsertBackground } from '@/lib/db'
+import type { AppState, Account, Background } from '@/types'
+
+interface Props {
+  accountId: string
+  data: AppState
+  onUpdateAccount: (account: Account) => void
+  onArchive: () => void
+  onDelete: () => void
+}
+
+export default function AccountView({ accountId, data, onUpdateAccount, onArchive, onDelete }: Props) {
+  const acct = data.accounts.find(a => a.account_id === accountId)
+  if (!acct) return null
+
+  const isArchived = acct.status === 'Archived'
+
+  return (
+    <div>
+      <div className="account-header-row">
+        <div>
+          <ContentEditable
+            className="account-name-heading"
+            value={acct.account_name}
+            ariaLabel="Account name"
+            onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
+          />
+          <div className="page-last-updated" id="page-last-updated" />
+        </div>
+        <div className="account-header-actions">
+          <button className="btn-acct-action" onClick={onArchive}>
+            {isArchived ? 'Unarchive Account' : 'Archive Account'}
+          </button>
+          <button className="btn-acct-action danger" onClick={onDelete}>
+            Delete Account
+          </button>
+        </div>
+      </div>
+
+      <div id="overview" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">Overview</div>
+        </div>
+        <OverviewSection accountId={accountId} data={data} />
+      </div>
+
+      <div id="people" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">People</div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
+          People section coming soon
+        </div>
+      </div>
+
+      <div id="actions" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">Actions</div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
+          Actions section coming soon
+        </div>
+      </div>
+
+      <div id="opportunities" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">Opportunities</div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
+          Opportunities section coming soon
+        </div>
+      </div>
+
+      <div id="projects" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">Projects</div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
+          Projects section coming soon
+        </div>
+      </div>
+
+      <div id="notes" className="section">
+        <div className="app-section-header">
+          <div className="app-section-title">Notes</div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
+          Notes section coming soon
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContentEditable({ className, value, ariaLabel, onSave }: {
+  className?: string
+  value: string
+  ariaLabel?: string
+  onSave: (v: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  return (
+    <div
+      ref={ref}
+      className={className}
+      contentEditable
+      suppressContentEditableWarning
+      aria-label={ariaLabel}
+      onBlur={() => {
+        const v = ref.current?.textContent?.trim() || ''
+        if (v) onSave(v)
+        else if (ref.current) ref.current.textContent = value
+      }}
+      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ref.current?.blur() } }}
+    >
+      {value}
+    </div>
+  )
+}
+
+function OverviewSection({ accountId, data }: { accountId: string; data: AppState }) {
+  let bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
+
+  const ensureBg = (): Background => {
+    if (!bg) {
+      bg = {
+        background_id: newId('BG'), account_id: accountId, engagement_id: '',
+        overview: '', strategic_context: '', delivery_model: '', key_dates: '',
+        account_director: '', account_manager: '', account_team: '',
+        next_meeting: '', account_tier: '', meeting_title: '', meeting_frequency: '',
+        meeting_day: '', meeting_attendees: '', meeting_interval: '', next_meeting_override: '',
+        revenue: {}, created_date: today(), last_updated: today(),
+      }
+    }
+    return bg
+  }
+
+  const saveBgField = async (field: keyof Background, value: string) => {
+    const b = { ...ensureBg(), [field]: value, last_updated: today() }
+    await upsertBackground(b)
+  }
+
+  const b = ensureBg()
+
+  return (
+    <div>
+      <div className="overview-stats">
+        <OverviewStat label="Account Tier" value={b.account_tier} placeholder="Growth" onSave={v => saveBgField('account_tier', v)} />
+        <OverviewStat label="Account Director" value={b.account_director} placeholder="Name" onSave={v => saveBgField('account_director', v)} />
+        <OverviewStat label="Account Manager" value={b.account_manager} placeholder="Name" onSave={v => saveBgField('account_manager', v)} />
+        <OverviewStat label="Account Team" value={b.account_team} placeholder="Names (semicolon separated)" onSave={v => saveBgField('account_team', v)} />
+        <OverviewStat label="Next Meeting" value={b.next_meeting} placeholder="Date or description" onSave={v => saveBgField('next_meeting', v)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <OverviewTextArea label="Overview" value={b.overview} placeholder="Account overview..." onSave={v => saveBgField('overview', v)} />
+        <OverviewTextArea label="Strategic Context" value={b.strategic_context} placeholder="Strategic context..." onSave={v => saveBgField('strategic_context', v)} />
+        <OverviewTextArea label="Key Dates" value={b.key_dates} placeholder="Key dates..." onSave={v => saveBgField('key_dates', v)} />
+        <OverviewTextArea label="Delivery Model" value={b.delivery_model} placeholder="Delivery model..." onSave={v => saveBgField('delivery_model', v)} />
+      </div>
+    </div>
+  )
+}
+
+function OverviewStat({ label, value, placeholder, onSave }: {
+  label: string; value: string; placeholder: string; onSave: (v: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  return (
+    <div className="overview-stat">
+      <div className="overview-stat-label">{label}</div>
+      <div
+        ref={ref}
+        className={`overview-stat-val${!value ? ' faded' : ''}`}
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        aria-label={label}
+        role="textbox"
+        onFocus={() => { if (!value && ref.current) { ref.current.textContent = ''; ref.current.classList.remove('faded') } }}
+        onBlur={() => {
+          const v = ref.current?.textContent?.trim() || ''
+          if (!v) { if (ref.current) { ref.current.textContent = placeholder; ref.current.classList.add('faded') } onSave('') }
+          else { if (ref.current) ref.current.classList.remove('faded'); onSave(v) }
+        }}
+      >
+        {value || placeholder}
+      </div>
+    </div>
+  )
+}
+
+function OverviewTextArea({ label, value, placeholder, onSave }: {
+  label: string; value: string; placeholder: string; onSave: (v: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="overview-stat-label" style={{ marginBottom: 8 }}>{label}</div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        className={!value ? 'faded' : ''}
+        style={{ minHeight: 60, outline: 'none', fontSize: 'var(--font-size-sm)', lineHeight: 1.6 }}
+        onFocus={() => { if (!value && ref.current) { ref.current.textContent = ''; ref.current.classList.remove('faded') } }}
+        onBlur={() => {
+          const v = ref.current?.textContent?.trim() || ''
+          if (!v && ref.current) { ref.current.textContent = placeholder; ref.current.classList.add('faded') }
+          onSave(v)
+        }}
+      >
+        {value || placeholder}
+      </div>
+    </div>
+  )
+}

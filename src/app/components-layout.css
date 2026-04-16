@@ -1,0 +1,197 @@
+/* shared/components-layout.css — Structural layout components.
+ * Sections: sidebar, org chart node, responsive overrides.
+ * Loaded via @import from shared/components.css. All values from tokens.css.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Sidebar
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--color-brand-purple);
+  color: var(--color-text-inverse);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-sidebar);
+  overflow-y: auto;
+}
+.app-sidebar-logo {
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-inverse);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+.app-sidebar-nav {
+  flex: 1;
+  padding: var(--spacing-sm) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* Grouping container for nav sections (label + items) */
+.app-sidebar-section { padding: 0 var(--spacing-sm); margin-bottom: var(--spacing-xs); }
+/* Section heading inside a nav group — uppercase label above items */
+.app-sidebar-section-label {
+  padding: var(--spacing-md) var(--spacing-sm) var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(254, 255, 255, 0.75);
+}
+.app-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--touch-target);
+  padding: 7px var(--spacing-md);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: rgba(254, 255, 255, 0.8);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast), border-left-color var(--transition-fast);
+  background: transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  text-align: left;
+  width: 100%;
+}
+.app-sidebar-item:hover { background: rgba(255, 255, 255, 0.07); color: var(--color-text-inverse); }
+.app-sidebar-item.active {
+  background: rgba(255, 255, 255, 0.11);
+  border-left-color: var(--color-brand-pink);
+  color: var(--color-text-inverse);
+  font-weight: var(--font-weight-bold);
+}
+.app-sidebar-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Back-to-hub link — shared between accounts and hr sidebars */
+.sidebar-back {
+  display: block;
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: var(--font-size-xs);
+  color: rgba(254, 255, 255, 0.75);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+.sidebar-back:hover { color: var(--color-text-inverse); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Org chart node — fixed size, content never expands the box
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+.org-node {
+  width: 220px;
+  min-height: 96px;
+  max-height: 140px;
+  box-sizing: border-box;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+.org-node-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-purple);
+  color: var(--color-text-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}
+.org-node-name {
+  display: block;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-node-title {
+  display: block;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-node-badge {
+  display: block;
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-pink-light);
+  color: var(--color-brand-purple);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  align-self: flex-start;
+}
+.org-node-connector {
+  stroke: var(--color-border);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Responsive — collapse/stack below 768px
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .app-card { width: 100%; }
+
+  .app-sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+  }
+  .app-sidebar.open { transform: translateX(0); }
+
+  .app-popover {
+    width: calc(100vw - var(--spacing-md) * 2);
+    max-width: 100%;
+  }
+
+  .app-modal {
+    width: 100%;
+    max-width: calc(100vw - var(--spacing-md) * 2);
+  }
+
+  .app-toast-container {
+    bottom: var(--spacing-sm);
+    right: var(--spacing-sm);
+    left: var(--spacing-sm);
+    max-width: none;
+  }
+
+  /* Interactive components already use min-height: var(--touch-target),
+     so no per-control overrides are needed. */
+}
+
+/* ── Coming soon placeholder (stub section pages) ─────────────────────────── */
+.coming-soon{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:12px}
+.coming-soon-badge{font-size:var(--font-size-xs);font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-full);padding:4px 12px}
+.coming-soon-title{font-size:var(--font-size-xl);font-weight:700;color:var(--text)}
+.coming-soon-sub{font-size:var(--font-size-base);color:var(--gray)}
