@@ -227,18 +227,4 @@
   --hub-text3:   var(--color-nav-text-faint);
   --hub-accent:  var(--color-brand-pink);
 
-  /* ── ADDITIONS — missing tokens identified during component migration ── */
-  --spacing-2xs:          2px;
-  --spacing-3:            3px;
-  --spacing-7:            7px;
-  --letter-spacing-caps:  0.08em;
-  --color-overlay-subtle: rgba(255,255,255,.06);
-  --color-overlay-border: rgba(255,255,255,.18);
-  --color-amber:          #b86c0a;
-  --color-green:          #1a9c6e;
-  --color-red:            #c0392b;
-  --transition-slow:      300ms ease;
-  --z-topbar:             calc(var(--z-sidebar) - 10);
-  --chip-bg:              rgba(83,41,118,0.1);
-  --chip-padding-y:       2px;
 }
