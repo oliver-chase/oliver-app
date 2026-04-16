@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { upsertOpportunity, deleteRecord, newId, today } from '@/lib/db'
+import { upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
 import type { Opportunity, Background, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
 
@@ -193,7 +193,7 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
       <div className="card-meta-row">
         <span className="card-meta-label">Owner(s):</span>
         <MultiPicker
-          values={opp.owners}
+          values={toArray(opp.owners)}
           options={owners}
           placeholder="Select people"
           onChange={v => onSave({ ...opp, owners: v, last_updated: today() })}
@@ -318,7 +318,7 @@ function InlineOppCard({ accountId, owners, onSaved, onDiscard }: {
       <div className="card-meta-row">
         <span className="card-meta-label">Owner(s):</span>
         <MultiPicker
-          values={rec.current.owners}
+          values={toArray(rec.current.owners)}
           options={owners}
           placeholder="Select people"
           onChange={v => { rec.current.owners = v }}

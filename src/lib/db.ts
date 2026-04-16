@@ -1,6 +1,12 @@
 import { supabase } from './supabase'
 import type { Account, Engagement, Stakeholder, Action, Note, Opportunity, Project, Background } from '@/types'
 
+export function toArray(val: string | string[] | null | undefined): string[] {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  return val.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+}
+
 async function fetchTable<T>(table: string): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('*')
   if (error) throw new Error(`[db] ${table}: ${error.message}`)
@@ -19,6 +25,8 @@ export async function loadAllData() {
       fetchTable<Project>('projects'),
       fetchTable<Background>('background'),
     ])
+  opportunities.forEach(o => { o.owners = toArray(o.owners) })
+  projects.forEach(p => { p.client_stakeholder_ids = toArray(p.client_stakeholder_ids) })
   return { accounts, engagements, stakeholders, actions, notes, opportunities, projects, background }
 }
 

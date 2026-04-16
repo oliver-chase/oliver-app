@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { upsertProject, upsertOpportunity, deleteRecord, newId, today } from '@/lib/db'
+import { upsertProject, upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
 import type { Project, AppState } from '@/types'
 import { MultiPicker } from './Picker'
 
@@ -206,11 +206,11 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
       <div className="card-meta-row">
         <span className="card-meta-label">Client stakeholder(s):</span>
         <MultiPicker
-          values={project.client_stakeholder_ids.map(stkIdToName)}
+          values={toArray(project.client_stakeholder_ids).map(stkIdToName)}
           options={stkOptions}
           placeholder="Select people"
           triggerClass="picker-btn"
-          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: '2px 4px', minHeight: 18, color: 'var(--gray)', borderRadius: 3, cursor: 'pointer', textAlign: 'left', fontStyle: project.client_stakeholder_ids.length ? undefined : 'italic' }}
+          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: '2px 4px', minHeight: 18, color: 'var(--gray)', borderRadius: 3, cursor: 'pointer', textAlign: 'left', fontStyle: toArray(project.client_stakeholder_ids).length ? undefined : 'italic' }}
           onChange={names => onSave({ ...project, client_stakeholder_ids: names.map(stkNameToId), last_updated: today() })}
         />
       </div>
