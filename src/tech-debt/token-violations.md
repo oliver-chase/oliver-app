@@ -116,3 +116,31 @@ when optgroup support is needed.
 - Multi-select implemented from spec — verify against source behavior in
   Overview (team members), People (engagement pills), Actions (owner) before
   shipping those sections.
+
+---
+
+## API routes — not ported (ship blocker for chatbot section)
+Source has 5 Cloudflare Pages Functions with no Next.js equivalent yet.
+Create as src/app/api/*/route.ts before shipping the chatbot panel:
+- POST /api/chat             → chatbot panel
+- POST /api/parse-document   → chatbot file upload
+- POST /api/parse-image      → chatbot image upload
+- POST /api/confirm-write    → chatbot data write confirmation
+- GET/POST/PATCH/DELETE /api/admin/keys → admin key management panel
+Note: Next.js API routes with output: 'export' are not supported on static
+export. These must use Next.js middleware or be served as Cloudflare Pages
+Functions placed in /functions/api/ (same as source). Verify CF Pages
+Functions work alongside Next.js static output before implementing.
+
+---
+
+## db.ts — write semantics differ from source (verify before ship)
+Source (ops-dashboard/shared/db.js): DELETE-all + INSERT-all per table on save.
+oliver-app (src/lib/db.ts): upsert per record.
+Risk: upsert leaves stale rows if a record is deleted locally but the delete
+is not synced before an upsert of another record in the same table.
+Action needed before ship:
+- Verify upsert produces identical results for all 8 tables under normal flow.
+- Test soft-delete flow: delete a record, refresh, confirm it does not reappear.
+- If stale-row risk is confirmed, switch to deleteRecord() + upsert or add
+  a server-side sync that mirrors the source DELETE-all + INSERT-all pattern.
