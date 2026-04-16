@@ -27,7 +27,7 @@ export interface Stakeholder {
   title: string
   department: string
   organization: string
-  is_executive: boolean
+  is_executive: string
   sentiment: 'Champion' | 'Supporter' | 'Neutral' | 'Detractor' | 'Unknown'
   primary_owner: string
   secondary_owner: string

@@ -364,7 +364,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
   const rec = useRef<Stakeholder>({
     stakeholder_id: newId('SH'), account_id: accountId, engagement_id: '',
     name: '', title: '', department: '', organization: 'Client',
-    is_executive: false, sentiment: 'Unknown',
+    is_executive: 'false', sentiment: 'Unknown',
     primary_owner: '', secondary_owner: '', reports_to: '', notes: '',
     created_date: today(), last_updated: today(),
   })
