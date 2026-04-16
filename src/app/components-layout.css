@@ -76,7 +76,7 @@
   color: var(--color-text-inverse);
   font-weight: var(--font-weight-bold);
 }
-.app-sidebar-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-sidebar-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; border-radius: 3px; padding: 0 2px; }
 /* Back-to-hub link — shared between accounts and hr sidebars */
 .sidebar-back {
   display: block;

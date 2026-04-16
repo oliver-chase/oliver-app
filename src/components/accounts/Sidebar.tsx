@@ -79,7 +79,6 @@ function SidebarAccount({ account, active, onSelect, onRename }: {
         suppressContentEditableWarning
         aria-label="Account name"
         role="textbox"
-        style={{ outline: 'none', borderRadius: 3, padding: '0 2px' }}
         onMouseDown={e => e.stopPropagation()}
         onBlur={() => {
           const v = spanRef.current?.textContent?.trim() || ''

@@ -49,14 +49,14 @@ export default function AccountsApp() {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--red)' }}>
+      <div className="app-error">
         Error loading data: {error}
       </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-layout">
       <Sidebar
         accounts={data.accounts}
         currentAccountId={currentAccountId}
@@ -68,7 +68,7 @@ export default function AccountsApp() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className="app-layout-content">
         <Topbar
           title={topbarTitle}
           editable={!!currentAccountId}
@@ -86,7 +86,7 @@ export default function AccountsApp() {
           style={!currentAccountId ? { paddingTop: 'var(--topbar-h)' } : undefined}
         >
           {loading ? (
-            <div style={{ paddingTop: 40, color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>Loading…</div>
+            <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (
             <AccountView
               accountId={currentAccountId}

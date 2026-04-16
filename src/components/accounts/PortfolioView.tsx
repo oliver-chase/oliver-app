@@ -63,14 +63,13 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
 
   return (
     <div
-      className={`account-card ${tierClass}`}
+      className={`account-card ${tierClass}${isArchived ? ' archived' : ''}`}
       role="button"
       tabIndex={0}
-      style={isArchived ? { opacity: 0.5 } : undefined}
       onClick={onSelect}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="account-card-name-row">
         <div
           className="account-card-name"
           data-placeholder="Company"
@@ -78,9 +77,7 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
           {account.account_name || ''}
         </div>
         {isArchived && (
-          <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, padding: '1px 6px', borderRadius: 10, background: 'var(--surface2)', color: 'var(--gray)' }}>
-            Archived
-          </span>
+          <span className="badge-archived">Archived</span>
         )}
       </div>
       <div
@@ -145,7 +142,7 @@ export default function PortfolioView({ accounts, background, stakeholders, acti
 
   if (!accounts.length) {
     return (
-      <div style={{ paddingTop: 8 }}>
+      <div className="portfolio-wrap">
         <div className="portfolio-grid">
           <div className="empty-state">No accounts yet.</div>
         </div>
@@ -154,14 +151,12 @@ export default function PortfolioView({ accounts, background, stakeholders, acti
   }
 
   return (
-    <div style={{ paddingTop: 8 }}>
+    <div className="portfolio-wrap">
       <div className="portfolio-grid">
         {Object.values(tiers).flat().map(acct => renderCard(acct, false))}
         {archived.length > 0 && (
           <>
-            <div style={{ width: '100%', gridColumn: '1 / -1', padding: '12px 0 4px', fontSize: 'var(--font-size-xs)', fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--gray)' }}>
-              Archived
-            </div>
+            <div className="portfolio-archived-sep">Archived</div>
             {archived.map(acct => renderCard(acct, true))}
           </>
         )}

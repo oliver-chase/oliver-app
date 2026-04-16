@@ -312,3 +312,20 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .card-title{outline:none;background:transparent!important}
 .card-title:focus{background:transparent!important}
 .card-status-wrap{background:transparent;margin-top:1px;margin-right:3px}
+/* App shell layout */
+.app-layout{display:flex;min-height:100vh}
+.app-layout-content{flex:1;display:flex;flex-direction:column;min-width:0}
+.app-error{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--red);font-size:var(--font-size-sm)}
+.section-loading{padding-top:40px;color:var(--gray);font-size:var(--font-size-sm)}
+/* Portfolio */
+.portfolio-wrap{padding-top:8px}
+.account-card-name-row{display:flex;align-items:center;gap:8px}
+.account-card.archived{opacity:0.5}
+.badge-archived{font-size:var(--font-size-xs);font-weight:600;padding:1px 6px;border-radius:10px;background:var(--surface2);color:var(--gray)}
+.portfolio-archived-sep{width:100%;grid-column:1/-1;padding:12px 0 4px;font-size:var(--font-size-xs);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)}
+/* Overview text cards */
+.overview-text-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px}
+.overview-text-card .overview-stat-label{margin-bottom:8px}
+.overview-text-body{min-height:60px;outline:none;font-size:var(--font-size-sm);line-height:1.6;font-family:var(--font)}
+/* Section placeholder */
+.section-placeholder{padding:24px 0;color:var(--gray);font-size:var(--font-size-sm)}

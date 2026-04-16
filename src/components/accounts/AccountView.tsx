@@ -50,45 +50,35 @@ export default function AccountView({ accountId, data, onUpdateAccount, onArchiv
         <div className="app-section-header">
           <div className="app-section-title">People</div>
         </div>
-        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
-          People section coming soon
-        </div>
+        <div className="section-placeholder">People section coming soon</div>
       </div>
 
       <div id="actions" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Actions</div>
         </div>
-        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
-          Actions section coming soon
-        </div>
+        <div className="section-placeholder">Actions section coming soon</div>
       </div>
 
       <div id="opportunities" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Opportunities</div>
         </div>
-        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
-          Opportunities section coming soon
-        </div>
+        <div className="section-placeholder">Opportunities section coming soon</div>
       </div>
 
       <div id="projects" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Projects</div>
         </div>
-        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
-          Projects section coming soon
-        </div>
+        <div className="section-placeholder">Projects section coming soon</div>
       </div>
 
       <div id="notes" className="section">
         <div className="app-section-header">
           <div className="app-section-title">Notes</div>
         </div>
-        <div className="empty-state" style={{ padding: '24px 0', color: 'var(--gray)', fontSize: 'var(--font-size-sm)' }}>
-          Notes section coming soon
-        </div>
+        <div className="section-placeholder">Notes section coming soon</div>
       </div>
     </div>
   )
@@ -153,7 +143,7 @@ function OverviewSection({ accountId, data }: { accountId: string; data: AppStat
         <OverviewStat label="Account Team" value={b.account_team} placeholder="Names (semicolon separated)" onSave={v => saveBgField('account_team', v)} />
         <OverviewStat label="Next Meeting" value={b.next_meeting} placeholder="Date or description" onSave={v => saveBgField('next_meeting', v)} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="overview-grid">
         <OverviewTextArea label="Overview" value={b.overview} placeholder="Account overview..." onSave={v => saveBgField('overview', v)} />
         <OverviewTextArea label="Strategic Context" value={b.strategic_context} placeholder="Strategic context..." onSave={v => saveBgField('strategic_context', v)} />
         <OverviewTextArea label="Key Dates" value={b.key_dates} placeholder="Key dates..." onSave={v => saveBgField('key_dates', v)} />
@@ -196,15 +186,14 @@ function OverviewTextArea({ label, value, placeholder, onSave }: {
 }) {
   const ref = useRef<HTMLDivElement>(null)
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <div className="overview-stat-label" style={{ marginBottom: 8 }}>{label}</div>
+    <div className="overview-text-card">
+      <div className="overview-stat-label">{label}</div>
       <div
         ref={ref}
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
-        className={!value ? 'faded' : ''}
-        style={{ minHeight: 60, outline: 'none', fontSize: 'var(--font-size-sm)', lineHeight: 1.6 }}
+        className={`overview-text-body${!value ? ' faded' : ''}`}
         onFocus={() => { if (!value && ref.current) { ref.current.textContent = ''; ref.current.classList.remove('faded') } }}
         onBlur={() => {
           const v = ref.current?.textContent?.trim() || ''
