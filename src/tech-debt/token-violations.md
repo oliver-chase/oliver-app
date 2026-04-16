@@ -70,3 +70,49 @@ Action needed before ship:
   Add onAccountNameChange: (name: string) => void prop when porting that feature.
 - engagementName not yet wired; add engagementName?: string prop when
   engagement support is ported.
+
+---
+
+## components-layout.css — Sidebar
+Source: components-layout.css:10–90
+
+- .app-sidebar-nav gap: 2px — not tokenized (no --spacing-2xs exists)
+  Action: add --spacing-2xs: 2px to tokens.css
+- .app-sidebar-item padding: 7px var(--spacing-md) — 7px not tokenized
+  Action: add --spacing-7: 7px to tokens.css or accept --spacing-sm (8px) as close enough
+- .app-sidebar-section-label letter-spacing: 0.08em — not tokenized
+  Action: add --letter-spacing-caps: 0.08em to tokens.css
+
+## accounts.css — sidebar-add-btn
+- margin: 8px 12px 4px — 12px and 4px not tokenized as a combined shorthand
+  (8px = --spacing-sm, 12px = no token, 4px = --spacing-xs)
+  Action: add --spacing-3: 12px to tokens.css or use calc()
+
+---
+
+## pickers.js (source) — inline styles throughout
+Source: accounts/js/pickers.js — all panel/item/checkmark styles are inline style.cssText
+These have been tokenized into components-interactive.css in the oliver-app:
+- .picker-wrap { position:relative; display:inline-block; width:100% } — added
+- .app-popover-item.active { background: var(--color-bg-hover) } — added (keyboard hover)
+- .app-popover-item-check { width:14px; ... } — added
+- .app-popover-empty { ... } — added
+Remaining inline violations in source (pickers.js) not relevant to Next.js component.
+
+## pickers.js (source) — group heading inline styles
+Source: pickers.js:145 — group header row uses inline style.cssText with font-size, color, etc.
+Not yet tokenized because CustomPicker.tsx does not yet support optgroup options.
+Action: add --font-size-xs/color-text-secondary/spacing classes and implement group headers
+when optgroup support is needed.
+
+---
+
+## CustomPicker.tsx — deferred features
+- Optgroup / grouped options not implemented. Source pickers.js supports
+  { group: string; items: Array<{ value: string; label: string }> } shape.
+  Used in: People section (reports-to picker groups by org), Notes section
+  (attendee picker). Add OptionsGroup type and render a section label row
+  before grouped items before migrating those sections.
+- Multi-select implemented from spec — verify against source behavior in
+  Overview (team members), People (engagement pills), Actions (owner) before
+  shipping those sections.

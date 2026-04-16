@@ -114,6 +114,35 @@
   cursor: pointer;
 }
 
+/* ── Picker wrap (source JS uses inline styles; tokenized here) ─── */
+.picker-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* ── Picker/popover additions not present in source CSS ─────────── */
+/* Keyboard-active state — source sets inline background:var(--surface2) */
+.app-popover-item.active { background: var(--color-bg-hover); }
+
+/* Checkmark column — source sets inline width/color/font-weight */
+.app-popover-item-check {
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--color-brand-pink);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+/* Empty state — source sets inline padding/color/font-style */
+.app-popover-empty {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Modal
  * ══════════════════════════════════════════════════════════════════════════ */
