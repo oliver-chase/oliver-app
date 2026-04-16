@@ -1,0 +1,126 @@
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.hub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  padding: 32px;
+  padding-top: 22vh;
+  background: var(--color-nav-bg);
+  color: var(--color-nav-text);
+}
+
+.brand {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.wordmark {
+  font-family: var(--font-family-base);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--color-nav-text);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.subtitle {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-nav-text-faint);
+  margin-top: 12px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.card {
+  display: block;
+  background: var(--color-nav-bg-deep);
+  border: 1px solid var(--color-nav-border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  text-decoration: none;
+  color: var(--color-nav-text);
+  transition: all 0.18s;
+  cursor: pointer;
+}
+
+.card:hover {
+  background: var(--color-brand-purple-light);
+  border-color: var(--color-overlay-border);
+  transform: translateY(-1px);
+}
+
+.cardName {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-family: var(--font-family-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-nav-text-faint);
+  background: var(--color-overlay-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.cardDesc {
+  font-size: 13px;
+  color: var(--color-nav-text-muted);
+  line-height: 1.5;
+}
+
+.footer {
+  position: fixed;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  color: var(--color-nav-text-faint);
+  letter-spacing: 0.12em;
+}
+
+.disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .hub {
+    padding: 24px 20px;
+    padding-top: 16vh;
+  }
+  .wordmark {
+    font-size: 36px;
+  }
+  .cards {
+    max-width: 100%;
+  }
+  .card {
+    padding: 16px 20px;
+  }
+}

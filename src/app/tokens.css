@@ -81,6 +81,10 @@
   --color-nav-accent:       var(--color-brand-pink);
   --color-nav-accent-hover: #ff3399;
 
+  /* ── Overlay utilities (dark surfaces) ───────────────────────────────── */
+  --color-overlay-subtle: rgba(255,255,255,.06);
+  --color-overlay-border: rgba(255,255,255,.18);
+
   /* ── Functional colors ───────────────────────────────────────────────── */
   --color-bg-overdue:       rgba(230,0,117,.06);   /* action row overdue tint */
   --color-bg-required:      rgba(230,0,117,.08);   /* inline required-field tint */
@@ -97,6 +101,9 @@
   --color-blue:        #1a6fb5;
   --color-blue-light:  #e8f2fc;
 
+  /* Note: --color-amber, --color-green, --color-red defined above as direct values.
+     Legacy aliases --amber, --green, --red below map to these same values. */
+
   /* ── Typography ──────────────────────────────────────────────────────── */
   --font-family-base: 'Aptos', system-ui, -apple-system, sans-serif;
   --font-family-mono: 'DM Mono', ui-monospace, monospace;
@@ -111,6 +118,8 @@
   --font-size-2xl:     24px;
   --font-size-display: 26px;
 
+  --letter-spacing-caps:  0.08em;
+
   --font-weight-normal:   400;
   --font-weight-medium:   500;
   --font-weight-semibold: 600;
@@ -121,7 +130,10 @@
   --line-height-relaxed: 1.75;
 
   /* ── Spacing ─────────────────────────────────────────────────────────── */
+  --spacing-2xs: 2px;
+  --spacing-3:   3px;
   --spacing-xs:  4px;
+  --spacing-7:   7px;
   --spacing-sm:  8px;
   --spacing-md:  16px;
   --spacing-lg:  24px;
@@ -144,6 +156,7 @@
   /* ── Z-index ─────────────────────────────────────────────────────────── */
   --z-base:    1;
   --z-sidebar: 50;
+  --z-topbar:  calc(var(--z-sidebar) - 10);
   --z-popover: 100;
   --z-modal:   200;
   --z-toast:   300;
@@ -151,6 +164,7 @@
   /* ── Motion ──────────────────────────────────────────────────────────── */
   --transition-fast: 150ms ease;
   --transition-base: 250ms ease;
+  --transition-slow: 300ms ease;
 
   /* ── Layout ──────────────────────────────────────────────────────────── */
   --sidebar-w:   220px;
@@ -161,6 +175,8 @@
   --touch-target: 44px; /* WCAG 2.5.5 AAA; iOS/Android guideline */
 
   /* ── Component tokens ────────────────────────────────────────────────── */
+  --chip-bg:                     rgba(83,41,118,0.1);
+  --chip-padding-y:              2px;
   --sync-dot-size:               7px;
   --avatar-size:                 34px;
   --org-node-w:                  220px;
@@ -210,4 +226,19 @@
   --hub-text2:   var(--color-nav-text-muted);
   --hub-text3:   var(--color-nav-text-faint);
   --hub-accent:  var(--color-brand-pink);
+
+  /* ── ADDITIONS — missing tokens identified during component migration ── */
+  --spacing-2xs:          2px;
+  --spacing-3:            3px;
+  --spacing-7:            7px;
+  --letter-spacing-caps:  0.08em;
+  --color-overlay-subtle: rgba(255,255,255,.06);
+  --color-overlay-border: rgba(255,255,255,.18);
+  --color-amber:          #b86c0a;
+  --color-green:          #1a9c6e;
+  --color-red:            #c0392b;
+  --transition-slow:      300ms ease;
+  --z-topbar:             calc(var(--z-sidebar) - 10);
+  --chip-bg:              rgba(83,41,118,0.1);
+  --chip-padding-y:       2px;
 }

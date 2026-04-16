@@ -12,8 +12,10 @@ Violations found during AppChip migration — these are pre-existing in the sour
 - background: rgba(83,41,118,0.1) — not in tokens (closest is --color-status-active-bg: #ece3f3 but value differs)
 - border-radius: 12px — should be var(--radius-lg) which is also 12px — safe to alias, not a value change
 
-Action needed before ship: add --chip-bg: rgba(83,41,118,0.1) and --chip-padding-y: 2px to tokens.css,
-then update components-base.css. Do not change values, only tokenize them.
+~~Action needed before ship: add --chip-bg: rgba(83,41,118,0.1) and --chip-padding-y: 2px to tokens.css,
+then update components-base.css. Do not change values, only tokenize them.~~
+**TOKENS ADDED 2026-04-16:** --chip-bg and --chip-padding-y now in tokens.css.
+**Remaining:** update components-base.css to use var(--chip-bg) and var(--chip-padding-y).
 
 ---
 
@@ -27,15 +29,17 @@ Violations found during SyncDot migration — pre-existing:
 - .ok uses var(--green) — legacy alias; semantic: var(--color-green)
 - .err uses var(--red) — legacy alias; semantic: var(--color-red)
 
-Action needed before ship:
+~~Action needed before ship:
 - Add --transition-slow: 300ms ease to tokens.css (or accept --transition-base as close enough)
 - Update accounts.css: replace hardcoded 7px with var(--sync-dot-size), replace legacy color aliases
-  with semantic equivalents, replace .3s with token. No value changes except transition if aligned.
+  with semantic equivalents, replace .3s with token. No value changes except transition if aligned.~~
+**TOKENS ADDED 2026-04-16:** --transition-slow: 300ms ease added to tokens.css. --color-amber/green/red already existed as direct values (not legacy aliases — see note below).
+**Remaining:** update accounts.css to use var(--sync-dot-size), var(--color-amber), var(--color-green), var(--color-red), var(--transition-slow).
 
 ---
 
 ## tokens.css — missing semantic color names for status states
-During SyncDot migration, accounts.css uses var(--amber), var(--green), var(--red).
+~~During SyncDot migration, accounts.css uses var(--amber), var(--green), var(--red).
 Semantic equivalents referenced in violation log do not currently exist as
 --color-amber, --color-green, --color-red in tokens.css.
 The values exist under --amber: #b86c0a, --green: #1a9c6e, --red: #c0392b (legacy names).
@@ -43,7 +47,8 @@ Action: add semantic aliases to tokens.css:
   --color-amber: var(--amber);
   --color-green: var(--green);
   --color-red:   var(--red);
-Also add --transition-slow: 300ms ease for the .sync-dot transition value.
+Also add --transition-slow: 300ms ease for the .sync-dot transition value.~~
+**RESOLVED 2026-04-16:** --color-amber (#b86c0a), --color-green (#1a9c6e), --color-red (#c0392b) already existed as direct values in the Status colors section. Legacy aliases --amber/--green/--red point to them (not circular). The requested var(--amber) alias forms would be circular and were not added. --transition-slow: 300ms ease added.
 
 ---
 
@@ -57,11 +62,13 @@ Violations found during Topbar migration — pre-existing:
 - transition: .12s on .topbar-nav a — not tokenized (--transition-fast is 150ms)
 - padding: 5px 10px on #btn-export-plan — not tokenized
 
-Action needed before ship:
+~~Action needed before ship:
 - Add --spacing-5: 20px and --spacing-2h: 10px (or similar) to fill gaps in scale, OR
   accept nearest tokens (--spacing-lg / --spacing-sm) if pixel-perfect match is not required
 - Add --z-topbar: calc(var(--z-sidebar) - 10) to tokens.css
-- Add --transition-quick: 120ms ease or alias .12s to --transition-fast in accounts.css
+- Add --transition-quick: 120ms ease or alias .12s to --transition-fast in accounts.css~~
+**TOKEN ADDED 2026-04-16:** --z-topbar: calc(var(--z-sidebar) - 10) added to tokens.css.
+**Remaining:** update accounts.css to use var(--z-topbar); evaluate --spacing-5/--spacing-2h; decide on .12s.
 
 ---
 
@@ -76,17 +83,20 @@ Action needed before ship:
 ## components-layout.css — Sidebar
 Source: components-layout.css:10–90
 
-- .app-sidebar-nav gap: 2px — not tokenized (no --spacing-2xs exists)
-  Action: add --spacing-2xs: 2px to tokens.css
-- .app-sidebar-item padding: 7px var(--spacing-md) — 7px not tokenized
-  Action: add --spacing-7: 7px to tokens.css or accept --spacing-sm (8px) as close enough
-- .app-sidebar-section-label letter-spacing: 0.08em — not tokenized
-  Action: add --letter-spacing-caps: 0.08em to tokens.css
+~~- .app-sidebar-nav gap: 2px — not tokenized (no --spacing-2xs exists)
+  Action: add --spacing-2xs: 2px to tokens.css~~
+~~- .app-sidebar-item padding: 7px var(--spacing-md) — 7px not tokenized
+  Action: add --spacing-7: 7px to tokens.css or accept --spacing-sm (8px) as close enough~~
+~~- .app-sidebar-section-label letter-spacing: 0.08em — not tokenized
+  Action: add --letter-spacing-caps: 0.08em to tokens.css~~
+**TOKENS ADDED 2026-04-16:** --spacing-2xs (2px), --spacing-7 (7px), --letter-spacing-caps (0.08em) added.
+**Remaining:** update components-layout.css to use these tokens.
 
 ## accounts.css — sidebar-add-btn
 - margin: 8px 12px 4px — 12px and 4px not tokenized as a combined shorthand
   (8px = --spacing-sm, 12px = no token, 4px = --spacing-xs)
-  Action: add --spacing-3: 12px to tokens.css or use calc()
+~~Action: add --spacing-3: 12px to tokens.css or use calc()~~
+**NOTE 2026-04-16:** --spacing-3 added as 3px (not 12px — name encodes the px value). Use --spacing-xs (4px) for the 4px value; 12px remains un-tokenized or use calc(--spacing-sm + --spacing-xs).
 
 ---
 
@@ -147,10 +157,11 @@ Action needed before ship:
 
 ---
 
-## HubPage (src/app/page.tsx) — untokenized transparency values
-- rgba(255,255,255,.06) — card badge background overlay, no token exists
+## HubPage (src/app/hub.module.css) — untokenized transparency values
+~~- rgba(255,255,255,.06) — card badge background overlay, no token exists
 - rgba(255,255,255,.18) — card hover border overlay, no token exists
 Action: add to tokens.css:
   --color-overlay-subtle:  rgba(255,255,255,.06);
   --color-overlay-border:  rgba(255,255,255,.18);
-Then update page.tsx to use the tokens.
+Then update page.tsx to use the tokens.~~
+**RESOLVED 2026-04-16:** --color-overlay-subtle and --color-overlay-border added to tokens.css. hub.module.css updated to use both tokens. Violation closed.
