@@ -95,10 +95,7 @@ export default function AccountsApp() {
           onHamburgerClick={() => setSidebarOpen(s => !s)}
         />
 
-        <main
-          className="main"
-          style={{ paddingTop: 'var(--topbar-h)' }}
-        >
+        <main className="main">
           {loading ? (
             <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (

@@ -19,35 +19,44 @@ export default function Sidebar({
 }: Props) {
   return (
     <>
-      <nav className={`app-sidebar${open ? ' open' : ''}`} id="sidebar" aria-label="Main navigation">
+      <aside className={`app-sidebar${open ? ' open' : ''}`} id="sidebar">
         <div className="app-sidebar-logo">Account Strategy</div>
-        <div
-          className={`app-sidebar-item${currentAccountId === null ? ' active' : ''}`}
-          id="sidebar-all"
-          role="button"
-          tabIndex={0}
-          onClick={onSelectAll}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAll() } }}
-        >
-          All Accounts
+        <a href="/" className="sidebar-back">&#8592; Back to Hub</a>
+
+        <div className="app-sidebar-section">
+          <div
+            className={`app-sidebar-item${currentAccountId === null ? ' active' : ''}`}
+            id="sidebar-all"
+            role="button"
+            tabIndex={0}
+            onClick={onSelectAll}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectAll() } }}
+          >
+            All Accounts
+          </div>
         </div>
-        <div id="sidebar-accounts">
-          {accounts.map(acc => (
-            <SidebarAccount
-              key={acc.account_id}
-              account={acc}
-              active={acc.account_id === currentAccountId}
-              onSelect={() => onSelectAccount(acc.account_id)}
-              onRename={name => onRenameAccount(acc.account_id, name)}
-            />
-          ))}
+
+        <div className="app-sidebar-section">
+          <div className="app-sidebar-section-label">Accounts</div>
+          <div id="sidebar-accounts">
+            {accounts.map(acc => (
+              <SidebarAccount
+                key={acc.account_id}
+                account={acc}
+                active={acc.account_id === currentAccountId}
+                onSelect={() => onSelectAccount(acc.account_id)}
+                onRename={name => onRenameAccount(acc.account_id, name)}
+              />
+            ))}
+          </div>
         </div>
+
         <button className="sidebar-add-btn" id="btn-add-account" onClick={onAddAccount}>
-          + New Account
+          + Add Account
         </button>
-      </nav>
+      </aside>
       <div
-        className={`app-sidebar-backdrop${open ? ' open' : ''}`}
+        className={`sidebar-backdrop${open ? ' open' : ''}`}
         id="sidebar-backdrop"
         onClick={onClose}
         aria-hidden="true"
