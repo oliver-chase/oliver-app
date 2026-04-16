@@ -329,3 +329,22 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .overview-text-body{min-height:60px;outline:none;font-size:var(--font-size-sm);line-height:1.6;font-family:var(--font)}
 /* Section placeholder */
 .section-placeholder{padding:24px 0;color:var(--gray);font-size:var(--font-size-sm)}
+/* Pill-style picker trigger — actions owner/project columns */
+.picker-btn-pill{background:var(--surface2);border-radius:20px;padding:3px 10px;font-size:var(--font-size-xs);font-weight:500;max-width:160px;border:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font);color:var(--text)}
+.picker-btn-pill.picker-placeholder{color:var(--gray);font-style:italic;font-weight:400}
+/* Person card delete on hover */
+.person-card:hover .project-delete{display:flex}
+/* Note card button row (clipboard + delete, top-right) */
+.note-card-btns{position:absolute;top:10px;right:8px;display:flex;align-items:center;gap:2px}
+.note-copy-btn{background:none;border:none;cursor:pointer;color:var(--gray);padding:4px;line-height:1;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:3px;font-family:var(--font)}
+.note-copy-btn:hover{color:var(--purple);background:var(--surface2)}
+.note-delete-btn{display:inline-flex;align-items:center;justify-content:center;position:static!important;width:24px;height:24px;border-radius:3px}
+/* Note body editable text */
+.note-body-text{min-height:80px;font-size:var(--font-size-sm);color:var(--text);padding:4px;outline:none;border-radius:3px;white-space:pre-wrap;line-height:1.5;font-family:var(--font)}
+.note-body-text:focus{background:var(--surface2)}
+/* Note attendees chip row */
+.note-attendees-row{display:flex;flex-wrap:wrap;gap:4px;padding:4px 0;align-items:center}
+/* Inline new card — pink dashed border */
+.new-card{border:1.5px dashed var(--pink)!important}
+/* Inline new action row — pink dashed outline */
+.new-row{outline:1.5px dashed var(--pink);outline-offset:-1px}

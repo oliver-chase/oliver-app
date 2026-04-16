@@ -1,15 +1,16 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, CSSProperties } from 'react'
 
 interface PickerProps {
   value: string
   options: string[]
   placeholder?: string
   triggerClass?: string
+  triggerStyle?: CSSProperties
   onChange: (v: string) => void
 }
 
-export function Picker({ value, options, placeholder = '—', triggerClass = 'picker-btn', onChange }: PickerProps) {
+export function Picker({ value, options, placeholder = '—', triggerClass = 'picker-btn', triggerStyle, onChange }: PickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -22,10 +23,13 @@ export function Picker({ value, options, placeholder = '—', triggerClass = 'pi
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  const isEmpty = !value
+  const cls = triggerClass + (isEmpty ? ' picker-placeholder' : '')
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button className={triggerClass} onClick={() => setOpen(o => !o)}>
-        {value || <span className="picker-placeholder">{placeholder}</span>}
+      <button className={cls} style={triggerStyle} onClick={() => setOpen(o => !o)}>
+        {value || placeholder}
       </button>
       {open && (
         <div className="app-popover" style={{ minWidth: 160 }}>
@@ -50,10 +54,12 @@ interface MultiPickerProps {
   values: string[]
   options: string[]
   placeholder?: string
+  triggerClass?: string
+  triggerStyle?: CSSProperties
   onChange: (v: string[]) => void
 }
 
-export function MultiPicker({ values, options, placeholder = 'None', onChange }: MultiPickerProps) {
+export function MultiPicker({ values, options, placeholder = '—', triggerClass = 'card-owner-btn', triggerStyle, onChange }: MultiPickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -67,14 +73,16 @@ export function MultiPicker({ values, options, placeholder = 'None', onChange }:
   }, [open])
 
   const toggle = (opt: string) => {
-    if (values.includes(opt)) onChange(values.filter(v => v !== opt))
-    else onChange([...values, opt])
+    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt])
   }
+
+  const isEmpty = values.length === 0
+  const cls = triggerClass + (isEmpty ? ' picker-placeholder' : '')
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button className="picker-btn" onClick={() => setOpen(o => !o)}>
-        {values.length ? values.join(', ') : <span className="picker-placeholder">{placeholder}</span>}
+      <button className={cls} style={triggerStyle} onClick={() => setOpen(o => !o)}>
+        {values.length ? values.join(', ') : placeholder}
       </button>
       {open && (
         <div className="app-popover" style={{ minWidth: 180 }}>

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { upsertOpportunity, deleteRecord, newId, today } from '@/lib/db'
 import type { Opportunity, Background, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
@@ -9,23 +9,17 @@ function getTeamNames(bg?: Background): string[] {
   const names: string[] = []
   if (bg.account_director) names.push(bg.account_director)
   if (bg.account_manager) names.push(bg.account_manager)
-  if (bg.account_team) {
-    bg.account_team.split(';').forEach(n => { const t = n.trim(); if (t) names.push(t) })
-  }
+  if (bg.account_team) bg.account_team.split(';').forEach(n => { const t = n.trim(); if (t) names.push(t) })
   return [...new Set(names)]
 }
 
-const STATUS_OPTIONS: Opportunity['status'][] = ['Identified', 'Pursuing', 'Won', 'Lost']
-
-function statusClass(status: Opportunity['status']) {
-  const map: Record<string, string> = {
-    Identified: 'app-badge app-badge-identified',
-    Pursuing: 'app-badge app-badge-pursuing',
-    Won: 'app-badge app-badge-won',
-    Lost: 'app-badge app-badge-lost',
-  }
-  return (map[status] || 'app-badge') + ' app-badge--clickable'
+const OPP_STATUS = ['Identified', 'Pursuing', 'Won', 'Lost'] as const
+const statusBadgeClass = (s: string) => {
+  const map: Record<string, string> = { Identified: 'identified', Pursuing: 'pursuing', Won: 'won', Lost: 'lost' }
+  return 'app-badge app-badge--clickable app-badge-' + (map[s] || 'identified')
 }
+
+const PH_NOTES = 'Add notes…'
 
 interface Props {
   accountId: string
@@ -38,8 +32,6 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
   const owners = getTeamNames(bg)
   const [showLost, setShowLost] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [newDesc, setNewDesc] = useState('')
-  const descInputRef = useRef<HTMLInputElement>(null)
 
   const opps = data.opportunities
     .filter(o => o.account_id === accountId)
@@ -51,17 +43,9 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
     await upsertOpportunity(o)
   }
 
-  const add = async () => {
-    const desc = newDesc.trim()
-    if (!desc) { descInputRef.current?.focus(); return }
-    const o: Opportunity = {
-      opportunity_id: newId('OPP'), account_id: accountId, engagement_id: '',
-      description: desc, status: 'Identified', owners: [], value: '', close_date: '',
-      year: String(new Date().getFullYear()), notes: '', created_date: today(), last_updated: today(),
-    }
+  const add = (o: Opportunity) => {
     setData(prev => ({ ...prev, opportunities: [o, ...prev.opportunities] }))
-    await upsertOpportunity(o)
-    setNewDesc(''); setAdding(false)
+    setAdding(false)
   }
 
   const remove = async (o: Opportunity) => {
@@ -70,56 +54,48 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
     await deleteRecord('opportunities', 'opportunity_id', o.opportunity_id)
   }
 
-  const promoteToProject = async (o: Opportunity) => {
+  const promote = async (o: Opportunity) => {
     const { upsertProject } = await import('@/lib/db')
     const proj = {
       project_id: newId('PROJ'), account_id: accountId, engagement_id: o.engagement_id,
-      project_name: o.description, status: 'Active' as const, client_stakeholder_ids: [],
+      project_name: o.description || '', status: 'Active' as const, client_stakeholder_ids: [],
       notes: o.notes, year: o.year, created_date: today(), last_updated: today(),
     }
-    setData(prev => ({ ...prev, projects: [proj, ...prev.projects] }))
+    setData(prev => ({
+      ...prev,
+      projects: [proj, ...prev.projects],
+      opportunities: prev.opportunities.filter(x => x.opportunity_id !== o.opportunity_id),
+    }))
     await upsertProject(proj)
-    await save({ ...o, status: 'Won', last_updated: today() })
+    await upsertOpportunity({ ...o })
   }
 
   return (
     <div>
       <div className="section-header-row2" style={{ marginBottom: 10 }}>
         <div />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button className={'btn-acct-action' + (showLost ? ' active' : '')} onClick={() => setShowLost(s => !s)}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className={'btn-acct-action' + (showLost ? '' : '')}
+            onClick={() => setShowLost(s => !s)}
+          >
             {showLost ? 'Hide Lost' : 'Show Lost'}
           </button>
-          <button className="btn-acct-action" onClick={() => { setAdding(true); setTimeout(() => descInputRef.current?.focus(), 50) }}>
-            + Add Opportunity
-          </button>
+          <button className="btn-acct-action" onClick={() => setAdding(true)}>+ Add Opportunity</button>
         </div>
       </div>
 
-      {adding && (
-        <div className="inline-form" style={{ marginBottom: 12 }}>
-          <div className="inline-form-title">New Opportunity</div>
-          <div className="form-field">
-            <label className="form-label">Description</label>
-            <input
-              ref={descInputRef}
-              className="form-input field-required-highlight"
-              placeholder="Opportunity description"
-              value={newDesc}
-              onChange={e => setNewDesc(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false) }}
-            />
-          </div>
-          <div className="inline-form-actions">
-            <button className="btn-acct-action" onClick={add}>Save</button>
-            <button className="btn-acct-action" onClick={() => { setAdding(false); setNewDesc('') }}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {opps.length === 0 && !adding && <div className="empty-state">No opportunities yet</div>}
+      {opps.length === 0 && !adding && <div className="empty-state">No results</div>}
 
       <div className="project-grid">
+        {adding && (
+          <InlineOppCard
+            accountId={accountId}
+            owners={owners}
+            onSaved={add}
+            onDiscard={() => setAdding(false)}
+          />
+        )}
         {opps.map(o => (
           <OppCard
             key={o.opportunity_id}
@@ -127,7 +103,7 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
             owners={owners}
             onSave={save}
             onDelete={remove}
-            onPromote={promoteToProject}
+            onPromote={promote}
           />
         ))}
       </div>
@@ -143,16 +119,20 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
   onPromote: (o: Opportunity) => Promise<void>
 }) {
   const descRef = useRef<HTMLDivElement>(null)
+  const yearRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="project-card">
+    <div className="project-card" title={'Last updated: ' + (opp.last_updated || '')}>
+      {/* Title row */}
       <div className="card-title-row">
         <div
           ref={descRef}
-          className="card-title proj-name"
+          className="card-title"
           contentEditable
           suppressContentEditableWarning
+          role="textbox"
+          aria-label="Opportunity description"
           onBlur={() => {
             const v = descRef.current?.textContent?.trim() || ''
             if (v !== opp.description) onSave({ ...opp, description: v || opp.description, last_updated: today() })
@@ -164,44 +144,169 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
         <div className="card-status-wrap">
           <Picker
             value={opp.status}
-            options={STATUS_OPTIONS as unknown as string[]}
-            triggerClass={statusClass(opp.status)}
+            options={[...OPP_STATUS] as unknown as string[]}
+            triggerClass={statusBadgeClass(opp.status)}
+            triggerStyle={{ border: 'none', minHeight: 0, cursor: 'pointer' }}
             onChange={v => onSave({ ...opp, status: v as Opportunity['status'], last_updated: today() })}
           />
         </div>
       </div>
 
-      <div className="proj-meta">
+      {/* Year */}
+      <div className="card-meta-row">
+        <span className="card-meta-label">Year:</span>
+        <span
+          ref={yearRef}
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Year"
+          data-placeholder="e.g. 2026"
+          onBlur={() => {
+            const v = yearRef.current?.textContent?.trim() || ''
+            if (v !== opp.year) onSave({ ...opp, year: v || String(new Date().getFullYear()), last_updated: today() })
+            if (!v && yearRef.current) yearRef.current.textContent = String(new Date().getFullYear())
+          }}
+        >
+          {opp.year || String(new Date().getFullYear())}
+        </span>
+      </div>
+
+      {/* Owners */}
+      <div className="card-meta-row">
+        <span className="card-meta-label">Owner(s):</span>
         <MultiPicker
           values={opp.owners}
           options={owners}
-          placeholder="No owners"
+          placeholder="Select people"
           onChange={v => onSave({ ...opp, owners: v, last_updated: today() })}
         />
-        {' · '}
-        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--gray)' }}>{opp.year || '—'}</span>
       </div>
 
+      {/* Notes */}
+      <div className="card-section-label">NOTES</div>
       <div
         ref={notesRef}
-        className="notes-text"
+        className="card-body-text"
         contentEditable
         suppressContentEditableWarning
-        data-placeholder="Notes…"
-        style={{ color: notesRef.current?.textContent?.trim() ? undefined : 'var(--gray)', fontStyle: notesRef.current?.textContent?.trim() ? undefined : 'italic' }}
+        role="textbox"
+        aria-label="Notes"
+        style={!opp.notes ? { fontStyle: 'italic' } : undefined}
+        onFocus={() => { if (!opp.notes && notesRef.current && notesRef.current.textContent === PH_NOTES) { notesRef.current.textContent = ''; notesRef.current.style.fontStyle = '' } }}
         onBlur={() => {
           const v = notesRef.current?.textContent?.trim() || ''
-          if (v !== opp.notes) onSave({ ...opp, notes: v, last_updated: today() })
+          if (!v || v === PH_NOTES) {
+            if (notesRef.current) { notesRef.current.textContent = PH_NOTES; notesRef.current.style.fontStyle = 'italic' }
+            if (opp.notes) onSave({ ...opp, notes: '', last_updated: today() })
+          } else if (v !== opp.notes) {
+            if (notesRef.current) notesRef.current.style.fontStyle = ''
+            onSave({ ...opp, notes: v, last_updated: today() })
+          }
         }}
       >
-        {opp.notes || 'Notes…'}
+        {opp.notes || PH_NOTES}
       </div>
 
-      {opp.status !== 'Won' && opp.status !== 'Lost' && (
-        <button className="card-action-link" onClick={() => onPromote(opp)}>Promote to Project →</button>
-      )}
+      <button className="card-action-link" onClick={() => onPromote(opp)}>→ Promote to Project</button>
+      <button className="project-delete" title="Delete opportunity" aria-label="Delete opportunity" onClick={e => { e.stopPropagation(); onDelete(opp) }}>×</button>
+    </div>
+  )
+}
 
-      <button className="project-delete" onClick={() => onDelete(opp)}>×</button>
+function InlineOppCard({ accountId, owners, onSaved, onDiscard }: {
+  accountId: string
+  owners: string[]
+  onSaved: (o: Opportunity) => void
+  onDiscard: () => void
+}) {
+  const rec = useRef<Opportunity>({
+    opportunity_id: newId('OPP'), account_id: accountId, engagement_id: '',
+    description: '', status: 'Identified', owners: [], value: '', close_date: '',
+    year: String(new Date().getFullYear()), notes: '', created_date: today(), last_updated: today(),
+  })
+  const descRef = useRef<HTMLDivElement>(null)
+  const [status, setStatus] = useState<Opportunity['status']>('Identified')
+  const saved = useRef(false)
+
+  useEffect(() => { descRef.current?.focus() }, [])
+
+  const saveIfReady = async () => {
+    if (saved.current || !rec.current.description.trim()) return
+    saved.current = true
+    rec.current.last_updated = today()
+    await upsertOpportunity(rec.current)
+    onSaved({ ...rec.current })
+  }
+
+  // Click-away: if description filled, save; else discard
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const card = descRef.current?.closest('.project-card')
+      if (!card) return
+      if (card.contains(e.target as Node)) return
+      if ((e.target as Element).closest('.app-popover,.app-modal-overlay')) return
+      if (!saved.current) {
+        if (rec.current.description.trim()) saveIfReady()
+        else onDiscard()
+      }
+    }
+    setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    return () => document.removeEventListener('mousedown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="project-card new-card">
+      <button
+        className="project-delete"
+        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        title="Discard"
+        onClick={onDiscard}
+      >×</button>
+
+      <div className="card-title-row">
+        <div
+          ref={descRef}
+          className="card-title field-required-highlight"
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label="Opportunity description"
+          data-placeholder="Describe the opportunity…"
+          style={{ color: 'var(--text)' }}
+          onInput={() => { rec.current.description = descRef.current?.textContent?.trim() || '' }}
+          onBlur={() => {
+            rec.current.description = descRef.current?.textContent?.trim() || ''
+            if (rec.current.description && !saved.current) saveIfReady()
+          }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveIfReady() } if (e.key === 'Escape') onDiscard() }}
+        />
+        <div className="card-status-wrap">
+          <Picker
+            value={status}
+            options={[...OPP_STATUS] as unknown as string[]}
+            triggerClass={statusBadgeClass(status)}
+            triggerStyle={{ border: 'none', minHeight: 0, cursor: 'pointer' }}
+            onChange={v => { setStatus(v as Opportunity['status']); rec.current.status = v as Opportunity['status'] }}
+          />
+        </div>
+      </div>
+
+      <div className="card-meta-row">
+        <span className="card-meta-label">Year:</span>
+        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)' }}>{rec.current.year}</span>
+      </div>
+
+      <div className="card-meta-row">
+        <span className="card-meta-label">Owner(s):</span>
+        <MultiPicker
+          values={rec.current.owners}
+          options={owners}
+          placeholder="Select people"
+          onChange={v => { rec.current.owners = v }}
+        />
+      </div>
     </div>
   )
 }
