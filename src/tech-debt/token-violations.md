@@ -144,3 +144,13 @@ Action needed before ship:
 - Test soft-delete flow: delete a record, refresh, confirm it does not reappear.
 - If stale-row risk is confirmed, switch to deleteRecord() + upsert or add
   a server-side sync that mirrors the source DELETE-all + INSERT-all pattern.
+
+---
+
+## HubPage (src/app/page.tsx) — untokenized transparency values
+- rgba(255,255,255,.06) — card badge background overlay, no token exists
+- rgba(255,255,255,.18) — card hover border overlay, no token exists
+Action: add to tokens.css:
+  --color-overlay-subtle:  rgba(255,255,255,.06);
+  --color-overlay-border:  rgba(255,255,255,.18);
+Then update page.tsx to use the tokens.
