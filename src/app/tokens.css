@@ -148,4 +148,42 @@
   /* ── Layout ──────────────────────────────────────────────────────────── */
   --sidebar-w: 220px; /* sidebar width — used by accounts, hr, and .app-sidebar */
   --topbar-h:  50px;  /* topbar height */
+
+  /* ── Legacy shorthand aliases (used by accounts.css + component CSS) ─── */
+  /* These mirror styles.css from ops-dashboard. All CSS files reference these
+     names — the semantic names above are the new system, not yet fully adopted. */
+  --font:        'Aptos', system-ui, -apple-system, sans-serif;
+  --mono:        'DM Mono', ui-monospace, monospace;
+  --pink:        #E60075;
+  --purple:      #532976;
+  --white:       #FEFFFF;
+  --gray:        #6c6c6f;
+  --gray-light:  #8c8c8f;
+  --bg:          #FEFFFF;
+  --surface:     #fff;
+  --surface2:    #f5f5f6;
+  --border:      #e0e0e2;
+  --border2:     #d0d0d3;
+  --text:        #1a1a1a;
+  --text2:       #797979;
+  --text3:       #767679;
+  --accent:      #E60075;
+  --accent-light:#fce4f0;
+  --accent-text: #532976;
+  --green:       #1a9c6e;
+  --green-light: #e6f7f1;
+  --amber:       #b86c0a;
+  --amber-light: #fef3e2;
+  --red:         #c0392b;
+  --red-light:   #fdecea;
+  --blue:        #1a6fb5;
+  --blue-light:  #e8f2fc;
+  --radius:      8px;
+  --hub-bg:      #532976;
+  --hub-bg2:     #3d1f5c;
+  --hub-border:  rgba(255,255,255,.12);
+  --hub-text:    #FEFFFF;
+  --hub-text2:   rgba(254,255,255,.7);
+  --hub-text3:   rgba(254,255,255,.4);
+  --hub-accent:  #E60075;
 }
