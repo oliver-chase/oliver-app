@@ -5,5 +5,5 @@ interface SyncDotProps {
 }
 
 export default function SyncDot({ status }: SyncDotProps) {
-  return <span className={`sync-dot ${status}`} aria-hidden="true" />;
+  return <div className={`sync-dot ${status}`} id="sync-dot" aria-hidden="true" />;
 }

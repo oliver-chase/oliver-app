@@ -8,9 +8,9 @@ type SyncStatus = 'syncing' | 'ok' | 'err';
 const NAV_ITEMS = [
   { label: 'Overview',      href: '#overview' },
   { label: 'People',        href: '#people' },
-  { label: 'Actions',       href: '#actions' },
   { label: 'Opportunities', href: '#opportunities' },
   { label: 'Projects',      href: '#projects' },
+  { label: 'Actions',       href: '#actions' },
   { label: 'Notes',         href: '#notes' },
 ] as const;
 
