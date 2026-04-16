@@ -1,84 +1,55 @@
+/*
+ * globals.css — oliver-app Next.js rewrite
+ * Resets sourced verbatim from ops-dashboard/shared/styles.css.
+ * No additions beyond what the source defines.
+ *
+ * Fonts: Aptos and DM Mono are NOT loaded via @font-face or Google Fonts
+ * in the source project — they rely on system availability with fallbacks.
+ * Aptos ships with Windows 11 / Microsoft 365; system-ui covers all other platforms.
+ * DM Mono falls back to ui-monospace. No font loading step required.
+ */
+
 @import './tokens.css';
-@import './components.css';
+@import './components-base.css';
 @import './components-interactive.css';
+@import './components-layout.css';
+@import './components.css';
 @import './accounts.css';
 
-* {
+/* ── Reset (verbatim from shared/styles.css) ──────────────────────────── */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
 }
 
-html, body {
-  height: 100%;
-}
-
+html,
 body {
-  font-family: var(--font);
-  font-size: var(--font-size-sm);
-  color: var(--text);
-  background: var(--bg);
+  height: 100%;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+body {
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
 }
 
-/* Login page */
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
+button {
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  border: none;
+  background: none;
 }
 
-.login-card {
-  width: 360px;
-  padding: 40px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
+input,
+select,
+textarea {
+  font-family: var(--font-family-base);
 }
 
-.login-logo {
-  margin-bottom: 8px;
-}
-
-.login-brand {
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--brand);
-}
-
-.login-title {
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-
-.login-subtitle {
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.login-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.login-ms-icon {
-  flex-shrink: 0;
-}
