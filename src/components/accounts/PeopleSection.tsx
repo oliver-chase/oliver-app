@@ -206,11 +206,11 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
 function PaginationRow({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
-      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(0)}>\u27e8</button>
-      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(page - 1)}>\u2190</button>
+      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(0)}>{'\u27e8'}</button>
+      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(page - 1)}>{'\u2190'}</button>
       <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', margin: '0 8px' }}>Page {page + 1} of {total}</span>
-      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(page + 1)}>\u2192</button>
-      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(total - 1)}>\u27e9</button>
+      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(page + 1)}>{'\u2192'}</button>
+      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(total - 1)}>{'\u27e9'}</button>
     </div>
   )
 }
@@ -309,7 +309,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               <span className="card-meta-label">{key === 'primary_owner' ? 'Primary:' : 'Secondary:'}</span>
               <Picker
                 value={person[key]}
-                options={[...owners, '']}
+                options={owners}
                 placeholder={PH_PERSON}
                 triggerClass={'card-owner-btn' + (!person[key] ? ' picker-placeholder' : '')}
                 onChange={v => onSave({ ...person, [key]: v, last_updated: today() })}
@@ -322,7 +322,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
           <span className="card-meta-label">Reports To:</span>
           <Picker
             value={otherPeople.find(p => p.stakeholder_id === person.reports_to)?.name || ''}
-            options={[...otherPeople.map(p => p.name), '']}
+            options={otherPeople.map(p => p.name)}
             placeholder={PH_PERSON}
             triggerClass={'card-owner-btn' + (!person.reports_to ? ' picker-placeholder' : '')}
             onChange={v => {
@@ -385,11 +385,13 @@ function EngPicker({ ids, items, label, onChange }: {
   onChange: (ids: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
@@ -399,15 +401,29 @@ function EngPicker({ ids, items, label, onChange }: {
     onChange(ids.includes(val) ? ids.filter(x => x !== val) : [...ids, val])
   }
 
+  const handleOpen = () => { setOpen(o => !o); setQuery(''); setTimeout(() => searchRef.current?.focus(), 0) }
+
+  const visibleItems = query
+    ? items.filter(item => item.isHeader || item.value === '' || item.label.toLowerCase().includes(query.toLowerCase()))
+    : items
+
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button className="person-eng-pill" onClick={() => setOpen(o => !o)} aria-haspopup="listbox">
+    <div ref={ref} className="picker-wrap">
+      <button className="person-eng-pill" onClick={handleOpen} aria-haspopup="listbox">
         {label}
       </button>
       {open && (
         <div className="app-popover" style={{ minWidth: 200 }}>
+          <input
+            ref={searchRef}
+            className="app-popover-search"
+            placeholder="Search\u2026"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+          />
           <div className="app-popover-list">
-            {items.map((item, i) =>
+            {visibleItems.map((item, i) =>
               item.isHeader ? (
                 <div key={i} className="app-popover-section-label">{item.label}</div>
               ) : (
@@ -416,11 +432,14 @@ function EngPicker({ ids, items, label, onChange }: {
                   className={'app-popover-item' + (item.value === '' ? (ids.length === 0 ? ' selected' : '') : (ids.includes(item.value) ? ' selected' : ''))}
                   onMouseDown={e => {
                     e.preventDefault()
-                    if (item.value === '') { onChange([]); setOpen(false) }
+                    if (item.value === '') { onChange([]); setOpen(false); setQuery('') }
                     else toggle(item.value)
                   }}
                 >{item.label}</div>
               )
+            )}
+            {visibleItems.filter(i => !i.isHeader).length === 0 && (
+              <div className="app-popover-empty">No matches</div>
             )}
           </div>
         </div>
