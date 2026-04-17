@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { today, upsertBackground } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
+import { useSyncReport } from '@/lib/sync-context'
 import type { AppState, Background, Note } from '@/types'
 import { Picker } from './Picker'
 
@@ -89,6 +90,7 @@ function getTeamNames(bg: Background | undefined): string[] {
 export default function OverviewSection({ accountId, data, setData }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const { modal, showModal } = useAppModal()
+  const reportSync = useSyncReport()
 
   const ensureBg = useCallback((): Background => {
     if (bg) return bg
@@ -115,8 +117,9 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           : [...prev.background, b],
       }
     })
-    await upsertBackground(b)
-  }, [setData])
+    reportSync('syncing')
+    try { await upsertBackground(b); reportSync('ok') } catch { reportSync('error') }
+  }, [setData, reportSync])
 
   const b = ensureBg()
   const [cadenceOpen, setCadenceOpen] = useState(!b.meeting_frequency)

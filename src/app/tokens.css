@@ -133,8 +133,12 @@
   --spacing-2xs: 2px;
   --spacing-3:   3px;
   --spacing-xs:  4px;
+  --spacing-6:   6px;
   --spacing-7:   7px;
   --spacing-sm:  8px;
+  --spacing-10:  10px;
+  --spacing-12:  12px;
+  --spacing-14:  14px;
   --spacing-md:  16px;
   --spacing-lg:  24px;
   --spacing-xl:  32px;
@@ -155,6 +159,7 @@
 
   /* ── Z-index ─────────────────────────────────────────────────────────── */
   --z-base:    1;
+  --z-org-svg: 0;
   --z-sidebar: 50;
   --z-topbar:  calc(var(--z-sidebar) - 10);
   --z-popover: 100;

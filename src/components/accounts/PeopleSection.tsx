@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { upsertStakeholder, deleteRecord, newId, today } from '@/lib/db'
+import { useSyncReport } from '@/lib/sync-context'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Stakeholder, Background, AppState } from '@/types'
 import { Picker } from './Picker'
@@ -96,9 +97,12 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const pagedPeople = people.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
   const filtersOn = filterExec || filterIncomplete || !!filterVTwoOwner
 
+  const reportSync = useSyncReport()
+
   const save = async (s: Stakeholder) => {
     setData(prev => ({ ...prev, stakeholders: prev.stakeholders.map(x => x.stakeholder_id === s.stakeholder_id ? s : x) }))
-    await upsertStakeholder(s)
+    reportSync('syncing')
+    try { await upsertStakeholder(s); reportSync('ok') } catch { reportSync('error') }
   }
 
   const add = (s: Stakeholder) => {
@@ -112,7 +116,7 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
       displayName: s.name || 'Person',
       onLocalRemove: () => { setData(prev => ({ ...prev, stakeholders: prev.stakeholders.filter(x => x.stakeholder_id !== s.stakeholder_id) })); setPage(0) },
       onLocalRestore: () => setData(prev => ({ ...prev, stakeholders: [...prev.stakeholders, s] })),
-      onDeleteRecord: async () => { await deleteRecord('stakeholders', 'stakeholder_id', s.stakeholder_id) },
+      onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('stakeholders', 'stakeholder_id', s.stakeholder_id); reportSync('ok') } catch { reportSync('error') } },
     })
   }
 
@@ -245,7 +249,13 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
   const notesRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLDivElement>(null)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isClient = (person.organization || '').toLowerCase() !== 'v.two'
+
+  const debouncedSave = (fn: () => void) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(fn, 500)
+  }
 
   const curEngIds = (person.engagement_id || '').split(',').map(s => s.trim()).filter(Boolean)
   const engItems = buildEngItems(acctProjs, acctOpps)
@@ -273,7 +283,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               if (!v) { if (nameRef.current) nameRef.current.textContent = person.name; return }
               if (v !== person.name) {
                 if (avatarRef.current) avatarRef.current.textContent = initials(v)
-                onSave({ ...person, name: v, last_updated: today() })
+                debouncedSave(() => onSave({ ...person, name: v, last_updated: today() }))
               }
             }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); nameRef.current?.blur() } }}
@@ -290,8 +300,8 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               onFocus={() => { if (!person.title && titleRef.current && titleRef.current.textContent?.includes('Add title')) { titleRef.current.textContent = ''; titleRef.current.style.cssText = '' } }}
               onBlur={() => {
                 const v = titleRef.current?.textContent?.trim() || ''
-                if (!v) { if (titleRef.current) { titleRef.current.textContent = 'Add title\u2026'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, title: '', last_updated: today() }) }
-                else { if (titleRef.current) titleRef.current.style.cssText = ''; if (v !== person.title) onSave({ ...person, title: v, last_updated: today() }) }
+                if (!v) { if (titleRef.current) { titleRef.current.textContent = 'Add title\u2026'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } debouncedSave(() => onSave({ ...person, title: '', last_updated: today() })) }
+                else { if (titleRef.current) titleRef.current.style.cssText = ''; if (v !== person.title) debouncedSave(() => onSave({ ...person, title: v, last_updated: today() })) }
               }}
             >{person.title || 'Add title\u2026'}</span>
           </div>
@@ -307,8 +317,8 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               onFocus={() => { if (!person.department && deptRef.current && deptRef.current.textContent?.includes('Add department')) { deptRef.current.textContent = ''; deptRef.current.style.cssText = '' } }}
               onBlur={() => {
                 const v = deptRef.current?.textContent?.trim() || ''
-                if (!v) { if (deptRef.current) { deptRef.current.textContent = 'Add department\u2026'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, department: '', last_updated: today() }) }
-                else { if (deptRef.current) deptRef.current.style.cssText = ''; if (v !== person.department) onSave({ ...person, department: v, last_updated: today() }) }
+                if (!v) { if (deptRef.current) { deptRef.current.textContent = 'Add department\u2026'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } debouncedSave(() => onSave({ ...person, department: '', last_updated: today() })) }
+                else { if (deptRef.current) deptRef.current.style.cssText = ''; if (v !== person.department) debouncedSave(() => onSave({ ...person, department: v, last_updated: today() })) }
               }}
             >{person.department || 'Add department\u2026'}</span>
           </div>
@@ -366,7 +376,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
             onFocus={() => { if (!expanded) setExpanded(true) }}
             onBlur={() => {
               const v = notesRef.current?.textContent?.trim() || ''
-              if (v !== person.notes) onSave({ ...person, notes: v, last_updated: today() })
+              if (v !== person.notes) debouncedSave(() => onSave({ ...person, notes: v, last_updated: today() }))
             }}
           >{person.notes}</div>
           <button type="button" className="card-notes-close" aria-label="Collapse notes" onClick={() => setExpanded(false)}>×</button>

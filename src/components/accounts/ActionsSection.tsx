@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, CSSProperties } from 'react'
 import { upsertAction, upsertBackground, deleteRecord, newId, today } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
+import { useSyncReport } from '@/lib/sync-context'
 import type { Action, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 
@@ -47,6 +48,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open-progress')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Action>()
+  const reportSync = useSyncReport()
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
@@ -93,7 +95,8 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
 
   const save = async (action: Action) => {
     setData(prev => ({ ...prev, actions: prev.actions.map(a => a.action_id === action.action_id ? action : a) }))
-    await upsertAction(action)
+    reportSync('syncing')
+    try { await upsertAction(action); reportSync('ok') } catch { reportSync('error') }
   }
 
   const remove = (a: Action) => {
@@ -101,7 +104,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
       displayName: a.description || 'Action',
       onLocalRemove: () => setData(prev => ({ ...prev, actions: prev.actions.filter(x => x.action_id !== a.action_id) })),
       onLocalRestore: () => setData(prev => ({ ...prev, actions: [...prev.actions, a] })),
-      onDeleteRecord: async () => { await deleteRecord('actions', 'action_id', a.action_id) },
+      onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('actions', 'action_id', a.action_id); reportSync('ok') } catch { reportSync('error') } },
     })
   }
 

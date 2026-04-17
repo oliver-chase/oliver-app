@@ -1,5 +1,5 @@
 'use client'
-import { useRef } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { today } from '@/lib/db'
 import type { AppState, Account } from '@/types'
 import ActionsSection from './ActionsSection'
@@ -18,8 +18,22 @@ interface Props {
   onDelete: () => void
 }
 
+function fmtDate(d: string) {
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return d
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export default function AccountView({ accountId, data, setData, onUpdateAccount, onArchive, onDelete }: Props) {
   const acct = data.accounts.find(a => a.account_id === accountId)
+  const [bttVisible, setBttVisible] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setBttVisible(window.scrollY > 300)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   if (!acct) return null
 
   const isArchived = acct.status === 'Archived'
@@ -36,7 +50,9 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
             ariaLabel="Account name"
             onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
           />
-          <div className="page-last-updated" id="page-last-updated" />
+          <div className="page-last-updated" id="page-last-updated">
+            {acct.last_updated ? 'Last updated ' + fmtDate(acct.last_updated) : ''}
+          </div>
         </div>
         <div className="account-header-actions" id="account-header-actions">
           <button className="btn-acct-action" onClick={onArchive}>
@@ -74,6 +90,16 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
       <div id="notes" className="section">
         <NotesSection accountId={accountId} data={data} setData={setData} />
       </div>
+
+      <button
+        id="btt"
+        className={'btt' + (bttVisible ? ' show' : '')}
+        aria-label="Back to top"
+        title="Back to top"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        {'\u2191'}
+      </button>
     </div>
   )
 }
@@ -87,6 +113,7 @@ function ContentEditable({ id, className, title, value, ariaLabel, onSave }: {
   onSave: (v: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   return (
     <div
       ref={ref}
@@ -98,8 +125,9 @@ function ContentEditable({ id, className, title, value, ariaLabel, onSave }: {
       aria-label={ariaLabel}
       onBlur={() => {
         const v = ref.current?.textContent?.trim() || ''
-        if (v) onSave(v)
-        else if (ref.current) ref.current.textContent = value
+        if (!v) { if (ref.current) ref.current.textContent = value; return }
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => onSave(v), 500)
       }}
       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ref.current?.blur() } }}
     >

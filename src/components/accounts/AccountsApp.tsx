@@ -10,6 +10,7 @@ import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
 import ExportPanel from './ExportPanel'
 import ChatbotPanel from './ChatbotPanel'
+import { SyncContext } from '@/lib/sync-context'
 import type { Account } from '@/types'
 
 class ErrorBoundary extends Component<
@@ -27,7 +28,7 @@ class ErrorBoundary extends Component<
 }
 
 export default function AccountsApp() {
-  const { data, setData, loading, error, syncState, saveAccount, addAccount } = useAccountsData()
+  const { data, setData, loading, error, syncState, reportSync, saveAccount, addAccount } = useAccountsData()
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -139,6 +140,7 @@ export default function AccountsApp() {
   }
 
   return (
+    <SyncContext.Provider value={reportSync}>
     <div className="app-layout">
       {modal}
       <Sidebar
@@ -208,5 +210,6 @@ export default function AccountsApp() {
         <ChatbotPanel accountId={currentAccountId} data={data} />
       )}
     </div>
+    </SyncContext.Provider>
   )
 }

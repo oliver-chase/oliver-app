@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { upsertNote, upsertBackground, deleteRecord, newId, today } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
+import { useSyncReport } from '@/lib/sync-context'
 import type { Note, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 
@@ -80,6 +81,7 @@ export default function NotesSection({ accountId, data, setData }: Props) {
   const [dateTo, setDateTo] = useState('')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Note>()
+  const reportSync = useSyncReport()
 
   const notes = data.notes
     .filter(n => n.account_id === accountId)
@@ -97,7 +99,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
 
   const save = async (n: Note) => {
     setData(prev => ({ ...prev, notes: prev.notes.map(x => x.note_id === n.note_id ? n : x) }))
-    await upsertNote(n)
+    reportSync('syncing')
+    try { await upsertNote(n); reportSync('ok') } catch { reportSync('error') }
   }
 
   const remove = (n: Note) => {
@@ -105,7 +108,7 @@ export default function NotesSection({ accountId, data, setData }: Props) {
       displayName: n.title || 'Note',
       onLocalRemove: () => setData(prev => ({ ...prev, notes: prev.notes.filter(x => x.note_id !== n.note_id) })),
       onLocalRestore: () => setData(prev => ({ ...prev, notes: [...prev.notes, n] })),
-      onDeleteRecord: async () => { await deleteRecord('notes', 'note_id', n.note_id) },
+      onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('notes', 'note_id', n.note_id); reportSync('ok') } catch { reportSync('error') } },
     })
   }
 
@@ -116,7 +119,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
     cur.push(name)
     const updated = { ...bg, account_team: cur.join('; ') }
     setData(prev => ({ ...prev, background: prev.background.map(b => b.account_id === accountId && !b.engagement_id ? updated : b) }))
-    await upsertBackground(updated)
+    reportSync('syncing')
+    try { await upsertBackground(updated); reportSync('ok') } catch { reportSync('error') }
   }
 
   const createNote = async () => {
@@ -140,7 +144,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
       body: '', transcript_link: '', created_date: dateStr, last_updated: dateStr,
     }
     setData(prev => ({ ...prev, notes: [rec, ...prev.notes] }))
-    await upsertNote(rec)
+    reportSync('syncing')
+    try { await upsertNote(rec); reportSync('ok') } catch { reportSync('error') }
   }
 
   return (

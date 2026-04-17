@@ -66,5 +66,7 @@ export function useAccountsData() {
     }
   }, [])
 
-  return { data, setData, loading, error, syncState, saveAccount, saveBackground, addAccount }
+  const reportSync = (s: 'syncing' | 'ok' | 'error') => setSyncState(s)
+
+  return { data, setData, loading, error, syncState, reportSync, saveAccount, saveBackground, addAccount }
 }

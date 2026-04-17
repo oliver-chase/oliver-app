@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { upsertProject, upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
+import { useSyncReport } from '@/lib/sync-context'
 import type { Project, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
 
@@ -27,6 +28,7 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
   const [sortBy, setSortBy] = useState('created_date')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Project>()
+  const reportSync = useSyncReport()
 
   const projects = data.projects
     .filter(p => p.account_id === accountId)
@@ -43,7 +45,8 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
 
   const save = async (p: Project) => {
     setData(prev => ({ ...prev, projects: prev.projects.map(x => x.project_id === p.project_id ? p : x) }))
-    await upsertProject(p)
+    reportSync('syncing')
+    try { await upsertProject(p); reportSync('ok') } catch { reportSync('error') }
   }
 
   const add = (p: Project) => {
@@ -56,7 +59,7 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
       displayName: p.project_name || 'Project',
       onLocalRemove: () => setData(prev => ({ ...prev, projects: prev.projects.filter(x => x.project_id !== p.project_id) })),
       onLocalRestore: () => setData(prev => ({ ...prev, projects: [...prev.projects, p] })),
-      onDeleteRecord: async () => { await deleteRecord('projects', 'project_id', p.project_id) },
+      onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('projects', 'project_id', p.project_id); reportSync('ok') } catch { reportSync('error') } },
     })
   }
 
@@ -80,8 +83,8 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
       opportunities: [opp, ...prev.opportunities],
       projects: prev.projects.filter(x => x.project_id !== p.project_id),
     }))
-    await upsertOpportunity(opp)
-    await deleteRecord('projects', 'project_id', p.project_id)
+    reportSync('syncing')
+    try { await upsertOpportunity(opp); await deleteRecord('projects', 'project_id', p.project_id); reportSync('ok') } catch { reportSync('error') }
   }
 
   const activeCount = data.projects.filter(p => p.account_id === accountId && p.status === 'Active').length
@@ -189,15 +192,13 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           {project.project_name}
         </div>
         <div className="card-status-wrap">
-          <span
+          <button
+            type="button"
             className={statusBadgeClass(status)}
-            role="button"
-            tabIndex={0}
             onClick={cycleStatus}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleStatus() } }}
           >
             {status}
-          </span>
+          </button>
         </div>
       </div>
 
@@ -338,15 +339,13 @@ function InlineProjCard({ accountId, clientStakeholders, onSaved, onDiscard }: {
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveIfReady() } if (e.key === 'Escape') onDiscard() }}
         />
         <div className="card-status-wrap">
-          <span
+          <button
+            type="button"
             className={statusBadgeClass(status)}
-            role="button"
-            tabIndex={0}
             onClick={cycleStatus}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleStatus() } }}
           >
             {status}
-          </span>
+          </button>
         </div>
       </div>
 

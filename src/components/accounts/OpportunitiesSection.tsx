@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
+import { useSyncReport } from '@/lib/sync-context'
 import type { Opportunity, Background, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
 
@@ -38,6 +39,7 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
   const [sortBy, setSortBy] = useState('created_date')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Opportunity>()
+  const reportSync = useSyncReport()
 
   const opps = data.opportunities
     .filter(o => o.account_id === accountId)
@@ -49,7 +51,8 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
 
   const save = async (o: Opportunity) => {
     setData(prev => ({ ...prev, opportunities: prev.opportunities.map(x => x.opportunity_id === o.opportunity_id ? o : x) }))
-    await upsertOpportunity(o)
+    reportSync('syncing')
+    try { await upsertOpportunity(o); reportSync('ok') } catch { reportSync('error') }
   }
 
   const add = (o: Opportunity) => {
@@ -62,7 +65,7 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
       displayName: o.description || 'Opportunity',
       onLocalRemove: () => setData(prev => ({ ...prev, opportunities: prev.opportunities.filter(x => x.opportunity_id !== o.opportunity_id) })),
       onLocalRestore: () => setData(prev => ({ ...prev, opportunities: [...prev.opportunities, o] })),
-      onDeleteRecord: async () => { await deleteRecord('opportunities', 'opportunity_id', o.opportunity_id) },
+      onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('opportunities', 'opportunity_id', o.opportunity_id); reportSync('ok') } catch { reportSync('error') } },
     })
   }
 
@@ -84,8 +87,8 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
       projects: [proj, ...prev.projects],
       opportunities: prev.opportunities.filter(x => x.opportunity_id !== o.opportunity_id),
     }))
-    await upsertProject(proj)
-    await upsertOpportunity({ ...o })
+    reportSync('syncing')
+    try { await upsertProject(proj); await upsertOpportunity({ ...o }); reportSync('ok') } catch { reportSync('error') }
   }
 
   const allOpps = data.opportunities.filter(o => o.account_id === accountId)

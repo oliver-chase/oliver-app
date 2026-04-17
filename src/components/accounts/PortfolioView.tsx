@@ -48,6 +48,7 @@ interface CardProps {
 
 function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount, isArchived, onSelect, onUpdateCompany }: CardProps) {
   const companyRef = useRef<HTMLDivElement>(null)
+  const companyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const tier = bg?.account_tier || 'Growth'
   const tierClass = TIER_CLASS[tier] || 'tier-growth'
   const lastUpdate = bg?.last_updated ? fmtDate(bg.last_updated) : 'Never'
@@ -86,7 +87,8 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
         onClick={e => e.stopPropagation()}
         onBlur={() => {
           const v = companyRef.current?.textContent?.trim() || ''
-          onUpdateCompany(v)
+          if (companyTimer.current) clearTimeout(companyTimer.current)
+          companyTimer.current = setTimeout(() => onUpdateCompany(v), 500)
         }}
       >
         {account.client_company || ''}
