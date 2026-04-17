@@ -49,7 +49,7 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
         <div className="sdr-detail-header">
           <div>
             <div className="sdr-detail-name">{p.nm || p.fn || 'Unknown'}</div>
-            <div style={{ marginTop: 6 }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
+            <div style={{ marginTop: 'var(--spacing-6)' }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
           </div>
           <button ref={closeRef} className="sdr-detail-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
@@ -83,9 +83,9 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
                 const date = s.sent_at ? new Date(s.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
                 const cls  = s.status === 'replied' ? 'sdr-status--replied' : s.status === 'bounced' ? 'sdr-status--bounced' : 'sdr-status--sent'
                 return (
-                  <div key={s.id} className="sdr-detail-value" style={{ marginTop: 4 }}>
+                  <div key={s.id} className="sdr-detail-value" style={{ marginTop: 'var(--spacing-xs)' }}>
                     <span className={'sdr-status-badge ' + cls}>{s.status || 'sent'}</span>
-                    {date && <span style={{ color: 'var(--gray)', marginLeft: 6 }}>{date}</span>}
+                    {date && <span style={{ color: 'var(--gray)', marginLeft: 'var(--spacing-6)' }}>{date}</span>}
                     {s.subject && <> — {s.subject}</>}
                   </div>
                 )
