@@ -1,0 +1,223 @@
+/* ── User Manager ─────────────────────────────────────────────────── */
+
+.loading {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  color: var(--color-text-primary);
+}
+
+.rowSaving {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tdName {
+  font-weight: 500;
+}
+
+.tdEmail {
+  color: var(--color-text-secondary);
+}
+
+.roleSelect {
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-base);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.permGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.permLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.permLabel input {
+  accent-color: var(--color-brand-purple);
+  cursor: pointer;
+}
+
+/* ── Token Editor ─────────────────────────────────────────────────── */
+
+.tokenEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tokenGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tokenGroupLabel {
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+
+.tokenRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-bg-hover);
+}
+
+.tokenName {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  flex: 0 0 260px;
+}
+
+.tokenValue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.colorSwatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.tokenValueText {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokenInput {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-focus);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.tokenEditBtn,
+.tokenSaveBtn {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.tokenEditBtn:hover {
+  border-color: var(--color-border-focus);
+  color: var(--color-text-primary);
+}
+
+.tokenSaveBtn {
+  background: var(--color-brand-purple);
+  color: var(--color-text-inverse);
+  border-color: var(--color-brand-purple);
+}
+
+.tokenSaveBtn:disabled {
+  opacity: 0.5;
+}
+
+/* ── Component Library ────────────────────────────────────────────── */
+
+.componentLibrary {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.clSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clSectionTitle {
+  font-size: 12px;
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.clSectionContent {
+  padding: 16px 0;
+}
+
+.clRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

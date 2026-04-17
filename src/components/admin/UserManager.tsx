@@ -1,0 +1,89 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import type { AppUser, PagePermission, Role } from '@/types/auth'
+import { listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
+import styles from './admin.module.css'
+
+const ALL_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm']
+
+export function UserManager() {
+  const [users, setUsers] = useState<AppUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+
+  useEffect(() => {
+    listUsers().then(u => { setUsers(u); setLoading(false) })
+  }, [])
+
+  async function handleRoleChange(userId: string, role: Role) {
+    setSaving(userId)
+    await updateUserRole(userId, role)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
+    setSaving(null)
+  }
+
+  async function handlePermissionToggle(userId: string, perm: PagePermission) {
+    const user = users.find(u => u.user_id === userId)
+    if (!user) return
+    const current = user.page_permissions
+    const updated = current.includes(perm)
+      ? current.filter(p => p !== perm)
+      : [...current, perm]
+    setSaving(userId)
+    await updateUserPermissions(userId, updated)
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, page_permissions: updated } : u))
+    setSaving(null)
+  }
+
+  if (loading) return <p className={styles.loading}>Loading users...</p>
+
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Permissions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(user => (
+            <tr key={user.user_id} className={saving === user.user_id ? styles.rowSaving : undefined}>
+              <td className={styles.tdName}>{user.name || '-'}</td>
+              <td className={styles.tdEmail}>{user.email}</td>
+              <td>
+                <select
+                  className={styles.roleSelect}
+                  value={user.role}
+                  onChange={e => handleRoleChange(user.user_id, e.target.value as Role)}
+                  disabled={saving === user.user_id}
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </td>
+              <td>
+                <div className={styles.permGrid}>
+                  {ALL_PERMISSIONS.map(perm => (
+                    <label key={perm} className={styles.permLabel}>
+                      <input
+                        type="checkbox"
+                        checked={user.role === 'admin' || user.page_permissions.includes(perm)}
+                        disabled={user.role === 'admin' || saving === user.user_id}
+                        onChange={() => handlePermissionToggle(user.user_id, perm)}
+                      />
+                      {perm}
+                    </label>
+                  ))}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
