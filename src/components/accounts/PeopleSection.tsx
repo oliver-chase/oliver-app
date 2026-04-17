@@ -4,6 +4,8 @@ import { upsertStakeholder, deleteRecord, newId, today } from '@/lib/db'
 import type { Stakeholder, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 
+const PAGE_SIZE = 6
+
 function getTeamNames(bg?: Background): string[] {
   if (!bg) return []
   const names: string[] = []
@@ -37,7 +39,7 @@ function engDisplay(ids: string[], projs: AppState['projects'], opps: AppState['
   return resolved.length ? resolved.join(', ') : 'Account-wide'
 }
 
-const PH_PERSON = 'Select person'
+const PH_PERSON = 'Select person\u2026'
 
 interface Props {
   accountId: string
@@ -50,16 +52,43 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const owners = getTeamNames(bg)
   const [adding, setAdding] = useState(false)
   const [sortBy, setSortBy] = useState('name')
+  const [view, setView] = useState<'cards' | 'orgchart'>('cards')
+  const [page, setPage] = useState(0)
+  const [filterExec, setFilterExec] = useState(false)
+  const [filterIncomplete, setFilterIncomplete] = useState(false)
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const filterPanelRef = useRef<HTMLDivElement>(null)
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
 
-  const people = data.stakeholders
-    .filter(s => s.account_id === accountId)
-    .sort((a, b) => {
-      if (sortBy === 'department') return (a.department || '').localeCompare(b.department || '')
-      return a.name.localeCompare(b.name)
-    })
+  useEffect(() => {
+    if (!filterPanelOpen) return
+    const handler = (e: MouseEvent) => {
+      if (filterPanelRef.current && !filterPanelRef.current.closest('.people-filter-wrapper')?.contains(e.target as Node)) {
+        setFilterPanelOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [filterPanelOpen])
+
+  let people = data.stakeholders.filter(s => s.account_id === accountId)
+  if (filterExec) people = people.filter(s => s.is_executive === 'true' || s.is_executive === 'TRUE')
+  if (filterIncomplete) {
+    people = people.filter(s => !s.department || !s.primary_owner || !s.secondary_owner || !s.reports_to)
+  }
+
+  people = [...people].sort((a, b) => {
+    if (sortBy === 'department') return (a.department || '').localeCompare(b.department || '')
+    if (sortBy === 'seniority') return (a.title || '').localeCompare(b.title || '')
+    return a.name.localeCompare(b.name)
+  })
+
+  const totalPages = Math.ceil(people.length / PAGE_SIZE)
+  const safePage = Math.min(page, Math.max(0, totalPages - 1))
+  const pagedPeople = people.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const filtersOn = filterExec || filterIncomplete
 
   const save = async (s: Stakeholder) => {
     setData(prev => ({ ...prev, stakeholders: prev.stakeholders.map(x => x.stakeholder_id === s.stakeholder_id ? s : x) }))
@@ -69,12 +98,14 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const add = (s: Stakeholder) => {
     setData(prev => ({ ...prev, stakeholders: [...prev.stakeholders, s] }))
     setAdding(false)
+    setPage(0)
   }
 
   const remove = async (s: Stakeholder) => {
     if (!window.confirm('Delete ' + s.name + '?')) return
     setData(prev => ({ ...prev, stakeholders: prev.stakeholders.filter(x => x.stakeholder_id !== s.stakeholder_id) }))
     await deleteRecord('stakeholders', 'stakeholder_id', s.stakeholder_id)
+    setPage(0)
   }
 
   return (
@@ -83,48 +114,94 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
         <div className="app-section-title">People</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-ghost btn--compact" onClick={() => setAdding(true)}>+ Add person</button>
+            <button className="btn-ghost btn--compact" id="btn-add-person" onClick={() => { setView('cards'); setAdding(true) }}>+ Add person</button>
           </div>
           <div className="section-actions">
             <select
               className="sort-select"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
+              id="people-sort"
               aria-label="Sort people"
+              value={sortBy}
+              onChange={e => { setSortBy(e.target.value); setPage(0) }}
             >
-              <option value="name">Name A–Z</option>
+              <option value="name">Name A&ndash;Z</option>
+              <option value="seniority">Seniority</option>
               <option value="department">Department</option>
             </select>
+            <div className="people-filter-wrapper">
+              <button
+                className={'filter-chip' + (filtersOn ? ' on' : '')}
+                id="people-filter-btn"
+                aria-label="Open people filters"
+                aria-expanded={filterPanelOpen}
+                aria-haspopup="dialog"
+                onClick={() => setFilterPanelOpen(o => !o)}
+              >Filters</button>
+              {filterPanelOpen && (
+                <div ref={filterPanelRef} className="people-filter-panel app-popover" id="people-filter-panel" role="dialog">
+                  <div className="filter-checkbox-group">
+                    <label><input type="checkbox" id="filter-exec-check" checked={filterExec} onChange={e => { setFilterExec(e.target.checked); setPage(0) }} /> Executive</label>
+                    <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { setFilterIncomplete(e.target.checked); setPage(0) }} /> Incomplete</label>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="app-view-toggle" id="people-toggle">
+              <button className={'app-view-toggle-btn' + (view === 'cards' ? ' active' : '')} data-view="cards" onClick={() => setView('cards')}>Cards</button>
+              <button className={'app-view-toggle-btn' + (view === 'orgchart' ? ' active' : '')} data-view="orgchart" onClick={() => setView('orgchart')}>Org</button>
+            </div>
           </div>
         </div>
       </div>
 
-      {people.length === 0 && !adding && <div className="empty-state">No results</div>}
-
-      <div className="people-grid">
-        {adding && (
-          <InlinePersonCard
-            accountId={accountId}
-            owners={owners}
-            acctProjs={acctProjs}
-            acctOpps={acctOpps}
-            onSaved={add}
-            onDiscard={() => setAdding(false)}
-          />
+      <div id="people-body">
+        {view === 'orgchart' ? (
+          <div className="empty-state">Org chart view coming soon.</div>
+        ) : (
+          <>
+            {people.length === 0 && !adding && <div className="empty-state">No results</div>}
+            <div className="people-grid">
+              {adding && (
+                <InlinePersonCard
+                  accountId={accountId}
+                  owners={owners}
+                  acctProjs={acctProjs}
+                  acctOpps={acctOpps}
+                  onSaved={add}
+                  onDiscard={() => setAdding(false)}
+                />
+              )}
+              {pagedPeople.map(p => (
+                <PersonCard
+                  key={p.stakeholder_id}
+                  person={p}
+                  owners={owners}
+                  otherPeople={people.filter(x => x.stakeholder_id !== p.stakeholder_id)}
+                  acctProjs={acctProjs}
+                  acctOpps={acctOpps}
+                  onSave={save}
+                  onDelete={remove}
+                />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <PaginationRow page={safePage} total={totalPages} onChange={setPage} />
+            )}
+          </>
         )}
-        {people.map(p => (
-          <PersonCard
-            key={p.stakeholder_id}
-            person={p}
-            owners={owners}
-            otherPeople={people.filter(x => x.stakeholder_id !== p.stakeholder_id)}
-            acctProjs={acctProjs}
-            acctOpps={acctOpps}
-            onSave={save}
-            onDelete={remove}
-          />
-        ))}
       </div>
+    </div>
+  )
+}
+
+function PaginationRow({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
+      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(0)}>\u27e8</button>
+      <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(page - 1)}>\u2190</button>
+      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', margin: '0 8px' }}>Page {page + 1} of {total}</span>
+      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(page + 1)}>\u2192</button>
+      <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(total - 1)}>\u27e9</button>
     </div>
   )
 }
@@ -139,17 +216,23 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
   onDelete: (s: Stakeholder) => Promise<void>
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [showExpand, setShowExpand] = useState(false)
   const nameRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
   const deptRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const avatarRef = useRef<HTMLDivElement>(null)
-  const [showExpand, setShowExpand] = useState(true) // always show expand since body has content
   const isClient = (person.organization || '').toLowerCase() !== 'v.two'
 
   const curEngIds = (person.engagement_id || '').split(',').map(s => s.trim()).filter(Boolean)
   const engItems = buildEngItems(acctProjs, acctOpps)
+
+  useEffect(() => {
+    if (!bodyRef.current) return
+    if (expanded) { setShowExpand(true); return }
+    setShowExpand(bodyRef.current.scrollHeight > bodyRef.current.clientHeight + 2)
+  }, [expanded, person])
 
   return (
     <div className="person-card">
@@ -172,9 +255,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               }
             }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); nameRef.current?.blur() } }}
-          >
-            {person.name}
-          </div>
+          >{person.name}</div>
           <div className="card-meta-row">
             <span className="card-meta-label">Title:</span>
             <span
@@ -187,12 +268,10 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               onFocus={() => { if (!person.title && titleRef.current && titleRef.current.textContent?.includes('Add title')) { titleRef.current.textContent = ''; titleRef.current.style.cssText = '' } }}
               onBlur={() => {
                 const v = titleRef.current?.textContent?.trim() || ''
-                if (!v) { if (titleRef.current) { titleRef.current.textContent = 'Add title…'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, title: '', last_updated: today() }) }
+                if (!v) { if (titleRef.current) { titleRef.current.textContent = 'Add title\u2026'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, title: '', last_updated: today() }) }
                 else { if (titleRef.current) titleRef.current.style.cssText = ''; if (v !== person.title) onSave({ ...person, title: v, last_updated: today() }) }
               }}
-            >
-              {person.title || 'Add title…'}
-            </span>
+            >{person.title || 'Add title\u2026'}</span>
           </div>
           <div className="card-meta-row">
             <span className="card-meta-label">Dept:</span>
@@ -206,17 +285,14 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               onFocus={() => { if (!person.department && deptRef.current && deptRef.current.textContent?.includes('Add department')) { deptRef.current.textContent = ''; deptRef.current.style.cssText = '' } }}
               onBlur={() => {
                 const v = deptRef.current?.textContent?.trim() || ''
-                if (!v) { if (deptRef.current) { deptRef.current.textContent = 'Add department…'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, department: '', last_updated: today() }) }
+                if (!v) { if (deptRef.current) { deptRef.current.textContent = 'Add department\u2026'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } onSave({ ...person, department: '', last_updated: today() }) }
                 else { if (deptRef.current) deptRef.current.style.cssText = ''; if (v !== person.department) onSave({ ...person, department: v, last_updated: today() }) }
               }}
-            >
-              {person.department || 'Add department…'}
-            </span>
+            >{person.department || 'Add department\u2026'}</span>
           </div>
         </div>
       </div>
 
-      {/* Collapsible body */}
       <div ref={bodyRef} className={'person-card-body' + (expanded ? ' expanded' : '')}>
         <div className="person-owners-block">
           {(['primary_owner', 'secondary_owner'] as const).map(key => (
@@ -247,7 +323,6 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
           />
         </div>
 
-        {/* Project/opp engagement */}
         <div className="card-meta-row" style={{ marginTop: 14 }}>
           <EngPicker
             ids={curEngIds}
@@ -258,36 +333,30 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
         </div>
 
         <div className="card-section-label">Notes</div>
-        <div
-          ref={notesRef}
-          className="card-body-text"
-          contentEditable
-          suppressContentEditableWarning
-          role="textbox"
-          aria-label="Notes"
-          onFocus={() => {
-            if (!expanded) {
-              setExpanded(true)
-            }
-          }}
-          onBlur={() => {
-            const v = notesRef.current?.textContent?.trim() || ''
-            if (v !== person.notes) onSave({ ...person, notes: v, last_updated: today() })
-          }}
-        >
-          {person.notes}
+        <div className="card-notes-wrap">
+          <div
+            ref={notesRef}
+            className="card-body-text"
+            contentEditable
+            suppressContentEditableWarning
+            role="textbox"
+            aria-label="Notes"
+            onFocus={() => { if (!expanded) setExpanded(true) }}
+            onBlur={() => {
+              const v = notesRef.current?.textContent?.trim() || ''
+              if (v !== person.notes) onSave({ ...person, notes: v, last_updated: today() })
+            }}
+          >{person.notes}</div>
+          <button type="button" className="card-notes-close" aria-label="Collapse notes" onClick={() => setExpanded(false)}>&times;</button>
         </div>
       </div>
 
       {showExpand && (
         <button
           className="card-expand-btn"
-          style={{ display: 'block' }}
           aria-expanded={expanded}
           onClick={() => setExpanded(e => !e)}
-        >
-          {expanded ? '▴' : '▾'}
-        </button>
+        >{expanded ? '\u25b4' : '\u25be'}</button>
       )}
 
       <button
@@ -295,7 +364,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
         title="Delete person"
         aria-label="Delete person"
         onClick={e => { e.stopPropagation(); onDelete(person) }}
-      >×</button>
+      >&times;</button>
     </div>
   )
 }
@@ -341,9 +410,7 @@ function EngPicker({ ids, items, label, onChange }: {
                     if (item.value === '') { onChange([]); setOpen(false) }
                     else toggle(item.value)
                   }}
-                >
-                  {item.label}
-                </div>
+                >{item.label}</div>
               )
             )}
           </div>
@@ -403,12 +470,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
 
   return (
     <div className="person-card new-card" style={{ border: '1.5px dashed var(--pink)' }}>
-      <button
-        className="project-delete"
-        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-        title="Discard"
-        onClick={onDiscard}
-      >×</button>
+      <button className="project-delete" title="Discard" onClick={onDiscard}>&times;</button>
 
       <div className="person-card-top">
         <div ref={avatarRef} className="avatar client">?</div>
@@ -420,7 +482,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
             suppressContentEditableWarning
             role="textbox"
             aria-label="Name"
-            data-placeholder="Full name…"
+            data-placeholder="Full name\u2026"
             style={{ color: 'var(--text)' }}
             onInput={() => {
               const v = nameRef.current?.textContent?.trim() || ''
@@ -444,8 +506,8 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
               aria-label="Title"
               style={{ fontStyle: 'italic', color: 'var(--gray)' }}
               onFocus={() => { if (titleRef.current && titleRef.current.textContent?.includes('Add title')) { titleRef.current.textContent = ''; titleRef.current.style.cssText = '' } }}
-              onBlur={() => { const v = titleRef.current?.textContent?.trim() || ''; rec.current.title = v; if (!v && titleRef.current) { titleRef.current.textContent = 'Add title…'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
-            >Add title…</span>
+              onBlur={() => { const v = titleRef.current?.textContent?.trim() || ''; rec.current.title = v; if (!v && titleRef.current) { titleRef.current.textContent = 'Add title\u2026'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
+            >Add title\u2026</span>
           </div>
           <div className="card-meta-row">
             <span className="card-meta-label">Dept:</span>
@@ -457,8 +519,8 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
               aria-label="Department"
               style={{ fontStyle: 'italic', color: 'var(--gray)' }}
               onFocus={() => { if (deptRef.current && deptRef.current.textContent?.includes('Add department')) { deptRef.current.textContent = ''; deptRef.current.style.cssText = '' } }}
-              onBlur={() => { const v = deptRef.current?.textContent?.trim() || ''; rec.current.department = v; if (!v && deptRef.current) { deptRef.current.textContent = 'Add department…'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
-            >Add department…</span>
+              onBlur={() => { const v = deptRef.current?.textContent?.trim() || ''; rec.current.department = v; if (!v && deptRef.current) { deptRef.current.textContent = 'Add department\u2026'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
+            >Add department\u2026</span>
           </div>
         </div>
       </div>
