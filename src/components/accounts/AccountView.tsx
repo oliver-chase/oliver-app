@@ -48,6 +48,7 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
             title="Click to edit account name"
             value={acct.account_name}
             ariaLabel="Account name"
+            placeholder="Account name"
             onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
           />
           <div className="page-last-updated" id="page-last-updated">
@@ -104,12 +105,13 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
   )
 }
 
-function ContentEditable({ id, className, title, value, ariaLabel, onSave }: {
+function ContentEditable({ id, className, title, value, ariaLabel, placeholder, onSave }: {
   id?: string
   className?: string
   title?: string
   value: string
   ariaLabel?: string
+  placeholder?: string
   onSave: (v: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -120,6 +122,7 @@ function ContentEditable({ id, className, title, value, ariaLabel, onSave }: {
       id={id}
       className={className}
       title={title}
+      data-placeholder={placeholder}
       contentEditable
       suppressContentEditableWarning
       aria-label={ariaLabel}
