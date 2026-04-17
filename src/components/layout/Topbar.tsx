@@ -38,7 +38,7 @@ export default function Topbar({
   activeSection,
 }: TopbarProps) {
   const showDetail = currentAccountId !== null;
-  const title = showDetail ? (accountName ?? 'Account') : 'Account Strategy';
+  const title = showDetail ? (accountName ?? 'Account') : 'All Accounts';
 
   return (
     <header className="topbar">
