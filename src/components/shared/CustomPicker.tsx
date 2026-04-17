@@ -207,7 +207,7 @@ export default function CustomPicker({
             <input
               ref={searchRef}
               className="app-popover-search"
-              placeholder="Search\u2026"
+              placeholder="Search…"
               aria-autocomplete="list"
               aria-controls={listId}
               value={query}
