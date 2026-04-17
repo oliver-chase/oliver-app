@@ -29,7 +29,7 @@ interface OrgChartProps {
   acctProjs: AppState['projects']
   acctOpps: AppState['opportunities']
   onUpdate: (s: Stakeholder) => Promise<void>
-  onDelete: (s: Stakeholder) => Promise<void>
+  onDelete: (s: Stakeholder) => void
 }
 
 export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, onUpdate, onDelete }: OrgChartProps) {
@@ -347,7 +347,7 @@ function OrgBranch({ stkId, childMap, stakeholders, ...nodeProps }: BranchProps)
   const children = childMap[stkId] || []
   return (
     <div className="org-branch">
-      <OrgNodeCard stk={stk} isUnmapped={false} onDeletePerson={() => Promise.resolve()} {...nodeProps} />
+      <OrgNodeCard stk={stk} isUnmapped={false} onDeletePerson={() => {}} {...nodeProps} />
       {children.length > 0 && (
         <div className="org-children">
           {children.map(cId => (
@@ -371,7 +371,7 @@ interface NodeCardProps {
   onDropLeave: () => void
   onDrop: (targetId: string) => Promise<void>
   onUnlinkFromTree: (id: string) => Promise<void>
-  onDeletePerson: (stk: Stakeholder) => Promise<void>
+  onDeletePerson: (stk: Stakeholder) => void
   onCardClick: (stk: Stakeholder) => void
   onKbSpace: (id: string, isUnmapped: boolean) => Promise<void>
   onKbEscape: () => void
@@ -415,20 +415,18 @@ function OrgNodeCard({ stk, isUnmapped, draggedId, dropTargetId, kbDragId, onDra
           className="org-unlink-btn"
           title="Remove from people list"
           aria-label="Remove from people list"
-          onClick={async e => {
+          onClick={e => {
             e.stopPropagation()
-            if (window.confirm('Remove ' + stk.name + ' from the people list entirely?')) {
-              await onDeletePerson(stk)
-            }
+            onDeletePerson(stk)
           }}
-        >&times;</button>
+        >×</button>
       ) : stk.reports_to ? (
         <button
           className="org-unlink-btn"
           title="Remove from reporting structure"
           aria-label="Remove from reporting structure"
           onClick={e => { e.stopPropagation(); onUnlinkFromTree(stk.stakeholder_id) }}
-        >&times;</button>
+        >×</button>
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px 12px', minWidth: 0 }}>
@@ -476,7 +474,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
     <div ref={panelRef} id="org-person-panel" className="person-detail-panel" role="dialog" aria-label={stk.name || 'Person'}>
       <div className="person-detail-header">
         <span className="person-detail-title">{stk.name || 'Person'}</span>
-        <button className="person-detail-close" type="button" aria-label="Close panel" onClick={onClose}>&times;</button>
+        <button className="person-detail-close" type="button" aria-label="Close panel" onClick={onClose}>×</button>
       </div>
       <div className="person-detail-content">
         <div className="person-card">
@@ -543,7 +541,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
                   <span className="card-meta-label">{key === 'primary_owner' ? 'Primary:' : 'Secondary:'}</span>
                   <Picker
                     value={stk[key]}
-                    options={[...owners, '']}
+                    options={owners}
                     placeholder="Select person\u2026"
                     triggerClass={'card-owner-btn' + (!stk[key] ? ' picker-placeholder' : '')}
                     onChange={v => onSave({ ...stk, [key]: v, last_updated: today() })}
@@ -555,7 +553,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
               <span className="card-meta-label">Reports To:</span>
               <Picker
                 value={otherPeople.find(p => p.stakeholder_id === stk.reports_to)?.name || ''}
-                options={[...otherPeople.map(p => p.name), '']}
+                options={otherPeople.map(p => p.name)}
                 placeholder="Select person\u2026"
                 triggerClass={'card-owner-btn' + (!stk.reports_to ? ' picker-placeholder' : '')}
                 onChange={v => {

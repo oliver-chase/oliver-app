@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect, CSSProperties } from 'react'
-import { upsertAction, deleteRecord, newId, today } from '@/lib/db'
+import { upsertAction, upsertBackground, deleteRecord, newId, today } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Action, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 
@@ -43,6 +45,8 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [adding, setAdding] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open-progress')
+  const { modal, showModal } = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<Action>()
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
@@ -92,10 +96,29 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
     await upsertAction(action)
   }
 
-  const remove = async (a: Action) => {
-    if (!window.confirm('Delete this action?')) return
-    setData(prev => ({ ...prev, actions: prev.actions.filter(x => x.action_id !== a.action_id) }))
-    await deleteRecord('actions', 'action_id', a.action_id)
+  const remove = (a: Action) => {
+    softDelete(a, {
+      displayName: a.description || 'Action',
+      onLocalRemove: () => setData(prev => ({ ...prev, actions: prev.actions.filter(x => x.action_id !== a.action_id) })),
+      onLocalRestore: () => setData(prev => ({ ...prev, actions: [...prev.actions, a] })),
+      onDeleteRecord: async () => { await deleteRecord('actions', 'action_id', a.action_id) },
+    })
+  }
+
+  const handleAddPerson = async (): Promise<string | null> => {
+    const { buttonValue, inputValue } = await showModal({ title: 'Add person', inputPlaceholder: 'Name', confirmLabel: 'Add' })
+    if (buttonValue !== 'confirm' || !inputValue.trim()) return null
+    const nm = inputValue.trim()
+    if (bg) {
+      const cur = (bg.account_team || '').split(';').map(s => s.trim()).filter(Boolean)
+      if (!cur.includes(nm)) {
+        cur.push(nm)
+        const updated = { ...bg, account_team: cur.join('; ') }
+        setData(prev => ({ ...prev, background: prev.background.map(b => b.account_id === accountId && !b.engagement_id ? updated : b) }))
+        await upsertBackground(updated)
+      }
+    }
+    return nm
   }
 
   const thCls = (col: SortCol) => sortCol === col ? 'sorted' : ''
@@ -112,6 +135,8 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
+      {modal}
+      {toastEl}
       <div className="app-section-header">
         <div className="app-section-title">Actions</div>
         <div className="section-header-row2">
@@ -148,6 +173,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
                 owners={owners}
                 engOptions={engOptions()}
                 engLabel={engLabel}
+                onAddPerson={handleAddPerson}
                 onSaved={a => {
                   setData(prev => ({ ...prev, actions: [a, ...prev.actions] }))
                   setAdding(false)
@@ -167,6 +193,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
                 engLabel={engLabel}
                 onSave={save}
                 onDelete={remove}
+                onAddPerson={handleAddPerson}
               />
             ))}
           </tbody>
@@ -178,11 +205,12 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
   )
 }
 
-function InlineAddRow({ accountId, owners, engOptions, engLabel, onSaved, onDiscard }: {
+function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, onSaved, onDiscard }: {
   accountId: string
   owners: string[]
   engOptions: Array<{ value: string; label: string; isHeader?: boolean }>
   engLabel: (id: string) => string
+  onAddPerson: () => Promise<string | null>
   onSaved: (a: Action) => void
   onDiscard: () => void
 }) {
@@ -232,6 +260,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onSaved, onDisc
           options={owners.map(n => ({ value: n, label: n }))}
           placeholder="Select person"
           onChange={v => { setOwnerVal(v); rec.current.owner = v }}
+          addNew={async () => { const nm = await onAddPerson(); if (nm) { setOwnerVal(nm); rec.current.owner = nm } }}
         />
       </td>
       <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
@@ -264,13 +293,14 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onSaved, onDisc
   )
 }
 
-function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete }: {
+function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onAddPerson }: {
   action: Action
   owners: string[]
   engOptions: Array<{ value: string; label: string; isHeader?: boolean }>
   engLabel: (id: string) => string
   onSave: (a: Action) => Promise<void>
-  onDelete: (a: Action) => Promise<void>
+  onDelete: (a: Action) => void
+  onAddPerson: () => Promise<string | null>
 }) {
   const descRef = useRef<HTMLSpanElement>(null)
   const age = (action.status === 'Open' || action.status === 'In Progress') ? dayAge(action.created_date) : 0
@@ -304,6 +334,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete }: {
           options={owners.map(n => ({ value: n, label: n }))}
           placeholder="Select person"
           onChange={v => onSave({ ...action, owner: v, last_updated: today() })}
+          addNew={async () => { const nm = await onAddPerson(); if (nm) onSave({ ...action, owner: nm, last_updated: today() }) }}
         />
       </td>
       <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
@@ -337,12 +368,13 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete }: {
 }
 
 // Pill-style picker button for owner + project columns in the actions table
-function EngPickerBtn({ value, options, placeholder, displayLabel, onChange }: {
+function EngPickerBtn({ value, options, placeholder, displayLabel, onChange, addNew }: {
   value: string
   options: Array<{ value: string; label: string; isHeader?: boolean }>
   placeholder: string
   displayLabel?: string
   onChange: (v: string) => void
+  addNew?: () => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -404,6 +436,14 @@ function EngPickerBtn({ value, options, placeholder, displayLabel, onChange }: {
               <div className="app-popover-empty">No matches</div>
             )}
           </div>
+          {addNew && (
+            <div
+              className="app-popover-add-new"
+              onMouseDown={e => { e.preventDefault(); setOpen(false); setQuery(''); void addNew() }}
+            >
+              + Add person\u2026
+            </div>
+          )}
         </div>
       )}
     </div>

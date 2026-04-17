@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { upsertStakeholder, deleteRecord, newId, today } from '@/lib/db'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Stakeholder, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 import OrgChart from './OrgChart'
@@ -58,8 +59,10 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const [page, setPage] = useState(0)
   const [filterExec, setFilterExec] = useState(false)
   const [filterIncomplete, setFilterIncomplete] = useState(false)
+  const [filterVTwoOwner, setFilterVTwoOwner] = useState('')
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const filterPanelRef = useRef<HTMLDivElement>(null)
+  const { softDelete, toastEl } = useSoftDelete<Stakeholder>()
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
   const acctOpps = data.opportunities.filter(o => o.account_id === accountId)
@@ -75,11 +78,12 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [filterPanelOpen])
 
-  let people = data.stakeholders.filter(s => s.account_id === accountId)
+  let people = data.stakeholders.filter(s => s.account_id === accountId && (s.organization || '').toLowerCase() !== 'v.two')
   if (filterExec) people = people.filter(s => s.is_executive === 'true' || s.is_executive === 'TRUE')
   if (filterIncomplete) {
     people = people.filter(s => !s.department || !s.primary_owner || !s.secondary_owner || !s.reports_to)
   }
+  if (filterVTwoOwner) people = people.filter(s => s.primary_owner === filterVTwoOwner || s.secondary_owner === filterVTwoOwner)
 
   people = [...people].sort((a, b) => {
     if (sortBy === 'department') return (a.department || '').localeCompare(b.department || '')
@@ -90,7 +94,7 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   const totalPages = Math.ceil(people.length / PAGE_SIZE)
   const safePage = Math.min(page, Math.max(0, totalPages - 1))
   const pagedPeople = people.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
-  const filtersOn = filterExec || filterIncomplete
+  const filtersOn = filterExec || filterIncomplete || !!filterVTwoOwner
 
   const save = async (s: Stakeholder) => {
     setData(prev => ({ ...prev, stakeholders: prev.stakeholders.map(x => x.stakeholder_id === s.stakeholder_id ? s : x) }))
@@ -103,15 +107,18 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
     setPage(0)
   }
 
-  const remove = async (s: Stakeholder) => {
-    if (!window.confirm('Delete ' + s.name + '?')) return
-    setData(prev => ({ ...prev, stakeholders: prev.stakeholders.filter(x => x.stakeholder_id !== s.stakeholder_id) }))
-    await deleteRecord('stakeholders', 'stakeholder_id', s.stakeholder_id)
-    setPage(0)
+  const remove = (s: Stakeholder) => {
+    softDelete(s, {
+      displayName: s.name || 'Person',
+      onLocalRemove: () => { setData(prev => ({ ...prev, stakeholders: prev.stakeholders.filter(x => x.stakeholder_id !== s.stakeholder_id) })); setPage(0) },
+      onLocalRestore: () => setData(prev => ({ ...prev, stakeholders: [...prev.stakeholders, s] })),
+      onDeleteRecord: async () => { await deleteRecord('stakeholders', 'stakeholder_id', s.stakeholder_id) },
+    })
   }
 
   return (
     <div>
+      {toastEl}
       <div className="app-section-header">
         <div className="app-section-title">People</div>
         <div className="section-header-row2">
@@ -141,6 +148,15 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
                     <label><input type="checkbox" id="filter-exec-check" checked={filterExec} onChange={e => { setFilterExec(e.target.checked); setPage(0) }} /> Executive</label>
                     <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { setFilterIncomplete(e.target.checked); setPage(0) }} /> Incomplete</label>
                   </div>
+                  {owners.length > 0 && (
+                    <div className="filter-radio-group" style={{ marginTop: 10 }}>
+                      <div className="filter-radio-divider">V.Two Owner</div>
+                      <label><input type="radio" name="vtwo-owner" value="" checked={filterVTwoOwner === ''} onChange={() => { setFilterVTwoOwner(''); setPage(0) }} /> All</label>
+                      {owners.map(name => (
+                        <label key={name}><input type="radio" name="vtwo-owner" value={name} checked={filterVTwoOwner === name} onChange={() => { setFilterVTwoOwner(name); setPage(0) }} /> {name}</label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -219,7 +235,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
   acctProjs: AppState['projects']
   acctOpps: AppState['opportunities']
   onSave: (s: Stakeholder) => Promise<void>
-  onDelete: (s: Stakeholder) => Promise<void>
+  onDelete: (s: Stakeholder) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showExpand, setShowExpand] = useState(false)
@@ -353,7 +369,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
               if (v !== person.notes) onSave({ ...person, notes: v, last_updated: today() })
             }}
           >{person.notes}</div>
-          <button type="button" className="card-notes-close" aria-label="Collapse notes" onClick={() => setExpanded(false)}>&times;</button>
+          <button type="button" className="card-notes-close" aria-label="Collapse notes" onClick={() => setExpanded(false)}>×</button>
         </div>
       </div>
 
@@ -370,7 +386,7 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
         title="Delete person"
         aria-label="Delete person"
         onClick={e => { e.stopPropagation(); onDelete(person) }}
-      >&times;</button>
+      >×</button>
     </div>
   )
 }
@@ -495,7 +511,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
 
   return (
     <div className="person-card new-card" style={{ border: '1.5px dashed var(--pink)' }}>
-      <button className="project-delete" title="Discard" onClick={onDiscard}>&times;</button>
+      <button className="project-delete" title="Discard" onClick={onDiscard}>×</button>
 
       <div className="person-card-top">
         <div ref={avatarRef} className="avatar client">?</div>
