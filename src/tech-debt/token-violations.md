@@ -210,5 +210,14 @@ create table if not exists app_users (
 **Seeding:** Insert admin users by email with a placeholder `user_id` (use email as placeholder).
 `upsertUser()` migrates the placeholder to the real Azure AD OID on first login.
 
-**Before production:** Add RLS policies to restrict reads to the authenticated user's own row
-plus admin-only writes. Table currently has no RLS.
+**RLS status:** RLS is intentionally OFF. The app uses Azure AD / MSAL for auth — there is no
+Supabase Auth session, so `auth.uid()` is always NULL and standard RLS policies would block
+all queries. The anon key is public (NEXT_PUBLIC_ env var), but the data is non-sensitive and
+the real auth gate is Azure AD.
+
+**To enable RLS properly** requires one of:
+- Integrate Supabase Auth alongside MSAL (thread a Supabase JWT from the Azure AD token)
+- Move `app_users` reads/writes to Next.js API routes using the service role key (requires
+  removing `output: 'export'` from next.config.ts — drops static build)
+
+Leave RLS off until one of these is chosen.
