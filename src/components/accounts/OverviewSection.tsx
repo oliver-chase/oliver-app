@@ -20,8 +20,8 @@ const FREQ_OPTS: [string, string][] = [
   ['quarterly', 'Quarterly'],
 ]
 const DAY_LABELS: [string, string][] = [
-  ['Sun', 'Su'], ['Mon', 'Mo'], ['Tue', 'Tu'], ['Wed', 'We'],
-  ['Thu', 'Th'], ['Fri', 'Fr'], ['Sat', 'Sa'],
+  ['Sun', 'S'], ['Mon', 'M'], ['Tue', 'T'], ['Wed', 'W'],
+  ['Thu', 'T'], ['Fri', 'F'], ['Sat', 'S'],
 ]
 const DAY_FULL: Record<string, string> = {
   Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday',
