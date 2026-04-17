@@ -13,17 +13,21 @@ interface CustomPickerProps {
   addNew?: { label: string; onClick: () => void };
   placeholder?: string;
   disabled?: boolean;
+  showUnassigned?: boolean;
+  unassignedLabel?: string;
 }
 
 export default function CustomPicker({
   options,
   selected,
   onChange,
-  searchable = false,
+  searchable = true,
   multiSelect = false,
   addNew,
   placeholder = 'Select\u2026',
   disabled = false,
+  showUnassigned = true,
+  unassignedLabel = 'Unassigned',
 }: CustomPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -43,6 +47,11 @@ export default function CustomPicker({
   const filtered = options.filter(o =>
     !query || o.label.toLowerCase().includes(query.toLowerCase())
   );
+
+  const showUnassignedRow = showUnassigned && !multiSelect && (
+    !query || unassignedLabel.toLowerCase().includes(query.toLowerCase())
+  );
+  const currentVal = Array.isArray(selected) ? (selected[0] ?? '') : (selected ?? '');
 
   // ── Click-outside — matches source: setTimeout + document.mousedown ───────
   useEffect(() => {
@@ -239,8 +248,27 @@ export default function CustomPicker({
               );
             })}
 
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !showUnassignedRow && (
               <div className="app-popover-empty">No matches</div>
+            )}
+            {showUnassignedRow && (
+              <div
+                className={'app-popover-item app-popover-item--unassigned' + (!currentVal ? ' selected' : '')}
+                role="option"
+                aria-selected={!currentVal}
+                data-value=""
+                onMouseEnter={() => setActiveIdx(filtered.length)}
+                onMouseDown={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  selectOption('');
+                }}
+              >
+                <span className="app-popover-item-check" aria-hidden="true">
+                  {!currentVal ? '\u2713' : ''}
+                </span>
+                <span>{unassignedLabel}</span>
+              </div>
             )}
           </div>
 

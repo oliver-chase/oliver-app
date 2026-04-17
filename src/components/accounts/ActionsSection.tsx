@@ -253,6 +253,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onSaved, onDisc
           options={[...STATUS_OPTIONS] as unknown as string[]}
           triggerClass={statusBadgeClass(statusVal)}
           triggerStyle={{ border: 'none', cursor: 'pointer' }}
+          showUnassigned={false}
           onChange={v => { setStatusVal(v as Action['status']); rec.current.status = v as Action['status'] }}
         />
       </td>
@@ -324,6 +325,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete }: {
           options={[...STATUS_OPTIONS] as unknown as string[]}
           triggerClass={statusBadgeClass(action.status)}
           triggerStyle={{ border: 'none', cursor: 'pointer' }}
+          showUnassigned={false}
           onChange={v => onSave({ ...action, status: v as Action['status'], closed_date: v === 'Done' ? today() : '', last_updated: today() })}
         />
       </td>
@@ -347,14 +349,25 @@ function EngPickerBtn({ value, options, placeholder, displayLabel, onChange }: {
   onChange: (v: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
+
+  const handleOpen = () => {
+    setOpen(o => !o); setQuery('')
+    setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
+  const filtered = query
+    ? options.filter(o => o.isHeader || o.label.toLowerCase().includes(query.toLowerCase()))
+    : options
 
   const label = displayLabel !== undefined ? displayLabel : (value || placeholder)
   const isEmpty = !value
@@ -363,25 +376,36 @@ function EngPickerBtn({ value, options, placeholder, displayLabel, onChange }: {
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
         className={'picker-btn-pill' + (isEmpty ? ' picker-placeholder' : '')}
-        onClick={() => setOpen(o => !o)}
+        onClick={handleOpen}
       >
         {label}
       </button>
       {open && (
         <div className="app-popover" style={{ minWidth: 180 }}>
+          <input
+            ref={searchRef}
+            className="app-popover-search"
+            placeholder="Search\u2026"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+          />
           <div className="app-popover-list">
-            {options.map((opt, i) =>
+            {filtered.map((opt, i) =>
               opt.isHeader ? (
                 <div key={i} className="app-popover-section-label">{opt.label}</div>
               ) : (
                 <div
                   key={opt.value}
                   className={'app-popover-item' + (opt.value === value ? ' selected' : '')}
-                  onMouseDown={e => { e.preventDefault(); onChange(opt.value); setOpen(false) }}
+                  onMouseDown={e => { e.preventDefault(); onChange(opt.value); setOpen(false); setQuery('') }}
                 >
                   {opt.label}
                 </div>
               )
+            )}
+            {filtered.filter(o => !o.isHeader).length === 0 && (
+              <div className="app-popover-empty">No matches</div>
             )}
           </div>
         </div>

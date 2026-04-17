@@ -178,6 +178,7 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
             options={[...OPP_STATUS] as unknown as string[]}
             triggerClass={statusBadgeClass(opp.status)}
             triggerStyle={{ border: 'none', minHeight: 0, cursor: 'pointer' }}
+            showUnassigned={false}
             onChange={v => onSave({ ...opp, status: v as Opportunity['status'], last_updated: today() })}
           />
         </div>
@@ -319,6 +320,7 @@ function InlineOppCard({ accountId, owners, onSaved, onDiscard }: {
             options={[...OPP_STATUS] as unknown as string[]}
             triggerClass={statusBadgeClass(status)}
             triggerStyle={{ border: 'none', minHeight: 0, cursor: 'pointer' }}
+            showUnassigned={false}
             onChange={v => { setStatus(v as Opportunity['status']); rec.current.status = v as Opportunity['status'] }}
           />
         </div>

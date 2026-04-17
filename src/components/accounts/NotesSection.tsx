@@ -369,39 +369,53 @@ function AttendeeAddBtn({ teamNames, onSelect, onAddNew }: {
   onAddNew: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  const filtered = query ? teamNames.filter(n => n.toLowerCase().includes(query.toLowerCase())) : teamNames
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation(); setOpen(o => !o); setQuery('')
+    setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        className="btn-link"
-        aria-haspopup="listbox"
-        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-      >
+      <button className="btn-link" aria-haspopup="listbox" onClick={handleOpen}>
         + Add attendee
       </button>
       {open && (
         <div className="app-popover" style={{ minWidth: 180 }}>
+          <input
+            ref={searchRef}
+            className="app-popover-search"
+            placeholder="Search\u2026"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+          />
           <div className="app-popover-list">
-            {teamNames.map(n => (
+            {filtered.map(n => (
               <div
                 key={n}
                 className="app-popover-item"
-                onMouseDown={e => { e.preventDefault(); onSelect(n); setOpen(false) }}
+                onMouseDown={e => { e.preventDefault(); onSelect(n); setOpen(false); setQuery('') }}
               >
                 {n}
               </div>
             ))}
+            {filtered.length === 0 && <div className="app-popover-empty">No matches</div>}
             <div
               className="app-popover-item"
-              onMouseDown={e => { e.preventDefault(); setOpen(false); onAddNew() }}
+              onMouseDown={e => { e.preventDefault(); setOpen(false); setQuery(''); onAddNew() }}
             >
               + Add new…
             </div>

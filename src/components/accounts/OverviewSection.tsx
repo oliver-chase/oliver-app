@@ -149,7 +149,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           <div className="app-card-label">Account Director</div>
           <Picker
             value={b.account_director || ''}
-            options={[...teamNames, 'None', '+ Add person\u2026']}
+            options={[...teamNames, '+ Add person\u2026']}
             placeholder={PH_SELECT}
             triggerClass={'overview-stat-val picker-btn overview-picker-btn' + (!b.account_director ? ' faded' : '')}
             onChange={async val => {
@@ -161,7 +161,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
                 updated.account_director = nm
               } else {
-                updated.account_director = val === 'None' ? '' : val
+                updated.account_director = val
               }
               await saveBg(updated)
             }}
@@ -169,7 +169,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           <div className="app-card-label" style={{ marginTop: '10px' }}>Account Manager</div>
           <Picker
             value={b.account_manager || ''}
-            options={[...teamNames, 'None', '+ Add person\u2026']}
+            options={[...teamNames, '+ Add person\u2026']}
             placeholder={PH_SELECT}
             triggerClass={'overview-stat-val picker-btn overview-picker-btn' + (!b.account_manager ? ' faded' : '')}
             onChange={async val => {
@@ -181,7 +181,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
                 updated.account_manager = nm
               } else {
-                updated.account_manager = val === 'None' ? '' : val
+                updated.account_manager = val
               }
               await saveBg(updated)
             }}
@@ -230,6 +230,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 options={FREQ_OPTS.map(([, label]) => label)}
                 placeholder="Does not repeat"
                 triggerClass={'card-owner-btn' + (!b.meeting_frequency ? ' picker-placeholder' : '')}
+                showUnassigned={false}
                 onChange={val => {
                   const v = FREQ_OPTS.find(([, l]) => l === val)?.[0] ?? ''
                   saveBg({ ...b, meeting_frequency: v, meeting_day: (v === 'weekly' || v === 'biweekly') ? b.meeting_day : '' })
@@ -374,6 +375,39 @@ function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: 
   onRemove: (idx: number) => void
   onAdd: (name: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [addingNew, setAddingNew] = useState(false)
+  const [newName, setNewName] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const newInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); setAddingNew(false); setNewName('') }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const existing = members.map(n => n.toLowerCase())
+  const available = teamNames.filter(n => !existing.includes(n.toLowerCase()))
+  const filtered = query ? available.filter(n => n.toLowerCase().includes(query.toLowerCase())) : available
+
+  const handleOpen = () => {
+    setOpen(o => !o); setQuery(''); setAddingNew(false); setNewName('')
+    setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
+  const select = (name: string) => { onAdd(name); setOpen(false); setQuery('') }
+
+  const commitNew = () => {
+    const n = newName.trim()
+    if (n) { onAdd(n); setOpen(false); setQuery(''); setAddingNew(false); setNewName('') }
+  }
+
   return (
     <div className="overview-chip-row">
       {members.map((name, i) => (
@@ -382,20 +416,48 @@ function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: 
           <button type="button" className="app-chip-remove" title="Remove" onClick={() => onRemove(i)}>&times;</button>
         </span>
       ))}
-      <button type="button" className="btn-link" onClick={() => {
-        const existing = members.map(n => n.toLowerCase())
-        const available = teamNames.filter(n => !existing.includes(n.toLowerCase()))
-        if (available.length) {
-          const picked = window.prompt('Add:\n' + available.map((n, i2) => (i2 + 1) + '. ' + n).join('\n') + '\n\nOr type a new name:')
-          if (!picked) return
-          const idx = parseInt(picked.trim()) - 1
-          const name = (idx >= 0 && idx < available.length) ? available[idx] : picked.trim()
-          if (name) onAdd(name)
-        } else {
-          const nm = window.prompt('Name')?.trim()
-          if (nm) onAdd(nm)
-        }
-      }}>{addLabel}</button>
+      <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+        <button type="button" className="btn-link" onClick={handleOpen}>{addLabel}</button>
+        {open && (
+          <div className="app-popover" style={{ minWidth: 180 }}>
+            <input
+              ref={searchRef}
+              className="app-popover-search"
+              placeholder="Search\u2026"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+            />
+            <div className="app-popover-list">
+              {filtered.map(n => (
+                <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); select(n) }}>{n}</div>
+              ))}
+              {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
+            </div>
+            {addingNew ? (
+              <input
+                ref={newInputRef}
+                className="app-popover-search"
+                placeholder="Enter name\u2026"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commitNew()
+                  if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) }
+                }}
+                onBlur={() => { if (newName.trim()) commitNew() }}
+              />
+            ) : (
+              <div
+                className="app-popover-add-new"
+                onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}
+              >
+                + Add new person
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
