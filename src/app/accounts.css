@@ -60,7 +60,7 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text);font-s
 .btn-acct-action.danger{color:var(--red);border-color:rgba(220,50,50,.35)}
 .btn-acct-action.danger:hover{background:rgba(220,50,50,.06)}
 .portfolio-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--spacing-md);padding-top:8px}
-.account-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid transparent;padding:18px 20px 18px 16px;border-radius:var(--radius-lg);cursor:pointer;transition:.15s}
+.account-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid transparent;padding:18px 20px;border-radius:var(--radius-lg);cursor:pointer;transition:.15s}
 .account-card:hover{border-color:var(--pink);box-shadow:0 2px 8px rgba(0,0,0,.07)}
 .account-card.tier-strategic{border-left-color:var(--color-tier-strategic)}
 .account-card.tier-growth{border-left-color:var(--color-tier-growth)}

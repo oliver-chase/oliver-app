@@ -161,9 +161,9 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="card-section-hdr">
-          Recent activity
+          Recent Activity
           {db.activities.length > 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={clearActivity}>Clear all</button>
+            <button className="btn btn-secondary btn-sm" onClick={clearActivity}>Clear All</button>
           )}
         </div>
         {db.activities.slice(0, 50).length === 0 ? (
