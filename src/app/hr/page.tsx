@@ -109,7 +109,7 @@ export default function HrPage() {
       />
       <nav className="app-sidebar" id="sidebar" aria-label="HR navigation">
         <div className="app-sidebar-logo">HR &amp; People Ops</div>
-        <Link href="/" className="sidebar-back">&larr; Back to Hub</Link>
+        <Link href="/" className="sidebar-back">← Back to Hub</Link>
         {SECTIONS.map(section => (
           <div key={section || 'main'} className="app-sidebar-section">
             {section && <div className="app-sidebar-section-label">{section}</div>}

@@ -51,7 +51,7 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
             <div className="sdr-detail-name">{p.nm || p.fn || 'Unknown'}</div>
             <div style={{ marginTop: 6 }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
           </div>
-          <button ref={closeRef} className="sdr-detail-close" aria-label="Close" onClick={onClose}>&times;</button>
+          <button ref={closeRef} className="sdr-detail-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
 
         <div className="sdr-detail-body">
@@ -86,7 +86,7 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
                   <div key={s.id} className="sdr-detail-value" style={{ marginTop: 4 }}>
                     <span className={'sdr-status-badge ' + cls}>{s.status || 'sent'}</span>
                     {date && <span style={{ color: 'var(--gray)', marginLeft: 6 }}>{date}</span>}
-                    {s.subject && <> &mdash; {s.subject}</>}
+                    {s.subject && <> — {s.subject}</>}
                   </div>
                 )
               })}

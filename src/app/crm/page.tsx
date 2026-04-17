@@ -17,7 +17,7 @@ export default function CrmPage() {
       />
       <nav className="app-sidebar" id="sidebar" aria-label="CRM navigation">
         <div className="app-sidebar-logo">CRM &amp; Business Dev</div>
-        <Link href="/" className="sidebar-back">&larr; Back to Hub</Link>
+        <Link href="/" className="sidebar-back">← Back to Hub</Link>
         <div className="app-sidebar-section">
           <div className="app-sidebar-item active" role="button" tabIndex={0}>Overview</div>
         </div>

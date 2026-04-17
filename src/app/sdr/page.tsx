@@ -74,7 +74,7 @@ export default function SdrPage() {
       />
       <nav className="app-sidebar" id="sidebar" aria-label="SDR navigation">
         <div className="app-sidebar-logo">SDR &amp; Outreach</div>
-        <Link href="/" className="sidebar-back">&larr; Back to Hub</Link>
+        <Link href="/" className="sidebar-back">← Back to Hub</Link>
         <div className="app-sidebar-section">
           {TABS.map(t => (
             <div

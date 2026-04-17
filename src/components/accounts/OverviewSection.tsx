@@ -294,7 +294,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
               <div className="overview-stat-sublabel">
                 Override
                 <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--font-size-sm)', color: 'var(--gray)', padding: 0, lineHeight: 1, fontFamily: 'var(--font)' }} title="Clear override" onClick={() => saveBg({ ...b, next_meeting_override: '' })}>
-                  &times;
+                  ×
                 </button>
               </div>
             </div>
@@ -309,7 +309,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           <div style={{ marginTop: '4px' }}>
             {!showDateInput ? (
               <button type="button" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--pink)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontFamily: 'var(--font)' }} onClick={() => setShowDateInput(true)}>
-                Set date &rarr;
+                Set date →
               </button>
             ) : (
               <input type="date"
@@ -418,7 +418,7 @@ function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: 
       {members.map((name, i) => (
         <span key={i} className="app-chip">
           {name}
-          <button type="button" className="app-chip-remove" title="Remove" onClick={() => onRemove(i)}>&times;</button>
+          <button type="button" className="app-chip-remove" title="Remove" onClick={() => onRemove(i)}>×</button>
         </span>
       ))}
       <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>

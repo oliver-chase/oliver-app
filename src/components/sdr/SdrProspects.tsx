@@ -104,9 +104,9 @@ export default function SdrProspects({ prospects, filters, onFiltersChange, onSe
           </div>
           {pageCount > 1 && (
             <div className="sdr-pagination">
-              <button className="sdr-page-btn" disabled={page === 0} onClick={() => onFiltersChange({ page: page - 1 })}>&larr;</button>
+              <button className="sdr-page-btn" disabled={page === 0} onClick={() => onFiltersChange({ page: page - 1 })}>←</button>
               <span className="sdr-page-info">Page {page + 1} of {pageCount}</span>
-              <button className="sdr-page-btn" disabled={page >= pageCount - 1} onClick={() => onFiltersChange({ page: page + 1 })}>&rarr;</button>
+              <button className="sdr-page-btn" disabled={page >= pageCount - 1} onClick={() => onFiltersChange({ page: page + 1 })}>→</button>
             </div>
           )}
         </>

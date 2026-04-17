@@ -77,7 +77,7 @@ export default function ChatbotPanel({ accountId, data }: Props) {
               navigator.clipboard.writeText(md).catch(() => {})
             }}
           >&#8595;</button>
-          <button className="chatbot-close-btn" id="chatbot-close" aria-label="Close Oliver" title="Close Oliver" onClick={() => setOpen(false)}>&times;</button>
+          <button className="chatbot-close-btn" id="chatbot-close" aria-label="Close Oliver" title="Close Oliver" onClick={() => setOpen(false)}>×</button>
         </div>
 
         <div className="chatbot-body">

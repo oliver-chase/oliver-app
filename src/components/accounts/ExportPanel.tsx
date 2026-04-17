@@ -71,7 +71,7 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
   return (
     <div className="export-panel-overlay" id="export-plan-panel-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div ref={panelRef} className="export-panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <button className="export-panel-close" title="Close" aria-label="Close" onClick={onClose}>&times;</button>
+        <button className="export-panel-close" title="Close" aria-label="Close" onClick={onClose}>×</button>
         <div className="export-panel-title" id={titleId}>Export Account Plan</div>
 
         <div className="export-section">
