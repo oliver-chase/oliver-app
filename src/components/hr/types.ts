@@ -14,7 +14,9 @@ export interface Candidate {
   state: string
   country: string
   client: string
+  email: string
   resumeLink: string
+  skills: string
   addedAt: string
   updatedAt: string
   notes: string
@@ -38,6 +40,7 @@ export interface Employee {
   manager: string
   buddy: string
   startDate: string
+  endDate: string
   email: string
   source: string
   created_at: string
@@ -50,10 +53,15 @@ export interface Device {
   make: string
   type: string
   model: string
+  modelNumber: string
   serial: string
   status: string
   assignedTo: string
+  condition: string
   purchaseDate: string
+  purchaseStore: string
+  orderNumber: string
+  specs: string
   location: string
   notes: string
   created_at: string
@@ -75,7 +83,19 @@ export interface Track {
   name: string
   type: string
   description: string
+  autoApply: string | boolean
   createdAt: string
+  updated_at: string
+}
+
+export interface TrackTask {
+  id: string
+  trackId: string
+  name: string
+  ownerRole: string
+  dueDaysOffset: string
+  order: number
+  created_at: string
   updated_at: string
 }
 
@@ -100,16 +120,62 @@ export interface RunTask {
   updated_at: string
 }
 
+export interface Interview {
+  id: string
+  candidateId: string
+  date: string
+  interviewers: string
+  notes: string
+  score: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Activity {
+  id: string
+  type: string
+  desc: string
+  at: string
+}
+
+export interface HrList {
+  id: string
+  listKey: string
+  value: string
+  order: string
+  created_at: string
+  updated_at: string
+}
+
 export interface HrDB {
   candidates: Candidate[]
   employees: Employee[]
   devices: Device[]
   assignments: Assignment[]
   tracks: Track[]
+  tasks: TrackTask[]
   onboardingRuns: OnboardingRun[]
   runTasks: RunTask[]
+  interviews: Interview[]
+  activities: Activity[]
+  lists: HrList[]
 }
 
 export type HrPage = 'dashboard' | 'hiring' | 'directory' | 'onboarding' | 'offboarding' | 'inventory' | 'assignments' | 'tracks' | 'reports' | 'settings'
 
-export const STAGES = ['sourced', 'screening', 'interview', 'offer', 'hired']
+export const STAGES = ['sourced', 'screening', 'interview', 'offer', 'hired'] as const
+
+export const DEFAULT_LISTS: Record<string, string[]> = {
+  candStatus: ['Active', 'On Hold', 'Nurturing', 'Hired', 'Closed'],
+  empType: ['Full-time', 'Part-time', 'Contract', 'Intern'],
+  source: ['Referral', 'LinkedIn', 'Job Board', 'Outreach', 'Agency'],
+  seniority: ['Junior', 'Mid', 'Senior', 'Staff', 'Principal', 'Director'],
+  dept: ['Engineering', 'Design', 'Product', 'Marketing', 'Sales', 'Operations', 'Finance', 'HR'],
+  deviceType: ['laptop', 'monitor', 'phone', 'keyboard', 'mouse', 'headset', 'other'],
+  interviewScore: ['Strong Yes', 'Yes', 'Neutral', 'No', 'Strong No'],
+}
+
+export function getList(lists: HrList[], key: string): string[] {
+  const vals = lists.filter(l => l.listKey === key).sort((a, b) => parseInt(a.order) - parseInt(b.order)).map(l => l.value)
+  return vals.length ? vals : (DEFAULT_LISTS[key] || [])
+}
