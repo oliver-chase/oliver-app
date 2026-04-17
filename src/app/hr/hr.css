@@ -301,7 +301,7 @@ tr.selected td{background:var(--accent-light)}
   .table-wrap table tbody{display:contents}
   .table-wrap table tr{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;gap:8px;cursor:pointer;min-height:44px}
   .table-wrap table tr.selected{background:var(--accent-light);border-color:var(--accent)}
-  .table-wrap table td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border:none;font-size:13px}
+  .table-wrap table td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border:none;font-size:var(--font-size-xs)}
 
   /* Touch targets */
   .clickable,tr.clickable,[role="button"],.btn,.nav-item,.tab,button{min-height:44px}
