@@ -65,6 +65,29 @@ function getTeamNames(bg?: Background): string[] {
 }
 
 const NOTES_SORT_OPTS: [string, string][] = [['desc', 'Newest first'], ['asc', 'Oldest first']]
+const NOTES_PAGE_SIZE = 6
+
+function fmtDateMd(iso: string): string {
+  if (!iso) return ''
+  const dt = new Date(iso + 'T00:00:00')
+  if (isNaN(dt.getTime())) return iso
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function noteToMarkdown(note: Note): string {
+  let md = '# ' + (note.title || 'Note') + '\n\n'
+  md += '*Date: ' + fmtDateMd(note.date) + '*  \n'
+  md += '\n'
+  let nd: { sections?: Array<{ heading: string; bullets?: Array<{ text?: string; indent?: number }> }> }
+  try { nd = JSON.parse(note.template_data) } catch { nd = { sections: [] } }
+  ;(nd.sections || []).forEach(sec => {
+    md += '## ' + sec.heading + '\n\n'
+    ;(sec.bullets || []).forEach(b => { md += (b.indent ? '  ' : '') + '- ' + (b.text || '') + '\n' })
+    md += '\n'
+  })
+  if (note.transcript_link) md += '[View Transcript](' + note.transcript_link + ')\n'
+  return md
+}
 
 interface Props {
   accountId: string
@@ -81,6 +104,7 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
   const teamNames = getTeamNames(bg)
   const [search, setSearch] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [page, setPage] = useState(0)
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Note>()
   const reportSync = useSyncReport()
@@ -92,12 +116,23 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
       if (filterDateTo && n.date > filterDateTo) return false
       if (!search) return true
       const q = search.toLowerCase()
-      return (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
+      if ((n.title || '').toLowerCase().includes(q)) return true
+      if ((n.body || '').toLowerCase().includes(q)) return true
+      try {
+        const nd = parseNoteData(n.template_data)
+        const attn = nd.sections.find(s => s.heading === 'Attendees')
+        if ((attn?.bullets || []).some(b => b.text.toLowerCase().includes(q))) return true
+      } catch {}
+      return false
     })
     .sort((a, b) => {
       const cmp = b.date.localeCompare(a.date) || b.created_date.localeCompare(a.created_date)
       return sortDir === 'desc' ? cmp : -cmp
     })
+
+  const totalPages = Math.ceil(notes.length / NOTES_PAGE_SIZE)
+  const safePage = Math.min(page, Math.max(0, totalPages - 1))
+  const pagedNotes = notes.slice(safePage * NOTES_PAGE_SIZE, (safePage + 1) * NOTES_PAGE_SIZE)
 
   const save = async (n: Note) => {
     setData(prev => ({ ...prev, notes: prev.notes.map(x => x.note_id === n.note_id ? n : x) }))
@@ -108,7 +143,7 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
   const remove = (n: Note) => {
     softDelete(n, {
       displayName: n.title || 'Note',
-      onLocalRemove: () => setData(prev => ({ ...prev, notes: prev.notes.filter(x => x.note_id !== n.note_id) })),
+      onLocalRemove: () => { setData(prev => ({ ...prev, notes: prev.notes.filter(x => x.note_id !== n.note_id) })); setPage(0) },
       onLocalRestore: () => setData(prev => ({ ...prev, notes: [...prev.notes, n] })),
       onDeleteRecord: async () => { reportSync('syncing'); try { await deleteRecord('notes', 'note_id', n.note_id); reportSync('ok') } catch { reportSync('error') } },
     })
@@ -129,7 +164,7 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
     const cadenceTitle = bg?.meeting_title?.trim() || ''
     let title = cadenceTitle
     if (!title) {
-      const { buttonValue, inputValue } = await showModal({ title: 'New meeting note', inputPlaceholder: 'Meeting title', confirmLabel: 'Create' })
+      const { buttonValue, inputValue } = await showModal({ title: 'Meeting title', inputPlaceholder: 'Title', confirmLabel: 'Create' })
       if (buttonValue !== 'confirm' || !inputValue.trim()) return
       title = inputValue.trim()
     }
@@ -185,7 +220,7 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
 
       <div id="notes-body">
         {notes.length === 0 && <div className="empty-state">No results</div>}
-        {notes.map(n => (
+        {pagedNotes.map(n => (
           <NoteCard
             key={n.note_id}
             note={n}
@@ -195,6 +230,15 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
             onAddPersonToTeam={addPersonToTeam}
           />
         ))}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
+            <button className="btn btn--compact" disabled={safePage === 0} onClick={() => setPage(0)}>{'\u27e8'}</button>
+            <button className="btn btn--compact" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>{'\u2190'}</button>
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', margin: '0 8px' }}>Page {safePage + 1} of {totalPages}</span>
+            <button className="btn btn--compact" disabled={safePage === totalPages - 1} onClick={() => setPage(safePage + 1)}>{'\u2192'}</button>
+            <button className="btn btn--compact" disabled={safePage === totalPages - 1} onClick={() => setPage(totalPages - 1)}>{'\u27e9'}</button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -209,6 +253,8 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
 }) {
   const { modal: noteModal, showModal: noteShowModal } = useAppModal()
   const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleRef = useRef<HTMLDivElement>(null)
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dateRef = useRef<HTMLSpanElement>(null)
@@ -216,8 +262,12 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
   const [attendees, setAttendeesState] = useState<string[]>(() => getAttendees(note.template_data))
 
   const copyToClipboard = async () => {
-    const md = (note.title ? note.title + '\n\n' : '') + (note.body || '')
-    try { await navigator.clipboard.writeText(md) } catch { /* no clipboard access */ }
+    try {
+      await navigator.clipboard.writeText(noteToMarkdown(note))
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+      setCopied(true)
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000)
+    } catch { /* no clipboard access */ }
   }
 
   const saveAttendees = async (newList: string[]) => {
@@ -258,6 +308,7 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
     >
       {/* Top-right button row */}
       <div className="note-card-btns">
+        {copied && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--gray)', alignSelf: 'center' }}>Copied to clipboard</span>}
         <button
           className="note-copy-btn"
           title="Copy to clipboard"
