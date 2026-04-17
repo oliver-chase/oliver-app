@@ -312,6 +312,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
   onAddPerson: () => Promise<string | null>
 }) {
   const descRef = useRef<HTMLSpanElement>(null)
+  const descTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const age = (action.status === 'Open' || action.status === 'In Progress') ? dayAge(action.created_date) : 0
   const rowStyle: CSSProperties = age > 14 ? { background: 'var(--color-bg-overdue)' } : {}
 
@@ -325,7 +326,10 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
           suppressContentEditableWarning
           onBlur={() => {
             const v = descRef.current?.textContent?.trim() || ''
-            if (v !== action.description) onSave({ ...action, description: v || action.description, last_updated: today() })
+            if (descTimer.current) clearTimeout(descTimer.current)
+            descTimer.current = setTimeout(() => {
+              if (v !== action.description) onSave({ ...action, description: v || action.description, last_updated: today() })
+            }, 500)
           }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); descRef.current?.blur() } }}
         >

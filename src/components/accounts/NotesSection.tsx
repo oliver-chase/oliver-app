@@ -210,6 +210,7 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
   const { modal: noteModal, showModal: noteShowModal } = useAppModal()
   const [expanded, setExpanded] = useState(false)
   const titleRef = useRef<HTMLDivElement>(null)
+  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dateRef = useRef<HTMLSpanElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const [attendees, setAttendeesState] = useState<string[]>(() => getAttendees(note.template_data))
@@ -314,7 +315,10 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
         onClick={e => e.stopPropagation()}
         onBlur={() => {
           const v = titleRef.current?.textContent?.trim() || ''
-          if (v !== note.title) onSave({ ...note, title: v, last_updated: today() })
+          if (titleTimer.current) clearTimeout(titleTimer.current)
+          titleTimer.current = setTimeout(() => {
+            if (v !== note.title) onSave({ ...note, title: v, last_updated: today() })
+          }, 500)
         }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); titleRef.current?.blur() } }}
       >

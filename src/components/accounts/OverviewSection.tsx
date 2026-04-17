@@ -551,6 +551,7 @@ function FadedEditable({ value, placeholder, ariaLabel, className, onSave }: {
   value: string; placeholder: string; ariaLabel: string; className: string; onSave: (v: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const empty = isEmptyRevValue(value)
   return (
     <div ref={ref} className={className + (empty ? ' faded' : '')} contentEditable suppressContentEditableWarning aria-label={ariaLabel} role="textbox"
@@ -558,8 +559,11 @@ function FadedEditable({ value, placeholder, ariaLabel, className, onSave }: {
       onBlur={() => {
         if (!ref.current) return
         const v = ref.current.textContent?.trim() || ''
-        if (!v || v === placeholder) { ref.current.textContent = placeholder; ref.current.classList.add('faded'); onSave('') }
-        else { ref.current.classList.remove('faded'); onSave(v) }
+        if (!v || v === placeholder) { ref.current.textContent = placeholder; ref.current.classList.add('faded') }
+        else { ref.current.classList.remove('faded') }
+        const toSave = (!v || v === placeholder) ? '' : v
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => onSave(toSave), 500)
       }}
     >{empty ? placeholder : value}</div>
   )
@@ -586,9 +590,14 @@ function RevLegend({ color, label }: { color: string; label: string }) {
 
 function NotesText({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   return (
     <div ref={ref} className="overview-notes-text" contentEditable suppressContentEditableWarning aria-label="Account notes" role="textbox"
-      onBlur={() => { const v = ref.current?.textContent?.trim() || ''; onSave(v) }}
+      onBlur={() => {
+        const v = ref.current?.textContent?.trim() || ''
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => onSave(v), 500)
+      }}
     >{value}</div>
   )
 }
@@ -603,13 +612,16 @@ function HistoricalYearForm({ bg, onSave, onCancel }: {
   const projRef = useRef<HTMLInputElement>(null)
   const closedRef = useRef<HTMLInputElement>(null)
   const existing = bg.revenue[year] || {}
+  const yearOptions = Array.from({ length: curYear - 2017 }, (_, i) => String(curYear - 1 - i))
   return (
     <div style={{ marginTop: '6px', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface2)' }}>
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <select value={year} onChange={e => setYear(Number(e.currentTarget.value))}
-          style={{ fontFamily: 'var(--font)', fontSize: 'var(--font-size-xs)', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface)' }}>
-          {Array.from({ length: curYear - 2017 }, (_, i) => curYear - 1 - i).map(y => (<option key={y} value={y}>{y}</option>))}
-        </select>
+        <Picker
+          value={String(year)}
+          options={yearOptions}
+          showUnassigned={false}
+          onChange={v => setYear(Number(v))}
+        />
         <input ref={projRef} type="text" defaultValue={existing.projected || ''} placeholder="Projected (e.g. $450K)" style={{ width: '110px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '4px 6px', background: 'var(--surface)' }} />
         <input ref={closedRef} type="text" defaultValue={existing.closed || ''} placeholder="Closed (e.g. $380K)" style={{ width: '110px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '4px 6px', background: 'var(--surface)' }} />
         <button type="button" className="btn-primary btn--compact" style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px' }} onClick={() => onSave(year, projRef.current?.value.trim() || '', closedRef.current?.value.trim() || '')}>Save</button>

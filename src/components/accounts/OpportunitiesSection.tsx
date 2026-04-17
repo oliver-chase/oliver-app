@@ -168,6 +168,9 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
   const descRef = useRef<HTMLDivElement>(null)
   const yearRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
+  const descTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const yearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   return (
     <div className="project-card" title={'Last updated: ' + (opp.last_updated || '')}>
@@ -182,7 +185,10 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
           aria-label="Opportunity description"
           onBlur={() => {
             const v = descRef.current?.textContent?.trim() || ''
-            if (v !== opp.description) onSave({ ...opp, description: v || opp.description, last_updated: today() })
+            if (descTimer.current) clearTimeout(descTimer.current)
+            descTimer.current = setTimeout(() => {
+              if (v !== opp.description) onSave({ ...opp, description: v || opp.description, last_updated: today() })
+            }, 500)
           }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); descRef.current?.blur() } }}
         >
@@ -212,8 +218,11 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
           data-placeholder="e.g. 2026"
           onBlur={() => {
             const v = yearRef.current?.textContent?.trim() || ''
-            if (v !== opp.year) onSave({ ...opp, year: v || String(new Date().getFullYear()), last_updated: today() })
             if (!v && yearRef.current) yearRef.current.textContent = String(new Date().getFullYear())
+            if (yearTimer.current) clearTimeout(yearTimer.current)
+            yearTimer.current = setTimeout(() => {
+              if (v !== opp.year) onSave({ ...opp, year: v || String(new Date().getFullYear()), last_updated: today() })
+            }, 500)
           }}
         >
           {opp.year || String(new Date().getFullYear())}
@@ -246,11 +255,14 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
           const v = notesRef.current?.textContent?.trim() || ''
           if (!v || v === PH_NOTES) {
             if (notesRef.current) { notesRef.current.textContent = PH_NOTES; notesRef.current.style.fontStyle = 'italic' }
-            if (opp.notes) onSave({ ...opp, notes: '', last_updated: today() })
-          } else if (v !== opp.notes) {
+          } else {
             if (notesRef.current) notesRef.current.style.fontStyle = ''
-            onSave({ ...opp, notes: v, last_updated: today() })
           }
+          if (notesTimer.current) clearTimeout(notesTimer.current)
+          notesTimer.current = setTimeout(() => {
+            if (!v || v === PH_NOTES) { if (opp.notes) onSave({ ...opp, notes: '', last_updated: today() }) }
+            else if (v !== opp.notes) onSave({ ...opp, notes: v, last_updated: today() })
+          }, 500)
         }}
       >
         {opp.notes || PH_NOTES}

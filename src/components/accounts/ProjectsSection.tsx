@@ -156,6 +156,9 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
   const nameRef = useRef<HTMLDivElement>(null)
   const yearRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const yearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [status, setStatus] = useState(project.status)
 
   const cycleStatus = async () => {
@@ -185,7 +188,10 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           aria-label="Project name"
           onBlur={() => {
             const v = nameRef.current?.textContent?.trim() || ''
-            if (v !== project.project_name) onSave({ ...project, project_name: v || project.project_name, last_updated: today() })
+            if (nameTimer.current) clearTimeout(nameTimer.current)
+            nameTimer.current = setTimeout(() => {
+              if (v !== project.project_name) onSave({ ...project, project_name: v || project.project_name, last_updated: today() })
+            }, 500)
           }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); nameRef.current?.blur() } }}
         >
@@ -214,8 +220,11 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           data-placeholder="e.g. 2026"
           onBlur={() => {
             const v = yearRef.current?.textContent?.trim() || ''
-            if (v !== project.year) onSave({ ...project, year: v || String(new Date().getFullYear()), last_updated: today() })
             if (!v && yearRef.current) yearRef.current.textContent = String(new Date().getFullYear())
+            if (yearTimer.current) clearTimeout(yearTimer.current)
+            yearTimer.current = setTimeout(() => {
+              if (v !== project.year) onSave({ ...project, year: v || String(new Date().getFullYear()), last_updated: today() })
+            }, 500)
           }}
         >
           {project.year || String(new Date().getFullYear())}
@@ -250,11 +259,14 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           const v = notesRef.current?.textContent?.trim() || ''
           if (!v || v === PH_NOTES) {
             if (notesRef.current) { notesRef.current.textContent = PH_NOTES; notesRef.current.style.fontStyle = 'italic' }
-            if (project.notes) onSave({ ...project, notes: '', last_updated: today() })
-          } else if (v !== project.notes) {
+          } else {
             if (notesRef.current) notesRef.current.style.fontStyle = ''
-            onSave({ ...project, notes: v, last_updated: today() })
           }
+          if (notesTimer.current) clearTimeout(notesTimer.current)
+          notesTimer.current = setTimeout(() => {
+            if (!v || v === PH_NOTES) { if (project.notes) onSave({ ...project, notes: '', last_updated: today() }) }
+            else if (v !== project.notes) onSave({ ...project, notes: v, last_updated: today() })
+          }, 500)
         }}
       >
         {project.notes || PH_NOTES}
