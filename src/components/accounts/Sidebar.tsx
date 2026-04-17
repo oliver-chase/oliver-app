@@ -1,5 +1,4 @@
 'use client'
-import { useRef } from 'react'
 import Link from 'next/link'
 import type { Account } from '@/types'
 
@@ -8,7 +7,6 @@ interface Props {
   currentAccountId: string | null
   onSelectAll: () => void
   onSelectAccount: (id: string) => void
-  onRenameAccount: (id: string, name: string) => void
   onAddAccount: () => void
   open: boolean
   onClose: () => void
@@ -16,7 +14,7 @@ interface Props {
 
 export default function Sidebar({
   accounts, currentAccountId, onSelectAll, onSelectAccount,
-  onRenameAccount, onAddAccount, open, onClose,
+  onAddAccount, open, onClose,
 }: Props) {
   return (
     <>
@@ -46,7 +44,6 @@ export default function Sidebar({
                 account={acc}
                 active={acc.account_id === currentAccountId}
                 onSelect={() => onSelectAccount(acc.account_id)}
-                onRename={name => onRenameAccount(acc.account_id, name)}
               />
             ))}
           </div>
@@ -66,14 +63,11 @@ export default function Sidebar({
   )
 }
 
-function SidebarAccount({ account, active, onSelect, onRename }: {
+function SidebarAccount({ account, active, onSelect }: {
   account: Account
   active: boolean
   onSelect: () => void
-  onRename: (name: string) => void
 }) {
-  const spanRef = useRef<HTMLSpanElement>(null)
-
   return (
     <div
       className={`app-sidebar-item${active ? ' active' : ''}`}
@@ -82,24 +76,7 @@ function SidebarAccount({ account, active, onSelect, onRename }: {
       onClick={onSelect}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
     >
-      <span
-        ref={spanRef}
-        className="app-sidebar-item-label"
-        contentEditable
-        suppressContentEditableWarning
-        aria-label="Account name"
-        role="textbox"
-        onMouseDown={e => e.stopPropagation()}
-        onFocus={() => { if (spanRef.current) spanRef.current.style.background = 'var(--color-bg-sidebar-focus)' }}
-        onBlur={() => {
-          if (spanRef.current) spanRef.current.style.background = ''
-          const v = spanRef.current?.textContent?.trim() || ''
-          if (v && v !== account.account_name) onRename(v)
-          else if (spanRef.current) spanRef.current.textContent = account.account_name
-        }}
-      >
-        {account.account_name}
-      </span>
+      <span className="app-sidebar-item-label">{account.account_name}</span>
     </div>
   )
 }

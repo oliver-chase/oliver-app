@@ -46,12 +46,6 @@ export default function AccountsApp() {
     setSidebarOpen(false)
   }, [])
 
-  const handleRenameAccount = useCallback(async (id: string, name: string) => {
-    const acct = data.accounts.find(a => a.account_id === id)
-    if (!acct || name === acct.account_name) return
-    await saveAccount({ ...acct, account_name: name })
-  }, [data.accounts, saveAccount])
-
   const handleAddAccount = useCallback(async () => {
     const { buttonValue, inputValue } = await showModal({
       title: 'New account',
@@ -127,7 +121,7 @@ export default function AccountsApp() {
     ? data.engagements.find(e => e.engagement_id === currentEngagementId)
     : null
 
-  const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'Account Strategy'
+  const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'All Accounts'
   const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
   const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'
 
@@ -148,7 +142,6 @@ export default function AccountsApp() {
         currentAccountId={currentAccountId}
         onSelectAll={handleSelectAll}
         onSelectAccount={handleSelectAccount}
-        onRenameAccount={handleRenameAccount}
         onAddAccount={handleAddAccount}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -194,7 +187,6 @@ export default function AccountsApp() {
                 actions={data.actions}
                 projects={data.projects}
                 onSelectAccount={handleSelectAccount}
-                onUpdateAccount={handleUpdateAccount}
               />
           )}
         </main>
