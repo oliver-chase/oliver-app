@@ -4,6 +4,9 @@ import type { Stakeholder, AppState } from '@/types'
 import { today } from '@/lib/db'
 import { Picker } from './Picker'
 
+let _touchDragStkId: string | null = null
+let _touchGhost: HTMLElement | null = null
+
 function initials(name: string) {
   return name.split(' ').map(p => p[0] || '').join('').toUpperCase().slice(0, 2) || '?'
 }
@@ -20,6 +23,26 @@ function isDescendantOf(potDesc: string, potAnc: string, stks: Stakeholder[]): b
     current = stk.reports_to
   }
   return false
+}
+
+function buildEngItems(projs: AppState['projects'], opps: AppState['opportunities']): Array<{ value: string; label: string; isHeader?: boolean }> {
+  const items: Array<{ value: string; label: string; isHeader?: boolean }> = [{ value: '', label: 'Account-wide' }]
+  const sp = [...projs].sort((a, b) => a.project_name.localeCompare(b.project_name))
+  if (sp.length) { items.push({ value: '__h_proj', label: 'PROJECTS', isHeader: true }); sp.forEach(p => items.push({ value: p.project_id, label: p.project_name })) }
+  const so = [...opps].sort((a, b) => (a.description || '').localeCompare(b.description || ''))
+  if (so.length) { items.push({ value: '__h_opp', label: 'OPPORTUNITIES', isHeader: true }); so.forEach(o => items.push({ value: o.opportunity_id, label: o.description || o.opportunity_id })) }
+  return items
+}
+
+function engDisplay(ids: string[], projs: AppState['projects'], opps: AppState['opportunities']): string {
+  if (!ids.length) return 'Account-wide'
+  const resolved = ids.map(id => {
+    const p = projs.find(x => x.project_id === id)
+    if (p) return p.project_name
+    const o = opps.find(x => x.opportunity_id === id)
+    return o ? (o.description || null) : null
+  }).filter(Boolean) as string[]
+  return resolved.length ? resolved.join(', ') : 'Account-wide'
 }
 
 interface OrgChartProps {
@@ -39,9 +62,17 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
   const [zone2Hover, setZone2Hover] = useState(false)
   const [kbDragId, setKbDragId] = useState<string | null>(null)
   const [detailPerson, setDetailPerson] = useState<Stakeholder | null>(null)
+  const [msgToast, setMsgToast] = useState<string | null>(null)
+  const msgToastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const outerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
   const liveRef = useRef<HTMLDivElement>(null)
+
+  const showMsgToast = useCallback((msg: string) => {
+    setMsgToast(msg)
+    clearTimeout(msgToastTimer.current)
+    msgToastTimer.current = setTimeout(() => setMsgToast(null), 3000)
+  }, [])
 
   const acctIds = new Set(stakeholders.map(s => s.stakeholder_id))
   const childMap: Record<string, string[]> = {}
@@ -130,7 +161,8 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
     const updated: Stakeholder = { ...dragged, reports_to: targetId, last_updated: today() }
     if (target.department && !dragged.department) updated.department = target.department
     await onUpdate(updated)
-  }, [stakeholders, onUpdate])
+    showMsgToast(dragged.name + ' now reports to ' + target.name)
+  }, [stakeholders, onUpdate, showMsgToast])
 
   const doRemoveFromTree = useCallback(async (dragId: string) => {
     const dragged = stakeholders.find(s => s.stakeholder_id === dragId)
@@ -168,6 +200,19 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
     if (kbDragId) { clearKbDrag(); announce('Drag cancelled') }
   }, [kbDragId, clearKbDrag, announce])
 
+  const handleTouchDrop = useCallback(async (dragId: string, targetId: string) => {
+    if (!dragId || dragId === targetId) return
+    if (isDescendantOf(targetId, dragId, stakeholders)) {
+      showMsgToast('Cannot create circular reporting relationship')
+      return
+    }
+    await doSetReportsTo(dragId, targetId)
+  }, [stakeholders, doSetReportsTo, showMsgToast])
+
+  const handleTouchUnlink = useCallback(async (dragId: string) => {
+    await doRemoveFromTree(dragId)
+  }, [doRemoveFromTree])
+
   if (!stakeholders.length) return <div className="empty-state">No people yet</div>
 
   const deptGrouped: Record<string, Stakeholder[]> = {}
@@ -181,6 +226,11 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
 
   return (
     <>
+      {msgToast && (
+        <div style={{ position: 'fixed', bottom: 80, right: 20, background: 'var(--color-text-primary)', color: 'var(--color-text-inverse)', padding: '8px 16px', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-xs)', fontWeight: 600, zIndex: 300, pointerEvents: 'none' }}>
+          {msgToast}
+        </div>
+      )}
       <div ref={liveRef} id="org-kb-live" aria-live="assertive" aria-atomic="true"
         style={{ clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', height: 1, overflow: 'hidden', position: 'absolute', whiteSpace: 'nowrap', width: 1 }} />
 
@@ -228,6 +278,8 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
                   await doSetReportsTo(did, targetId)
                 }}
                 onUnlinkFromTree={doRemoveFromTree}
+                onTouchDrop={handleTouchDrop}
+                onTouchUnlink={handleTouchUnlink}
                 onCardClick={setDetailPerson}
                 onKbSpace={handleKbSpace}
                 onKbEscape={handleKbEscape}
@@ -270,6 +322,8 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
                       onDropLeave={() => {}}
                       onDrop={async () => {}}
                       onUnlinkFromTree={() => Promise.resolve()}
+                      onTouchDrop={handleTouchDrop}
+                      onTouchUnlink={handleTouchUnlink}
                       onDeletePerson={onDelete}
                       onCardClick={setDetailPerson}
                       onKbSpace={handleKbSpace}
@@ -296,6 +350,8 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
                     onDropLeave={() => {}}
                     onDrop={async () => {}}
                     onUnlinkFromTree={() => Promise.resolve()}
+                    onTouchDrop={handleTouchDrop}
+                    onTouchUnlink={handleTouchUnlink}
                     onDeletePerson={onDelete}
                     onCardClick={setDetailPerson}
                     onKbSpace={handleKbSpace}
@@ -336,22 +392,24 @@ interface BranchProps {
   onDropLeave: () => void
   onDrop: (targetId: string) => Promise<void>
   onUnlinkFromTree: (id: string) => Promise<void>
+  onTouchDrop: (dragId: string, targetId: string) => Promise<void>
+  onTouchUnlink: (dragId: string) => Promise<void>
   onCardClick: (stk: Stakeholder) => void
   onKbSpace: (id: string, isUnmapped: boolean) => Promise<void>
   onKbEscape: () => void
 }
 
-function OrgBranch({ stkId, childMap, stakeholders, ...nodeProps }: BranchProps) {
+function OrgBranch({ stkId, childMap, stakeholders, onTouchDrop, onTouchUnlink, ...nodeProps }: BranchProps) {
   const stk = stakeholders.find(s => s.stakeholder_id === stkId)
   if (!stk) return null
   const children = childMap[stkId] || []
   return (
     <div className="org-branch">
-      <OrgNodeCard stk={stk} isUnmapped={false} onDeletePerson={() => {}} {...nodeProps} />
+      <OrgNodeCard stk={stk} isUnmapped={false} onDeletePerson={() => {}} onTouchDrop={onTouchDrop} onTouchUnlink={onTouchUnlink} {...nodeProps} />
       {children.length > 0 && (
         <div className="org-children">
           {children.map(cId => (
-            <OrgBranch key={cId} stkId={cId} childMap={childMap} stakeholders={stakeholders} {...nodeProps} />
+            <OrgBranch key={cId} stkId={cId} childMap={childMap} stakeholders={stakeholders} onTouchDrop={onTouchDrop} onTouchUnlink={onTouchUnlink} {...nodeProps} />
           ))}
         </div>
       )}
@@ -371,22 +429,108 @@ interface NodeCardProps {
   onDropLeave: () => void
   onDrop: (targetId: string) => Promise<void>
   onUnlinkFromTree: (id: string) => Promise<void>
+  onTouchDrop: (dragId: string, targetId: string) => Promise<void>
+  onTouchUnlink: (dragId: string) => Promise<void>
   onDeletePerson: (stk: Stakeholder) => void
   onCardClick: (stk: Stakeholder) => void
   onKbSpace: (id: string, isUnmapped: boolean) => Promise<void>
   onKbEscape: () => void
 }
 
-function OrgNodeCard({ stk, isUnmapped, draggedId, dropTargetId, kbDragId, onDragStart, onDragEnd, onDropTarget, onDropLeave, onDrop, onUnlinkFromTree, onDeletePerson, onCardClick, onKbSpace, onKbEscape }: NodeCardProps) {
+function OrgNodeCard({ stk, isUnmapped, draggedId, dropTargetId, kbDragId, onDragStart, onDragEnd, onDropTarget, onDropLeave, onDrop, onUnlinkFromTree, onTouchDrop, onTouchUnlink, onDeletePerson, onCardClick, onKbSpace, onKbEscape }: NodeCardProps) {
   const isDragging = draggedId === stk.stakeholder_id
   const isDropTarget = !isUnmapped && dropTargetId === stk.stakeholder_id
   const isKbDragging = kbDragId === stk.stakeholder_id
   const isKbDroppable = kbDragId !== null && kbDragId !== stk.stakeholder_id && !isUnmapped
 
+  const cardRef = useRef<HTMLDivElement>(null)
+  const onDragStartRef = useRef(onDragStart)
+  const onDragEndRef = useRef(onDragEnd)
+  const onTouchDropRef = useRef(onTouchDrop)
+  const onTouchUnlinkRef = useRef(onTouchUnlink)
+  const isUnmappedRef = useRef(isUnmapped)
+  onDragStartRef.current = onDragStart
+  onDragEndRef.current = onDragEnd
+  onTouchDropRef.current = onTouchDrop
+  onTouchUnlinkRef.current = onTouchUnlink
+  isUnmappedRef.current = isUnmapped
+
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+    const stkId = stk.stakeholder_id
+
+    const handleTouchStart = (e: TouchEvent) => {
+      _touchDragStkId = stkId
+      const rect = card.getBoundingClientRect()
+      const touch = e.touches[0]
+      const ghost = card.cloneNode(true) as HTMLElement
+      ghost.style.cssText = 'position:fixed;pointer-events:none;opacity:0.75;z-index:9999;width:' + rect.width + 'px;left:' + (touch.clientX - rect.width / 2) + 'px;top:' + (touch.clientY - rect.height / 2) + 'px;transform:scale(0.9)'
+      document.body.appendChild(ghost)
+      _touchGhost = ghost
+      card.classList.add('dragging')
+      onDragStartRef.current(stkId)
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!_touchDragStkId || !_touchGhost) return
+      e.preventDefault()
+      const touch = e.touches[0]
+      _touchGhost.style.left = (touch.clientX - _touchGhost.offsetWidth / 2) + 'px'
+      _touchGhost.style.top = (touch.clientY - _touchGhost.offsetHeight / 2) + 'px'
+      const el = document.elementFromPoint(touch.clientX, touch.clientY)
+      document.querySelectorAll('.drop-target').forEach(x => x.classList.remove('drop-target'))
+      document.querySelectorAll<HTMLElement>('[data-zone2]').forEach(z => { z.style.borderColor = '' })
+      if (!el) return
+      const targetCard = el.closest('.org-node-card')
+      if (targetCard && !isUnmappedRef.current && targetCard !== card) {
+        targetCard.classList.add('drop-target')
+      } else {
+        const zone2 = el.closest<HTMLElement>('[data-zone2]')
+        if (zone2) zone2.style.borderColor = 'var(--color-brand-pink)'
+      }
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      card.classList.remove('dragging')
+      document.querySelectorAll('.drop-target').forEach(x => x.classList.remove('drop-target'))
+      document.querySelectorAll<HTMLElement>('[data-zone2]').forEach(z => { z.style.borderColor = '' })
+      const ghost = _touchGhost; _touchGhost = null
+      if (ghost) ghost.remove()
+      const dragId = _touchDragStkId; _touchDragStkId = null
+      onDragEndRef.current()
+      if (!dragId) return
+      const touch = e.changedTouches[0]
+      const el = document.elementFromPoint(touch.clientX, touch.clientY)
+      if (!el) return
+      const targetCard = el.closest<HTMLElement>('.org-node-card')
+      const zone2 = el.closest('[data-zone2]')
+      if (zone2) {
+        void onTouchUnlinkRef.current(dragId)
+      } else if (targetCard && !isUnmappedRef.current) {
+        const targetStkId = targetCard.dataset.stkid
+        if (targetStkId && targetStkId !== dragId) {
+          void onTouchDropRef.current(dragId, targetStkId)
+        }
+      }
+    }
+
+    card.addEventListener('touchstart', handleTouchStart, { passive: true })
+    card.addEventListener('touchmove', handleTouchMove, { passive: false })
+    card.addEventListener('touchend', handleTouchEnd)
+
+    return () => {
+      card.removeEventListener('touchstart', handleTouchStart)
+      card.removeEventListener('touchmove', handleTouchMove)
+      card.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [stk.stakeholder_id])
+
   const titleParts = [stk.title, stk.department].filter(Boolean).join(', ')
 
   return (
     <div
+      ref={cardRef}
       className={[
         'org-node-card',
         isDragging ? 'dragging' : '',
@@ -450,12 +594,21 @@ interface DetailPanelProps {
   onClose: () => void
 }
 
-function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: DetailPanelProps) {
+function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSave, onClose }: DetailPanelProps) {
   const nameRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
   const deptRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const [rtoError, setRtoError] = useState(false)
+  useEffect(() => {
+    if (!rtoError) return
+    const t = setTimeout(() => setRtoError(false), 3000)
+    return () => clearTimeout(t)
+  }, [rtoError])
+
+  const curEngIds = (stk.engagement_id || '').split(',').map(s => s.trim()).filter(Boolean)
+  const engItems = buildEngItems(acctProjs, acctOpps)
 
   useEffect(() => {
     const closeBtnEl = panelRef.current?.querySelector<HTMLElement>('.person-detail-close')
@@ -558,8 +711,25 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
                 triggerClass={'card-owner-btn' + (!stk.reports_to ? ' picker-placeholder' : '')}
                 onChange={v => {
                   const match = otherPeople.find(p => p.name === v)
+                  if (match && isDescendantOf(match.stakeholder_id, stk.stakeholder_id, [stk, ...otherPeople])) {
+                    setRtoError(true)
+                    return
+                  }
                   onSave({ ...stk, reports_to: match ? match.stakeholder_id : '', last_updated: today() })
                 }}
+              />
+            </div>
+            {rtoError && (
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 4, paddingLeft: 8 }}>
+                Cannot create circular reporting relationship
+              </div>
+            )}
+            <div className="card-meta-row" style={{ marginTop: 14 }}>
+              <OrgEngPicker
+                ids={curEngIds}
+                items={engItems}
+                label={engDisplay(curEngIds, acctProjs, acctOpps)}
+                onChange={ids => onSave({ ...stk, engagement_id: ids.join(','), last_updated: today() })}
               />
             </div>
             <div className="card-section-label">Notes</div>
@@ -581,3 +751,74 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
     </div>
   )
 }
+
+function OrgEngPicker({ ids, items, label, onChange }: {
+  ids: string[]
+  items: Array<{ value: string; label: string; isHeader?: boolean }>
+  label: string
+  onChange: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery('') } }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const toggle = (val: string) => {
+    if (!val || val.startsWith('__h_')) return
+    onChange(ids.includes(val) ? ids.filter(x => x !== val) : [...ids, val])
+  }
+
+  const handleOpen = () => { setOpen(o => !o); setQuery(''); setTimeout(() => searchRef.current?.focus(), 0) }
+
+  const visibleItems = query
+    ? items.filter(item => item.isHeader || item.value === '' || item.label.toLowerCase().includes(query.toLowerCase()))
+    : items
+
+  return (
+    <div ref={ref} className="picker-wrap">
+      <button className="person-eng-pill" onClick={handleOpen} aria-haspopup="listbox">
+        {label}
+      </button>
+      {open && (
+        <div className="app-popover" style={{ minWidth: 200 }}>
+          <input
+            ref={searchRef}
+            className="app-popover-search"
+            placeholder="Search…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+          />
+          <div className="app-popover-list">
+            {visibleItems.map((item, i) =>
+              item.isHeader ? (
+                <div key={i} className="app-popover-section-label">{item.label}</div>
+              ) : (
+                <div
+                  key={item.value}
+                  className={'app-popover-item' + (item.value === '' ? (ids.length === 0 ? ' selected' : '') : (ids.includes(item.value) ? ' selected' : ''))}
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    if (item.value === '') { onChange([]); setOpen(false); setQuery('') }
+                    else toggle(item.value)
+                  }}
+                >{item.label}</div>
+              )
+            )}
+            {visibleItems.filter(i => !i.isHeader).length === 0 && (
+              <div className="app-popover-empty">No matches</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+

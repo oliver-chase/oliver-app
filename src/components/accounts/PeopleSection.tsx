@@ -42,6 +42,20 @@ function engDisplay(ids: string[], projs: AppState['projects'], opps: AppState['
   return resolved.length ? resolved.join(', ') : 'Account-wide'
 }
 
+function isDescendantOf(potDesc: string, potAnc: string, stks: Stakeholder[]): boolean {
+  let current: string | undefined = potDesc
+  const visited = new Set<string>()
+  while (current) {
+    if (visited.has(current)) break
+    visited.add(current)
+    const stk = stks.find(s => s.stakeholder_id === current)
+    if (!stk || !stk.reports_to) return false
+    if (stk.reports_to === potAnc) return true
+    current = stk.reports_to
+  }
+  return false
+}
+
 const PH_PERSON = 'Select person\u2026'
 const PEOPLE_SORT_OPTS: [string, string][] = [['name', 'Name A\u2013Z'], ['seniority', 'Seniority'], ['department', 'Department']]
 
@@ -211,6 +225,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                   person={p}
                   owners={owners}
                   otherPeople={people.filter(x => x.stakeholder_id !== p.stakeholder_id)}
+                  allStakeholders={data.stakeholders.filter(s => s.account_id === accountId)}
                   acctProjs={acctProjs}
                   acctOpps={acctOpps}
                   onSave={save}
@@ -240,10 +255,11 @@ function PaginationRow({ page, total, onChange }: { page: number; total: number;
   )
 }
 
-function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, onDelete }: {
+function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, acctOpps, onSave, onDelete }: {
   person: Stakeholder
   owners: string[]
   otherPeople: Stakeholder[]
+  allStakeholders: Stakeholder[]
   acctProjs: AppState['projects']
   acctOpps: AppState['opportunities']
   onSave: (s: Stakeholder) => Promise<void>
@@ -251,6 +267,12 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showExpand, setShowExpand] = useState(false)
+  const [rtoError, setRtoError] = useState(false)
+  useEffect(() => {
+    if (!rtoError) return
+    const t = setTimeout(() => setRtoError(false), 3000)
+    return () => clearTimeout(t)
+  }, [rtoError])
   const nameRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
   const deptRef = useRef<HTMLSpanElement>(null)
@@ -358,10 +380,19 @@ function PersonCard({ person, owners, otherPeople, acctProjs, acctOpps, onSave, 
             triggerClass={'card-owner-btn' + (!person.reports_to ? ' picker-placeholder' : '')}
             onChange={v => {
               const match = otherPeople.find(p => p.name === v)
+              if (match && isDescendantOf(match.stakeholder_id, person.stakeholder_id, allStakeholders)) {
+                setRtoError(true)
+                return
+              }
               onSave({ ...person, reports_to: match ? match.stakeholder_id : '', last_updated: today() })
             }}
           />
         </div>
+        {rtoError && (
+          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 4, paddingLeft: 8 }}>
+            Cannot create circular reporting relationship
+          </div>
+        )}
 
         <div className="card-meta-row" style={{ marginTop: 14 }}>
           <EngPicker
