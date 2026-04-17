@@ -90,11 +90,15 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
       if (!cand) return null
       const allCandIvs = db.interviews.filter(i => i.candidateId === iv.candidateId).sort((a, b) => a.date.localeCompare(b.date))
       const num = allCandIvs.findIndex(i => i.id === iv.id) + 1
-      return { candId: cand.id, candName: cand.name, role: cand.role, interviewer: iv.interviewers, date: iv.date, num, stage: cand.stage, ini: initials(cand.name) }
+      return { candId: cand.id, candName: cand.name, role: cand.role, interviewer: iv.interviewers || '', date: iv.date, num, stage: cand.stage, ini: initials(cand.name) }
     })
     .filter(Boolean)
     .sort((a, b) => b!.date.localeCompare(a!.date))
     .slice(0, 4) as { candId: string; candName: string; role: string; interviewer: string; date: string; num: number; stage: string; ini: string }[]
+
+  const recentCands = [...db.candidates]
+    .sort((a, b) => (b.updatedAt || b.addedAt || '').localeCompare(a.updatedAt || a.addedAt || ''))
+    .slice(0, 4)
 
   const activeOnboardingGroups = (() => {
     const groups: Record<string, { empId: string; empName: string; role: string; startDate: string; tracks: { runId: string; trackName: string; pct: number; nextSteps: string[] }[] }> = {}
@@ -222,25 +226,17 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
           </div>
         </div>
         <div>
-          <SectionHdr title="Recent interviews" nav="hiring" onNav={onNav} />
+          <SectionHdr title="Recent candidates" nav="hiring" onNav={onNav} />
           <div className="card">
-            {recentIvs.length === 0 ? <EmptyRow msg="No recent interviews" /> : recentIvs.map(iv => {
-              const outcomeColor = iv.stage === 'offer' || iv.stage === 'hired' ? 'var(--accent-text)' : iv.stage === 'rejected' ? 'var(--red)' : 'var(--text3)'
-              const outcome = iv.stage === 'offer' || iv.stage === 'hired' ? 'Advancing' : iv.stage === 'rejected' ? 'Not advancing' : 'Pending'
-              return (
-                <div key={iv.candId + iv.date} className="dash-row" style={{ gap: 10, padding: '9px 0' }} onClick={() => onNav('hiring')}>
-                  <div className="dash-av dash-av--iv">{iv.ini}</div>
-                  <div className="dash-row-mid">
-                    <div className="dash-row-name dash-row-ellipsis">{iv.candName}</div>
-                    <div className="dash-row-sub dash-row-ellipsis">with {iv.interviewer || 'TBD'} &middot; {iv.role}</div>
-                  </div>
-                  <div className="dash-row-right">
-                    <div className="dash-row-date">{new Date(iv.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                    <div className="dash-iv-meta">#{iv.num} &middot; <span style={{ color: outcomeColor }}>{outcome}</span></div>
-                  </div>
+            {recentCands.length === 0 ? <EmptyRow msg="No candidates yet" /> : recentCands.map(c => (
+              <div key={c.id} className="dash-row" style={{ padding: '9px 0' }} onClick={() => onNav('hiring')}>
+                <div className="dash-row-mid">
+                  <div className="dash-row-name dash-row-ellipsis">{c.name}</div>
+                  <div className="dash-row-sub dash-row-ellipsis">{c.role}{c.dept ? ' · ' + c.dept : ''}</div>
                 </div>
-              )
-            })}
+                <span className={'badge cand-status-' + (c.candStatus || 'active').toLowerCase().replace(/\s+/g, '-')}>{c.candStatus || 'Active'}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

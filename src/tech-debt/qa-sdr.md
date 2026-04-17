@@ -1,17 +1,39 @@
-# QA — SDR Page
+# SDR — Visual QA Checklist
 
 **Status:** Full React port complete. All 4 tabs functional.
 
-## What's ported
-- Overview: stat row, pipeline breakdown, pending drafts alert
-- Prospects: filter pills (status + track), search, pagination, card grid
-- Drafts: batch grouping, approve/reject actions via /api/sdr-approve
-- Outreach: send history list with reply rate stats
-- Prospect detail: slide-in panel with full field set, send history, copy email
+## Section Parity Status
 
-## Known gaps / tech debt
-- `/api/sdr-approve` endpoint: calls ops-dashboard function at `/api/sdr-approve`.
-  This endpoint does not exist in oliver-app — needs a Cloudflare Pages Function port
-  or Supabase direct update before approve/reject works in production.
-- No drag-to-reorder on kanban (SDR has no kanban, but noted for consistency)
-- No AI intake button (HR-specific feature, not applicable here)
+### Overview (SdrOverview.tsx)
+- [x] Stat row: Total, Active, Sent, Reply Rate
+- [x] Pending drafts alert with "Review Drafts" button
+- [x] Pipeline breakdown by status
+
+### Prospects (SdrProspects.tsx)
+- [x] Filter pills by status and track
+- [x] Search bar
+- [x] Prospect grid cards with status badges
+- [x] Pagination
+
+### Drafts (SdrDrafts.tsx)
+- [x] Grouped by batch_date
+- [x] Approve/Reject actions via POST /api/sdr-approve
+- [x] Status badges
+
+### Outreach (SdrOutreach.tsx)
+- [x] Send list sorted by sent_at
+- [x] Stat row when sends exist
+
+### Prospect Detail (SdrProspectDetail.tsx)
+- [x] Fixed right slide-in panel
+- [x] sdr-detail-backdrop + sdr-detail-panel classes
+- [x] Escape key closes panel
+- [x] Body overflow hidden when open
+
+## Responsive
+- [x] sdr.css includes sdr-prospect-grid with auto-fill minmax(280px)
+- [x] sdr-detail-panel fixed right slide-in (width 380px)
+
+## Known Gaps
+- /api/sdr-approve endpoint: needs Cloudflare Pages Function port in oliver-app — endpoint does not exist yet; approve/reject will fail in production
+- No local /api/sdr-approve function in functions/api/ — must be added before SDR drafts feature works
