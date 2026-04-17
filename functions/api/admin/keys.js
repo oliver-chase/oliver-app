@@ -4,7 +4,7 @@
 // PATCH:  { id, is_active?, fallback_key?, model?, label? } — update key
 // DELETE: { id } — remove key
 
-import { jsonResponse, errorResponse } from '../../_shared/ai.js';
+import { jsonResponse, errorResponse } from '../_shared/ai.js';
 
 function maskKey(key) {
   if (!key || key.length < 8) return '****';
