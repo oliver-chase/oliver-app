@@ -34,6 +34,9 @@ export default function AdminPage() {
             </Link>
             <h1 className={styles.title}>Admin</h1>
           </div>
+          <Link href="/design-system" className={styles.backLink} style={{ marginLeft: 'auto' }}>
+            Design System &rarr;
+          </Link>
           <div className={styles.tabs}>
             <button
               className={tab === 'users' ? `${styles.tab} ${styles.tabActive}` : styles.tab}
