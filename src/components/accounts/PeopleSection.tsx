@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { upsertStakeholder, deleteRecord, newId, today } from '@/lib/db'
 import type { Stakeholder, Background, AppState } from '@/types'
 import { Picker } from './Picker'
+import OrgChart from './OrgChart'
 
 const PAGE_SIZE = 6
 
@@ -156,7 +157,15 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
 
       <div id="people-body">
         {view === 'orgchart' ? (
-          <div className="empty-state">Org chart view coming soon.</div>
+          <OrgChart
+            accountId={accountId}
+            stakeholders={data.stakeholders.filter(s => s.account_id === accountId)}
+            owners={owners}
+            acctProjs={acctProjs}
+            acctOpps={acctOpps}
+            onUpdate={save}
+            onDelete={remove}
+          />
         ) : (
           <>
             {people.length === 0 && !adding && <div className="empty-state">No results</div>}

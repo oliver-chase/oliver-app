@@ -157,6 +157,26 @@ Action needed before ship:
 
 ---
 
+## OrgChart.tsx — inline style ports from source JS
+Source: orgchart.js — inline style.cssText on tree node and node header.
+These are intentional ports of source JS inline styles; CSS tokens do not exist for these values:
+- `gap: 48` on `.org-tree` — source: `tree.style.gap='48px'`. No gap token at 48px.
+- `padding: 16` on `.org-tree` — source: `tree.style.padding='16px'`. Closest: --spacing-md (16px) — safe to tokenize.
+- `gap: 8` on node header div — source: `nodeTop.style.cssText='...gap:8px...'`. Closest: --spacing-sm (8px).
+- `padding: '10px 12px 6px 12px'` on node header — source inline; no shorthand token.
+Action: consider adding --org-tree-gap: 48px to tokens.css, and use var(--spacing-md) for the 16px padding,
+var(--spacing-sm) for the 8px gap. The 10px/6px padding values have no token equivalents.
+
+---
+
+## ActionsSection.tsx — td padding inline style
+Source: actions.js inline `padding:4px` on delete-column td.
+- `padding: 4` on delete `<td>` — source: `delTd.style.cssText='...padding:4px...'`. 4px = var(--spacing-xs) exists.
+~~Action: update to `padding: 'var(--spacing-xs)'` — safe substitution, no value change.~~
+**RESOLVED 2026-04-16:** Updated both td instances in ActionsSection.tsx to use var(--spacing-xs).
+
+---
+
 ## HubPage (src/app/hub.module.css) — untokenized transparency values
 ~~- rgba(255,255,255,.06) — card badge background overlay, no token exists
 - rgba(255,255,255,.18) — card hover border overlay, no token exists

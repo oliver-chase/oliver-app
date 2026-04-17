@@ -256,7 +256,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onSaved, onDisc
           onChange={v => { setStatusVal(v as Action['status']); rec.current.status = v as Action['status'] }}
         />
       </td>
-      <td style={{ width: 40, textAlign: 'center', padding: 4, verticalAlign: 'middle' }}>
+      <td style={{ width: 40, textAlign: 'center', padding: 'var(--spacing-xs)', verticalAlign: 'middle' }}>
         <button
           className="project-delete"
           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static', width: 20, height: 20 }}
@@ -327,7 +327,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete }: {
           onChange={v => onSave({ ...action, status: v as Action['status'], closed_date: v === 'Done' ? today() : '', last_updated: today() })}
         />
       </td>
-      <td style={{ width: 40, textAlign: 'center', padding: 4, verticalAlign: 'middle' }}>
+      <td style={{ width: 40, textAlign: 'center', padding: 'var(--spacing-xs)', verticalAlign: 'middle' }}>
         <button
           className="project-delete"
           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static', width: 20, height: 20 }}
