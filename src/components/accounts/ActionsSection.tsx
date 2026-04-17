@@ -185,7 +185,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
               />
             )}
             {sorted.length === 0 && !adding && (
-              <tr><td colSpan={5}><div className="empty-state">No actions yet</div></td></tr>
+              <tr><td colSpan={5}><div className="empty-state">No results</div></td></tr>
             )}
             {sorted.map(a => (
               <ActionRow

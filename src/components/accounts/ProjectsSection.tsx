@@ -100,13 +100,6 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
             <button className="btn-link" id="btn-add-proj" onClick={() => setAdding(true)}>+ Add project</button>
           </div>
           <div className="section-actions">
-            <Picker
-              value={PROJ_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PROJ_SORT_OPTS[0][1]}
-              options={PROJ_SORT_OPTS.map(([, l]) => l)}
-              triggerClass="sort-select"
-              showUnassigned={false}
-              onChange={val => setSortBy(PROJ_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
-            />
             <button
               className={'filter-chip' + (hideComplete ? ' on' : '')}
               id="btn-hide-complete"
@@ -114,6 +107,13 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
             >
               {hideComplete ? 'Show Complete' : 'Hide Complete'}
             </button>
+            <Picker
+              value={PROJ_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PROJ_SORT_OPTS[0][1]}
+              options={PROJ_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setSortBy(PROJ_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
+            />
           </div>
         </div>
       </div>

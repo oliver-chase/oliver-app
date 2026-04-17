@@ -111,13 +111,6 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
             <button className="btn-link" id="btn-add-opp" onClick={() => setAdding(true)}>+ Add opportunity</button>
           </div>
           <div className="section-actions">
-            <Picker
-              value={OPP_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? OPP_SORT_OPTS[0][1]}
-              options={OPP_SORT_OPTS.map(([, l]) => l)}
-              triggerClass="sort-select"
-              showUnassigned={false}
-              onChange={val => setSortBy(OPP_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
-            />
             <button
               className={'filter-chip' + (showLost ? ' on' : '')}
               id="btn-hide-lost"
@@ -126,6 +119,13 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
             >
               {showLost ? 'Hide Lost' : 'Show Lost'}
             </button>
+            <Picker
+              value={OPP_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? OPP_SORT_OPTS[0][1]}
+              options={OPP_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setSortBy(OPP_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
+            />
           </div>
         </div>
       </div>
