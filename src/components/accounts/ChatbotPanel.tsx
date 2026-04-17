@@ -28,18 +28,24 @@ export default function ChatbotPanel({ accountId, data }: Props) {
     const text = input.trim()
     if (!text || busy) return
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', text }])
+    const next = [...messages, { role: 'user' as const, text }]
+    setMessages(next)
     setBusy(true)
     try {
-      // TODO: implement POST /api/chat with account context
-      // const acct = data.accounts.find(a => a.account_id === accountId)
-      // const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
-      // const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ message: text, accountId, context: { accountName: acct?.account_name, ... } }) })
-      // const { reply } = await res.json()
-      const reply = '[TODO: API not yet connected — POST /api/chat]'
-      setMessages(prev => [...prev, { role: 'assistant', text: reply }])
-    } catch (e) {
+      const acct = data.accounts.find(a => a.account_id === accountId)
+      const bg = data.background?.find((b: { account_id: string; engagement_id?: string }) => b.account_id === accountId && !b.engagement_id)
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: next.map(m => ({ role: m.role, content: m.text })),
+          pageContext: 'Account page',
+          accountData: { accountName: acct?.account_name, accountId, background: bg },
+        }),
+      })
+      const json = await res.json() as { reply?: string; error?: string }
+      setMessages(prev => [...prev, { role: 'assistant', text: json.reply ?? json.error ?? 'No response.' }])
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', text: 'Error sending message.' }])
     } finally {
       setBusy(false)
@@ -109,7 +115,7 @@ export default function ChatbotPanel({ accountId, data }: Props) {
             <textarea
               ref={inputRef}
               className="chatbot-input"
-              placeholder="Ask a question\u2026"
+              placeholder="Ask a question…"
               rows={1}
               value={input}
               onChange={e => setInput(e.target.value)}

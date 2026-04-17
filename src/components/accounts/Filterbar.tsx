@@ -19,7 +19,7 @@ export default function Filterbar({ show, search, onSearch, onReset }: Props) {
         type="text"
         className="filter-search"
         id="filter-search"
-        placeholder="Search\u2026"
+        placeholder="Search…"
         aria-label="Search accounts"
         value={search}
         onChange={e => onSearch(e.currentTarget.value)}

@@ -415,7 +415,7 @@ function AttendeeAddBtn({ teamNames, onSelect, onAddNew }: {
           <input
             ref={searchRef}
             className="app-popover-search"
-            placeholder="Search\u2026"
+            placeholder="Search…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}

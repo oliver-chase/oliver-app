@@ -542,7 +542,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
                   <Picker
                     value={stk[key]}
                     options={owners}
-                    placeholder="Select person\u2026"
+                    placeholder="Select person…"
                     triggerClass={'card-owner-btn' + (!stk[key] ? ' picker-placeholder' : '')}
                     onChange={v => onSave({ ...stk, [key]: v, last_updated: today() })}
                   />
@@ -554,7 +554,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, onSave, onClose }: Detail
               <Picker
                 value={otherPeople.find(p => p.stakeholder_id === stk.reports_to)?.name || ''}
                 options={otherPeople.map(p => p.name)}
-                placeholder="Select person\u2026"
+                placeholder="Select person…"
                 triggerClass={'card-owner-btn' + (!stk.reports_to ? ' picker-placeholder' : '')}
                 onChange={v => {
                   const match = otherPeople.find(p => p.name === v)

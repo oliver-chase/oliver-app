@@ -440,7 +440,7 @@ function EngPicker({ ids, items, label, onChange }: {
           <input
             ref={searchRef}
             className="app-popover-search"
-            placeholder="Search\u2026"
+            placeholder="Search…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
@@ -533,7 +533,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
             suppressContentEditableWarning
             role="textbox"
             aria-label="Name"
-            data-placeholder="Full name\u2026"
+            data-placeholder="Full name…"
             style={{ color: 'var(--text)' }}
             onInput={() => {
               const v = nameRef.current?.textContent?.trim() || ''
@@ -558,7 +558,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
               style={{ fontStyle: 'italic', color: 'var(--gray)' }}
               onFocus={() => { if (titleRef.current && titleRef.current.textContent?.includes('Add title')) { titleRef.current.textContent = ''; titleRef.current.style.cssText = '' } }}
               onBlur={() => { const v = titleRef.current?.textContent?.trim() || ''; rec.current.title = v; if (!v && titleRef.current) { titleRef.current.textContent = 'Add title\u2026'; titleRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
-            >Add title\u2026</span>
+            >Add title…</span>
           </div>
           <div className="card-meta-row">
             <span className="card-meta-label">Dept:</span>
@@ -571,7 +571,7 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
               style={{ fontStyle: 'italic', color: 'var(--gray)' }}
               onFocus={() => { if (deptRef.current && deptRef.current.textContent?.includes('Add department')) { deptRef.current.textContent = ''; deptRef.current.style.cssText = '' } }}
               onBlur={() => { const v = deptRef.current?.textContent?.trim() || ''; rec.current.department = v; if (!v && deptRef.current) { deptRef.current.textContent = 'Add department\u2026'; deptRef.current.style.cssText = 'font-style:italic;color:var(--gray)' } }}
-            >Add department\u2026</span>
+            >Add department…</span>
           </div>
         </div>
       </div>

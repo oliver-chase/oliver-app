@@ -174,7 +174,7 @@ export default function AccountsApp() {
 
         <main className="main" id="main-content">
           {loading ? (
-            <div className="section-loading">Loading\u2026</div>
+            <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (
             <ErrorBoundary>
               <AccountView

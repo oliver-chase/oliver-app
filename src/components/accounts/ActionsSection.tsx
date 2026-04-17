@@ -416,7 +416,7 @@ function EngPickerBtn({ value, options, placeholder, displayLabel, onChange, add
           <input
             ref={searchRef}
             className="app-popover-search"
-            placeholder="Search\u2026"
+            placeholder="Search…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
@@ -444,7 +444,7 @@ function EngPickerBtn({ value, options, placeholder, displayLabel, onChange, add
               className="app-popover-add-new"
               onMouseDown={e => { e.preventDefault(); setOpen(false); setQuery(''); void addNew() }}
             >
-              + Add person\u2026
+              + Add person…
             </div>
           )}
         </div>

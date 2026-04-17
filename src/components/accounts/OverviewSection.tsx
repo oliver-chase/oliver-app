@@ -20,9 +20,13 @@ const FREQ_OPTS: [string, string][] = [
   ['quarterly', 'Quarterly'],
 ]
 const DAY_LABELS: [string, string][] = [
-  ['Sun', 'S'], ['Mon', 'M'], ['Tue', 'T'], ['Wed', 'W'],
-  ['Thu', 'T'], ['Fri', 'F'], ['Sat', 'S'],
+  ['Sun', 'Su'], ['Mon', 'Mo'], ['Tue', 'Tu'], ['Wed', 'We'],
+  ['Thu', 'Th'], ['Fri', 'Fr'], ['Sat', 'Sa'],
 ]
+const DAY_FULL: Record<string, string> = {
+  Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday',
+  Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday',
+}
 const PH_SELECT = 'Select person\u2026'
 const MTL_PH = 'e.g. NCL Account Planning | Internal V.Two'
 
@@ -45,8 +49,9 @@ function getSummaryText(bg: Background) {
   const n = parseInt(bg.meeting_interval || '1') || 1
   const day = bg.meeting_day || ''
   if (!freq) return ''
-  if (freq === 'weekly') return n === 1 ? (day ? 'Every ' + day : 'Weekly') : 'Every ' + n + ' weeks' + (day ? ' on ' + day : '')
-  if (freq === 'biweekly') return 'Every 2 weeks' + (day ? ' on ' + day : '')
+  const fullDay = day ? (DAY_FULL[day] ?? day) : ''
+  if (freq === 'weekly') return n === 1 ? (fullDay ? 'Every ' + fullDay : 'Weekly') : 'Every ' + n + ' weeks' + (fullDay ? ' on ' + fullDay : '')
+  if (freq === 'biweekly') return 'Every 2 weeks' + (fullDay ? ' on ' + fullDay : '')
   if (freq === 'monthly') return n === 1 ? 'Monthly' : 'Every ' + n + ' months'
   if (freq === 'quarterly') return n === 1 ? 'Quarterly' : 'Every ' + n + ' quarters'
   return ''
@@ -153,46 +158,18 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
       <div className="overview-row" style={{ marginBottom: '12px' }}>
         <div className="app-card overview-card-col">
           <div className="app-card-label">Account Director</div>
-          <Picker
+          <PersonPill
             value={b.account_director || ''}
-            options={[...teamNames, '+ Add person\u2026']}
-            placeholder={PH_SELECT}
-            triggerClass={'overview-stat-val picker-btn overview-picker-btn' + (!b.account_director ? ' faded' : '')}
-            onChange={async val => {
-              const updated = { ...b }
-              if (val === '+ Add person\u2026') {
-                const { buttonValue, inputValue } = await showModal({ title: 'Add person', inputPlaceholder: 'Name', confirmLabel: 'Add' })
-                if (buttonValue !== 'confirm' || !inputValue.trim()) return
-                const nm = inputValue.trim()
-                const cur = (updated.account_team || '').split(/[;\n]/).map(s => s.trim()).filter(Boolean)
-                if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
-                updated.account_director = nm
-              } else {
-                updated.account_director = val
-              }
-              await saveBg(updated)
-            }}
+            teamNames={teamNames}
+            addLabel="+ Add director"
+            onChange={async nm => await saveBg({ ...b, account_director: nm })}
           />
           <div className="app-card-label" style={{ marginTop: '10px' }}>Account Manager</div>
-          <Picker
+          <PersonPill
             value={b.account_manager || ''}
-            options={[...teamNames, '+ Add person\u2026']}
-            placeholder={PH_SELECT}
-            triggerClass={'overview-stat-val picker-btn overview-picker-btn' + (!b.account_manager ? ' faded' : '')}
-            onChange={async val => {
-              const updated = { ...b }
-              if (val === '+ Add person\u2026') {
-                const { buttonValue, inputValue } = await showModal({ title: 'Add person', inputPlaceholder: 'Name', confirmLabel: 'Add' })
-                if (buttonValue !== 'confirm' || !inputValue.trim()) return
-                const nm = inputValue.trim()
-                const cur = (updated.account_team || '').split(/[;\n]/).map(s => s.trim()).filter(Boolean)
-                if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
-                updated.account_manager = nm
-              } else {
-                updated.account_manager = val
-              }
-              await saveBg(updated)
-            }}
+            teamNames={teamNames}
+            addLabel="+ Add manager"
+            onChange={async nm => await saveBg({ ...b, account_manager: nm })}
           />
           <div className="app-card-label" style={{ marginTop: '10px' }}>Account Team (V.Two)</div>
           <TeamPills
@@ -213,8 +190,8 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
         <div className="app-card overview-card-col overview-meeting-card">
           <div className="overview-stat-label">MEETING CADENCE</div>
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '28px', cursor: cadenceOpen ? 'default' : 'pointer' }}
-            onClick={() => { if (!cadenceOpen) setCadenceOpen(true) }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '28px', cursor: 'pointer' }}
+            onClick={() => setCadenceOpen(o => !o)}
           >
             <span style={{
               fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font)', flex: 1, minWidth: 0,
@@ -223,13 +200,6 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             }}>
               {b.meeting_frequency ? getSummaryText(b) : 'Not set'}
             </span>
-            <button
-              type="button"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', padding: 0, color: 'var(--pink)', flexShrink: 0 }}
-              onClick={e => { e.stopPropagation(); setCadenceOpen(o => !o) }}
-            >
-              {cadenceOpen ? 'Done' : 'Edit'}
-            </button>
           </div>
           {cadenceOpen && (
             <div style={{ paddingTop: '8px', borderTop: '1px solid var(--border)', marginTop: '6px' }}>
@@ -376,6 +346,113 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
   )
 }
 
+function PersonPill({ value, teamNames, addLabel = '+ Add', onChange }: {
+  value: string
+  teamNames: string[]
+  addLabel?: string
+  onChange: (name: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [addingNew, setAddingNew] = useState(false)
+  const [newName, setNewName] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const newInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); setAddingNew(false); setNewName('') }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const filtered = query ? teamNames.filter(n => n.toLowerCase().includes(query.toLowerCase())) : teamNames
+
+  const handleOpen = () => {
+    setOpen(o => !o); setQuery(''); setAddingNew(false); setNewName('')
+    setTimeout(() => searchRef.current?.focus(), 0)
+  }
+
+  const commitNew = () => {
+    const n = newName.trim()
+    if (n) { onChange(n); setOpen(false); setQuery(''); setAddingNew(false); setNewName('') }
+  }
+
+  return (
+    <div className="overview-chip-row">
+      {value && (
+        <span className="app-chip">
+          {value}
+          <button type="button" className="app-chip-remove" title="Remove" onClick={() => onChange('')}>×</button>
+        </span>
+      )}
+      {!value && (
+        <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+          <button type="button" className="btn-link" onClick={handleOpen}>{addLabel}</button>
+          {open && (
+            <div className="app-popover" style={{ minWidth: 180 }}>
+              <input ref={searchRef} className="app-popover-search" placeholder="Search…" value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+              />
+              <div className="app-popover-list">
+                {filtered.map(n => (
+                  <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); onChange(n); setOpen(false); setQuery('') }}>{n}</div>
+                ))}
+                {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
+              </div>
+              {addingNew ? (
+                <input ref={newInputRef} className="app-popover-search" placeholder="Enter name…" value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') commitNew(); if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) } }}
+                  onBlur={() => { if (newName.trim()) commitNew() }}
+                />
+              ) : (
+                <div className="app-popover-add-new" onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}>
+                  + Add new person
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {value && (
+        <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+          <button type="button" className="btn-link" onClick={handleOpen}>Change</button>
+          {open && (
+            <div className="app-popover" style={{ minWidth: 180 }}>
+              <input ref={searchRef} className="app-popover-search" placeholder="Search…" value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+              />
+              <div className="app-popover-list">
+                {filtered.map(n => (
+                  <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); onChange(n); setOpen(false); setQuery('') }}>{n}</div>
+                ))}
+                {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
+              </div>
+              {addingNew ? (
+                <input ref={newInputRef} className="app-popover-search" placeholder="Enter name…" value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') commitNew(); if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) } }}
+                  onBlur={() => { if (newName.trim()) commitNew() }}
+                />
+              ) : (
+                <div className="app-popover-add-new" onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}>
+                  + Add new person
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: {
   members: string[]
   teamNames: string[]
@@ -431,7 +508,7 @@ function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: 
             <input
               ref={searchRef}
               className="app-popover-search"
-              placeholder="Search\u2026"
+              placeholder="Search…"
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
@@ -446,7 +523,7 @@ function TeamPills({ members, teamNames, addLabel = '+ Add', onRemove, onAdd }: 
               <input
                 ref={newInputRef}
                 className="app-popover-search"
-                placeholder="Enter name\u2026"
+                placeholder="Enter name…"
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 onKeyDown={e => {
