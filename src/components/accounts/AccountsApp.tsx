@@ -6,6 +6,8 @@ import Topbar from '@/components/layout/Topbar'
 import Filterbar from './Filterbar'
 import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
+import ExportPanel from './ExportPanel'
+import ChatbotPanel from './ChatbotPanel'
 import type { Account } from '@/types'
 
 class ErrorBoundary extends Component<
@@ -28,6 +30,7 @@ export default function AccountsApp() {
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
+  const [exportOpen, setExportOpen] = useState(false)
 
   const handleSelectAccount = useCallback((id: string) => {
     setCurrentAccountId(id)
@@ -93,7 +96,7 @@ export default function AccountsApp() {
           currentAccountId={currentAccountId}
           syncStatus={syncStatus}
           syncText={syncText}
-          onExportClick={() => {}}
+          onExportClick={() => setExportOpen(true)}
           onHamburgerClick={() => setSidebarOpen(s => !s)}
         />
 
@@ -142,6 +145,16 @@ export default function AccountsApp() {
           )}
         </main>
       </div>
+      {exportOpen && currentAccountId && (
+        <ExportPanel
+          accountId={currentAccountId}
+          data={data}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
+      {currentAccountId && (
+        <ChatbotPanel accountId={currentAccountId} data={data} />
+      )}
     </div>
   )
 }
