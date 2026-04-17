@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { upsertProject, upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
 import type { Project, AppState } from '@/types'
-import { MultiPicker } from './Picker'
+import { Picker, MultiPicker } from './Picker'
 
 const PROJ_STATUS: Project['status'][] = ['Active', 'Complete', 'On Hold']
 const statusBadgeClass = (s: string) => {
@@ -11,6 +11,7 @@ const statusBadgeClass = (s: string) => {
 }
 
 const PH_NOTES = 'Add notes…'
+const PROJ_SORT_OPTS: [string, string][] = [['created_date', 'Newest first'], ['project_name', 'Name A\u2013Z'], ['status', 'By status'], ['engagement_id', 'By engagement']]
 
 interface Props {
   accountId: string
@@ -80,18 +81,13 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
             <button className="btn-link" id="btn-add-proj" onClick={() => setAdding(true)}>+ Add project</button>
           </div>
           <div className="section-actions">
-            <select
-              className="sort-select"
-              id="proj-sort"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-              aria-label="Sort projects"
-            >
-              <option value="created_date">Newest first</option>
-              <option value="project_name">Name A&ndash;Z</option>
-              <option value="status">By status</option>
-              <option value="engagement_id">By engagement</option>
-            </select>
+            <Picker
+              value={PROJ_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PROJ_SORT_OPTS[0][1]}
+              options={PROJ_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setSortBy(PROJ_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
+            />
             <button
               className={'filter-chip' + (hideComplete ? ' on' : '')}
               id="btn-hide-complete"

@@ -41,6 +41,7 @@ function engDisplay(ids: string[], projs: AppState['projects'], opps: AppState['
 }
 
 const PH_PERSON = 'Select person\u2026'
+const PEOPLE_SORT_OPTS: [string, string][] = [['name', 'Name A\u2013Z'], ['seniority', 'Seniority'], ['department', 'Department']]
 
 interface Props {
   accountId: string
@@ -118,17 +119,13 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
             <button className="btn-ghost btn--compact" id="btn-add-person" onClick={() => { setView('cards'); setAdding(true) }}>+ Add person</button>
           </div>
           <div className="section-actions">
-            <select
-              className="sort-select"
-              id="people-sort"
-              aria-label="Sort people"
-              value={sortBy}
-              onChange={e => { setSortBy(e.target.value); setPage(0) }}
-            >
-              <option value="name">Name A&ndash;Z</option>
-              <option value="seniority">Seniority</option>
-              <option value="department">Department</option>
-            </select>
+            <Picker
+              value={PEOPLE_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PEOPLE_SORT_OPTS[0][1]}
+              options={PEOPLE_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => { setSortBy(PEOPLE_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'name'); setPage(0) }}
+            />
             <div className="people-filter-wrapper">
               <button
                 className={'filter-chip' + (filtersOn ? ' on' : '')}

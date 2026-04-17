@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { upsertNote, deleteRecord, newId, today } from '@/lib/db'
 import type { Note, Background, AppState } from '@/types'
+import { Picker } from './Picker'
 
 interface NoteSection { heading: string; bullets: Array<{ text: string; indent: number }> }
 interface NoteData { sections: NoteSection[] }
@@ -59,6 +60,8 @@ function getTeamNames(bg?: Background): string[] {
   if (bg.account_team) bg.account_team.split(';').forEach(n => { const t = n.trim(); if (t) names.push(t) })
   return [...new Set(names)]
 }
+
+const NOTES_SORT_OPTS: [string, string][] = [['desc', 'Newest first'], ['asc', 'Oldest first']]
 
 interface Props {
   accountId: string
@@ -143,16 +146,13 @@ export default function NotesSection({ accountId, data, setData }: Props) {
             />
             <input type="date" className="filter-date" id="filter-date-from" aria-label="Notes from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="filter-date" id="filter-date-to" aria-label="Notes to date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-            <select
-              className="sort-select"
-              id="notes-sort-btn"
-              value={sortDir}
-              onChange={e => setSortDir(e.target.value as 'desc' | 'asc')}
-              aria-label="Sort notes"
-            >
-              <option value="desc">Newest first</option>
-              <option value="asc">Oldest first</option>
-            </select>
+            <Picker
+              value={NOTES_SORT_OPTS.find(([v]) => v === sortDir)?.[1] ?? NOTES_SORT_OPTS[0][1]}
+              options={NOTES_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setSortDir((NOTES_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'desc') as 'desc' | 'asc')}
+            />
           </div>
         </div>
       </div>

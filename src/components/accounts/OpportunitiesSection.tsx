@@ -20,6 +20,7 @@ const statusBadgeClass = (s: string) => {
 }
 
 const PH_NOTES = 'Add notes…'
+const OPP_SORT_OPTS: [string, string][] = [['created_date', 'Newest first'], ['status', 'By status']]
 
 interface Props {
   accountId: string
@@ -92,16 +93,13 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
             <button className="btn-link" id="btn-add-opp" onClick={() => setAdding(true)}>+ Add opportunity</button>
           </div>
           <div className="section-actions">
-            <select
-              className="sort-select"
-              id="opp-sort"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-              aria-label="Sort opportunities"
-            >
-              <option value="created_date">Newest first</option>
-              <option value="status">By status</option>
-            </select>
+            <Picker
+              value={OPP_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? OPP_SORT_OPTS[0][1]}
+              options={OPP_SORT_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setSortBy(OPP_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'created_date')}
+            />
             <button
               className={'filter-chip' + (showLost ? ' on' : '')}
               id="btn-hide-lost"

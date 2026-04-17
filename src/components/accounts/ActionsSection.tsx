@@ -19,6 +19,7 @@ function dayAge(dateStr: string): number {
 }
 
 const STATUS_OPTIONS = ['Open', 'In Progress', 'Done'] as const
+const ACT_FILTER_OPTS: [string, string][] = [['open-progress', 'Open + In Progress'], ['all', 'All statuses'], ['Open', 'Open only'], ['Done', 'Done only']]
 const statusBadgeClass = (s: string) => {
   if (s === 'Done') return 'app-badge app-badge-complete app-badge--clickable'
   if (s === 'In Progress') return 'app-badge app-badge-progress app-badge--clickable'
@@ -118,18 +119,13 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
             <button className="btn-link" id="btn-add-action" onClick={() => setAdding(true)}>+ Add action</button>
           </div>
           <div className="section-actions">
-            <select
-              className="sort-select"
-              id="filter-action-status"
-              aria-label="Filter by action status"
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
-            >
-              <option value="open-progress">Open + In Progress</option>
-              <option value="all">All statuses</option>
-              <option value="Open">Open only</option>
-              <option value="Done">Done only</option>
-            </select>
+            <Picker
+              value={ACT_FILTER_OPTS.find(([v]) => v === statusFilter)?.[1] ?? ACT_FILTER_OPTS[0][1]}
+              options={ACT_FILTER_OPTS.map(([, l]) => l)}
+              triggerClass="sort-select"
+              showUnassigned={false}
+              onChange={val => setStatusFilter((ACT_FILTER_OPTS.find(([, l]) => l === val)?.[0] ?? 'open-progress') as StatusFilter)}
+            />
           </div>
         </div>
       </div>
