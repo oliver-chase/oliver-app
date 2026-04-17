@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
+import CustomPicker from '@/components/shared/CustomPicker'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Device } from './types'
 import { getList } from './types'
 
@@ -37,6 +39,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
   const [form, setForm] = useState<DevForm>({ ...BLANK_DEV, purchaseDate: today() })
   const [assignEmpId, setAssignEmpId] = useState('')
   const { modal, showModal } = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<Device>()
 
   const avail    = db.devices.filter(d => d.status === 'available').length
   const assigned = db.devices.filter(d => d.status === 'assigned').length
@@ -105,10 +108,12 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
     if (!d) return
     if (d.status === 'assigned') { await showModal({ title: 'Cannot delete', message: 'Return device before deleting.', confirmLabel: 'OK', cancelLabel: 'Close' }); return }
     closeModal()
-    const { buttonValue } = await showModal({ title: 'Delete Device', message: `Delete ${d.name}? This cannot be undone.`, confirmLabel: 'Delete Device', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
-    setDb(prev => ({ ...prev, devices: prev.devices.filter(x => x.id !== id) }))
-    await dbMulti([() => supabase.from('devices').delete().eq('id', id)])
+    softDelete(d, {
+      displayName: d.name,
+      onLocalRemove: () => setDb(prev => ({ ...prev, devices: prev.devices.filter(x => x.id !== id) })),
+      onLocalRestore: dev => setDb(prev => ({ ...prev, devices: [...prev.devices, dev] })),
+      onDeleteRecord: async () => { await dbMulti([() => supabase.from('devices').delete().eq('id', id)]) },
+    })
   }
 
   async function assignDevice() {
@@ -157,6 +162,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
   return (
     <div className="page">
       {modal}
+      {toastEl}
 
       {/* Add device modal */}
       {modalType === 'add' && (
@@ -177,14 +183,22 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
               </div>
               <div className="form-row">
                 <div className="form-group"><label className="form-label">Type</label>
-                  <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                    {getList(db.lists, 'deviceType').map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                  </select>
+                  <CustomPicker
+                    placeholder="Type"
+                    options={getList(db.lists, 'deviceType').map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+                    selected={form.type}
+                    onChange={v => setForm(f => ({ ...f, type: v as string }))}
+                    showUnassigned={false}
+                  />
                 </div>
                 <div className="form-group"><label className="form-label">Condition</label>
-                  <select className="form-input" value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}>
-                    {['new', 'good', 'fair', 'poor'].map(c => <option key={c}>{c}</option>)}
-                  </select>
+                  <CustomPicker
+                    placeholder="Condition"
+                    options={['new', 'good', 'fair', 'poor'].map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+                    selected={form.condition}
+                    onChange={v => setForm(f => ({ ...f, condition: v as string }))}
+                    showUnassigned={false}
+                  />
                 </div>
               </div>
               <div className="form-row">
@@ -223,14 +237,22 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
               </div>
               <div className="form-row">
                 <div className="form-group"><label className="form-label">Type</label>
-                  <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                    {getList(db.lists, 'deviceType').map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                  </select>
+                  <CustomPicker
+                    placeholder="Type"
+                    options={getList(db.lists, 'deviceType').map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+                    selected={form.type}
+                    onChange={v => setForm(f => ({ ...f, type: v as string }))}
+                    showUnassigned={false}
+                  />
                 </div>
                 <div className="form-group"><label className="form-label">Condition</label>
-                  <select className="form-input" value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}>
-                    {['new', 'good', 'fair', 'poor'].map(c => <option key={c}>{c}</option>)}
-                  </select>
+                  <CustomPicker
+                    placeholder="Condition"
+                    options={['new', 'good', 'fair', 'poor'].map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+                    selected={form.condition}
+                    onChange={v => setForm(f => ({ ...f, condition: v as string }))}
+                    showUnassigned={false}
+                  />
                 </div>
               </div>
               <div className="form-row">
@@ -326,12 +348,16 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
             <div className="app-modal-body">
               <div className="form-group">
                 <label className="form-label">Employee</label>
-                <select className="form-input" value={assignEmpId} onChange={e => setAssignEmpId(e.target.value)}>
-                  {db.employees.map(e => {
+                <CustomPicker
+                  placeholder="Select employee\u2026"
+                  options={db.employees.map(e => {
                     const hasType = db.assignments.filter(a => a.employeeId === e.id && a.status === 'active').some(a => { const dv = db.devices.find(d => d.id === a.deviceId); return dv?.type === focusDev.type })
-                    return <option key={e.id} value={e.id}>{e.name} — {e.role}{hasType ? ` (already has ${focusDev.type})` : ''}</option>
+                    return { value: e.id, label: e.name + ' \u2014 ' + e.role + (hasType ? ' (already has ' + focusDev.type + ')' : '') }
                   })}
-                </select>
+                  selected={assignEmpId}
+                  onChange={v => setAssignEmpId(v as string)}
+                  showUnassigned={false}
+                />
               </div>
             </div>
             <div className="app-modal-actions">

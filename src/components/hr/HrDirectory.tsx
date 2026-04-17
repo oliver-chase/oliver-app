@@ -1,7 +1,8 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useAppModal } from '@/components/shared/AppModal'
+import CustomPicker from '@/components/shared/CustomPicker'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Employee } from './types'
 import { getList } from './types'
 
@@ -52,7 +53,8 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
   const [form, setForm]               = useState<EmpForm>(BLANK)
   const [offTrackId, setOffTrackId]   = useState('')
   const [offDate, setOffDate]         = useState('')
-  const { modal, showModal }          = useAppModal()
+
+  const { softDelete, toastEl } = useSoftDelete<Employee>()
 
   const depts  = [...new Set(db.employees.map(e => e.dept).filter(Boolean))]
   const states = [...new Set(db.employees.map(e => e.state).filter(Boolean))]
@@ -160,26 +162,34 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
     await dbMulti([() => supabase.from('employees').upsert(updated)])
   }
 
-  async function deleteEmployee(id: string) {
+  function deleteEmployee(id: string) {
     const e = db.employees.find(x => x.id === id)
     if (!e) return
     closeModal()
-    const { buttonValue } = await showModal({ title: 'Delete Employee', message: `Delete ${e.name}? This will also remove their device assignments and onboarding runs. This cannot be undone.`, confirmLabel: 'Delete Employee', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
     const runIds = db.onboardingRuns.filter(r => r.employeeId === id).map(r => r.id)
-    setDb(prev => ({
-      ...prev,
-      employees: prev.employees.filter(x => x.id !== id),
-      devices: prev.devices.map(d => {
-        const a = prev.assignments.find(a => a.employeeId === id && a.deviceId === d.id && a.status === 'active')
-        return a ? { ...d, status: 'available', assignedTo: '' } : d
-      }),
-      assignments: prev.assignments.map(a => a.employeeId === id && a.status === 'active' ? { ...a, status: 'returned' } : a),
-      onboardingRuns: prev.onboardingRuns.filter(r => r.employeeId !== id),
-      runTasks: prev.runTasks.filter(t => !runIds.includes(t.runId)),
-    }))
-    if (selectedId === id) setSelectedId(null)
-    await dbMulti([() => supabase.from('employees').delete().eq('id', id)])
+    softDelete(e, {
+      displayName: e.name,
+      onLocalRemove: () => {
+        setDb(prev => ({
+          ...prev,
+          employees: prev.employees.filter(x => x.id !== id),
+          devices: prev.devices.map(d => {
+            const a = prev.assignments.find(a => a.employeeId === id && a.deviceId === d.id && a.status === 'active')
+            return a ? { ...d, status: 'available', assignedTo: '' } : d
+          }),
+          assignments: prev.assignments.map(a => a.employeeId === id && a.status === 'active' ? { ...a, status: 'returned' } : a),
+          onboardingRuns: prev.onboardingRuns.filter(r => r.employeeId !== id),
+          runTasks: prev.runTasks.filter(t => !runIds.includes(t.runId)),
+        }))
+        if (selectedId === id) setSelectedId(null)
+      },
+      onLocalRestore: emp => {
+        setDb(prev => ({ ...prev, employees: [emp, ...prev.employees] }))
+      },
+      onDeleteRecord: async () => {
+        await dbMulti([() => supabase.from('employees').delete().eq('id', id)])
+      },
+    })
   }
 
   async function confirmOffboard() {
@@ -211,7 +221,7 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
 
   return (
     <div className="page page--split">
-      {modal}
+      {toastEl}
 
       {modalType && (
         <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
@@ -230,19 +240,25 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Role</label><input className="form-input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} /></div>
                   <div className="form-group"><label className="form-label">Department</label>
-                    <select className="form-input" value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
-                      <option value="">(none)</option>
-                      {getList(db.lists, 'dept').map(d => <option key={d}>{d}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="(none)"
+                      options={getList(db.lists, 'dept').map(d => ({ value: d, label: d }))}
+                      selected={form.dept}
+                      onChange={v => setForm(f => ({ ...f, dept: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Start Date</label><input type="date" className="form-input" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} /></div>
                   <div className="form-group"><label className="form-label">Manager</label>
-                    <select className="form-input" value={form.manager} onChange={e => setForm(f => ({ ...f, manager: e.target.value }))}>
-                      <option value="">(none)</option>
-                      {db.employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="(none)"
+                      options={db.employees.map(e => ({ value: e.name, label: e.name }))}
+                      selected={form.manager}
+                      onChange={v => setForm(f => ({ ...f, manager: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                 </div>
                 <div className="form-row-3">
@@ -269,17 +285,24 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Role</label><input className="form-input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} /></div>
                   <div className="form-group"><label className="form-label">Department</label>
-                    <select className="form-input" value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
-                      <option value="">(none)</option>
-                      {getList(db.lists, 'dept').map(d => <option key={d}>{d}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="(none)"
+                      options={getList(db.lists, 'dept').map(d => ({ value: d, label: d }))}
+                      selected={form.dept}
+                      onChange={v => setForm(f => ({ ...f, dept: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Status</label>
-                    <select className="form-input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                      {['active', 'onboarding', 'offboarding', 'inactive'].map(s => <option key={s}>{s}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="Status"
+                      options={['active', 'onboarding', 'offboarding', 'inactive'].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
+                      selected={form.status}
+                      onChange={v => setForm(f => ({ ...f, status: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                   <div className="form-group"><label className="form-label">Start Date</label><input type="date" className="form-input" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} /></div>
                 </div>
@@ -315,9 +338,14 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
                 <p className="modal-body-desc">This will set {db.employees.find(e => e.id === editingId)?.name}&apos;s status to <strong>offboarding</strong> and start a checklist track.</p>
                 <div className="form-group">
                   <label className="form-label">Offboarding Track</label>
-                  <select className="form-input" value={offTrackId} onChange={e => setOffTrackId(e.target.value)}>
-                    {offTracks.length ? offTracks.map(t => <option key={t.id} value={t.id}>{t.name}</option>) : <option value="">No tracks available — create one in Tracks</option>}
-                  </select>
+                  <CustomPicker
+                    placeholder={offTracks.length ? 'Select track\u2026' : 'No tracks available — create one in Tracks'}
+                    options={offTracks.map(t => ({ value: t.id, label: t.name }))}
+                    selected={offTrackId}
+                    onChange={v => setOffTrackId(v as string)}
+                    showUnassigned={false}
+                    disabled={offTracks.length === 0}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Last Day</label>
@@ -347,22 +375,34 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
             <input placeholder="Search name, role, city..." value={q} onChange={e => setQ(e.target.value)} />
           </div>
-          <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            <option>active</option><option>onboarding</option><option>offboarding</option><option>inactive</option>
-          </select>
-          <select className="filter-select" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-            <option value="">All departments</option>
-            {depts.map(d => <option key={d}>{d}</option>)}
-          </select>
-          <select className="filter-select" value={filterState} onChange={e => setFilterState(e.target.value)}>
-            <option value="">All states</option>
-            {states.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select className="filter-select" value={filterCity} onChange={e => setFilterCity(e.target.value)}>
-            <option value="">All cities</option>
-            {cities.map(c => <option key={c}>{c}</option>)}
-          </select>
+          <CustomPicker
+            placeholder="All statuses"
+            options={['active', 'onboarding', 'offboarding', 'inactive'].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
+            selected={filterStatus}
+            onChange={v => setFilterStatus(v as string)}
+            showUnassigned={false}
+          />
+          <CustomPicker
+            placeholder="All departments"
+            options={depts.map(d => ({ value: d, label: d }))}
+            selected={filterDept}
+            onChange={v => setFilterDept(v as string)}
+            showUnassigned={false}
+          />
+          <CustomPicker
+            placeholder="All states"
+            options={states.map(s => ({ value: s, label: s }))}
+            selected={filterState}
+            onChange={v => setFilterState(v as string)}
+            showUnassigned={false}
+          />
+          <CustomPicker
+            placeholder="All cities"
+            options={cities.map(c => ({ value: c, label: c }))}
+            selected={filterCity}
+            onChange={v => setFilterCity(v as string)}
+            showUnassigned={false}
+          />
         </div>
       </div>
 

@@ -2,8 +2,9 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, HrList } from './types'
-import { DEFAULT_LISTS, getList } from './types'
+import { getList } from './types'
 
 interface Props {
   db: HrDB
@@ -25,6 +26,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
   const [tab, setTab]           = useState<'dropdowns' | 'data'>('dropdowns')
   const [newVals, setNewVals]   = useState<Record<string, string>>({})
   const { modal, showModal }    = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<HrList>()
 
   const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
     setSyncState('syncing')
@@ -43,16 +45,18 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
     await dbMulti([() => supabase.from('lists').insert(nl)])
   }
 
-  async function removeItem(listKey: string, val: string) {
-    const { buttonValue } = await showModal({ title: 'Remove Value', message: `Remove "${val}" from the list?`, confirmLabel: 'Remove', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
-    setDb(prev => ({ ...prev, lists: prev.lists.filter(l => !(l.listKey === listKey && l.value === val)) }))
-    setSyncState('syncing')
-    try {
-      const item = db.lists.find(l => l.listKey === listKey && l.value === val)
-      if (item) await supabase.from('lists').delete().eq('id', item.id)
-      setSyncState('ok')
-    } catch { setSyncState('error') }
+  function removeItem(listKey: string, val: string) {
+    const item = db.lists.find(l => l.listKey === listKey && l.value === val)
+    if (!item) return
+    softDelete(item, {
+      displayName: val,
+      onLocalRemove: () => setDb(prev => ({ ...prev, lists: prev.lists.filter(l => l.id !== item.id) })),
+      onLocalRestore: restored => setDb(prev => ({ ...prev, lists: [...prev.lists, restored] })),
+      onDeleteRecord: async () => {
+        setSyncState('syncing')
+        try { await supabase.from('lists').delete().eq('id', item.id); setSyncState('ok') } catch { setSyncState('error') }
+      },
+    })
   }
 
   async function renameItem(listKey: string, oldVal: string) {
@@ -88,6 +92,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
   return (
     <div className="page">
       {modal}
+      {toastEl}
 
       <div className="page-header">
         <div><div className="page-title">Settings</div></div>

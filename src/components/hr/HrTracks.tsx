@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
+import CustomPicker from '@/components/shared/CustomPicker'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Track, TrackTask } from './types'
 
 interface Props {
@@ -25,6 +27,8 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
   const [taskForm, setTaskForm]     = useState<TaskForm>(BLANK_TASK)
   const [editingId, setEditingId]   = useState<string | null>(null)
   const { modal, showModal }        = useAppModal()
+  const { softDelete: softDeleteTrack, toastEl: trackToastEl } = useSoftDelete<Track>()
+  const { softDelete: softDeleteTask, toastEl: taskToastEl }   = useSoftDelete<TrackTask>()
 
   const selectedTrack = selectedId ? db.tracks.find(t => t.id === selectedId) || null : null
   const trackTasks    = selectedId ? db.tasks.filter(t => t.trackId === selectedId).sort((a, b) => a.order - b.order) : []
@@ -71,17 +75,26 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
     await dbMulti([() => supabase.from('tracks').upsert(updated)])
   }
 
-  async function deleteTrack(id: string) {
-    const t   = db.tracks.find(x => x.id === id)
-    const cnt = db.tasks.filter(x => x.trackId === id).length
+  function deleteTrack(id: string) {
+    const t = db.tracks.find(x => x.id === id)
     if (!t) return
     closeModal()
-    const { buttonValue } = await showModal({ title: 'Delete Track', message: `Delete "${t.name}" and its ${cnt} task(s)? This action cannot be undone.`, confirmLabel: 'Delete Track', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
+    const removedTasks = db.tasks.filter(x => x.trackId === id)
     const nextId = db.tracks.filter(x => x.id !== id)[0]?.id || null
-    setDb(prev => ({ ...prev, tracks: prev.tracks.filter(x => x.id !== id), tasks: prev.tasks.filter(x => x.trackId !== id) }))
-    setSelectedId(nextId)
-    await dbMulti([() => supabase.from('tracks').delete().eq('id', id), () => supabase.from('tasks').delete().eq('trackId', id)])
+    softDeleteTrack(t, {
+      displayName: t.name,
+      onLocalRemove: () => {
+        setDb(prev => ({ ...prev, tracks: prev.tracks.filter(x => x.id !== id), tasks: prev.tasks.filter(x => x.trackId !== id) }))
+        setSelectedId(nextId)
+      },
+      onLocalRestore: track => {
+        setDb(prev => ({ ...prev, tracks: [...prev.tracks, track], tasks: [...prev.tasks, ...removedTasks] }))
+        setSelectedId(id)
+      },
+      onDeleteRecord: async () => {
+        await dbMulti([() => supabase.from('tracks').delete().eq('id', id), () => supabase.from('tasks').delete().eq('trackId', id)])
+      },
+    })
   }
 
   async function addTask() {
@@ -103,16 +116,25 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
     await dbMulti([() => supabase.from('tasks').upsert(updated)])
   }
 
-  async function deleteTask(id: string, trackId: string) {
-    setDb(prev => ({ ...prev, tasks: prev.tasks.filter(x => x.id !== id) }))
-    setSyncState('syncing')
-    try { await supabase.from('tasks').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
-    void trackId
+  function deleteTask(id: string) {
+    const t = db.tasks.find(x => x.id === id)
+    if (!t) return
+    softDeleteTask(t, {
+      displayName: t.name,
+      onLocalRemove: () => setDb(prev => ({ ...prev, tasks: prev.tasks.filter(x => x.id !== id) })),
+      onLocalRestore: task => setDb(prev => ({ ...prev, tasks: [...prev.tasks, task] })),
+      onDeleteRecord: async () => {
+        setSyncState('syncing')
+        try { await supabase.from('tasks').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+      },
+    })
   }
 
   return (
     <div className="page page--split">
       {modal}
+      {trackToastEl}
+      {taskToastEl}
 
       {modalType && (
         <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
@@ -124,14 +146,22 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                 <div className="form-group"><label className="form-label">Track Name</label><input className="form-input" placeholder="e.g. Design Onboarding" value={trackForm.name} onChange={e => setTrackForm(f => ({ ...f, name: e.target.value }))} /></div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Type</label>
-                    <select className="form-input" value={trackForm.type} onChange={e => setTrackForm(f => ({ ...f, type: e.target.value }))}>
-                      {['company', 'role', 'client', 'offboarding'].map(t => <option key={t}>{t}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="Type"
+                      options={['company', 'role', 'client', 'offboarding'].map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+                      selected={trackForm.type}
+                      onChange={v => setTrackForm(f => ({ ...f, type: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                   <div className="form-group"><label className="form-label">Auto-apply</label>
-                    <select className="form-input" value={trackForm.autoApply} onChange={e => setTrackForm(f => ({ ...f, autoApply: e.target.value }))}>
-                      <option value="false">No</option><option value="true">Yes</option>
-                    </select>
+                    <CustomPicker
+                      placeholder="Auto-apply"
+                      options={[{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }]}
+                      selected={trackForm.autoApply}
+                      onChange={v => setTrackForm(f => ({ ...f, autoApply: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                 </div>
               </div>
@@ -144,14 +174,22 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                 <div className="form-group"><label className="form-label">Track Name</label><input className="form-input" value={trackForm.name} onChange={e => setTrackForm(f => ({ ...f, name: e.target.value }))} /></div>
                 <div className="form-row">
                   <div className="form-group"><label className="form-label">Type</label>
-                    <select className="form-input" value={trackForm.type} onChange={e => setTrackForm(f => ({ ...f, type: e.target.value }))}>
-                      {['company', 'role', 'client', 'offboarding'].map(t => <option key={t}>{t}</option>)}
-                    </select>
+                    <CustomPicker
+                      placeholder="Type"
+                      options={['company', 'role', 'client', 'offboarding'].map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+                      selected={trackForm.type}
+                      onChange={v => setTrackForm(f => ({ ...f, type: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                   <div className="form-group"><label className="form-label">Auto-apply</label>
-                    <select className="form-input" value={trackForm.autoApply} onChange={e => setTrackForm(f => ({ ...f, autoApply: e.target.value }))}>
-                      <option value="true">Yes</option><option value="false">No</option>
-                    </select>
+                    <CustomPicker
+                      placeholder="Auto-apply"
+                      options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]}
+                      selected={trackForm.autoApply}
+                      onChange={v => setTrackForm(f => ({ ...f, autoApply: v as string }))}
+                      showUnassigned={false}
+                    />
                   </div>
                 </div>
               </div>
@@ -245,7 +283,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                         <button className="btn btn-sm btn-secondary" title="Edit task" onClick={() => openEditTask(task)}>
                           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 2l4 4-6 6H4v-4l6-6z"/></svg>
                         </button>
-                        <button className="btn-ghost btn-sm btn-icon-danger" onClick={() => deleteTask(task.id, selectedTrack.id)}>&#x2715;</button>
+                        <button className="btn-ghost btn-sm btn-icon-danger" onClick={() => deleteTask(task.id)}>&#x2715;</button>
                       </div>
                     )
                   })}

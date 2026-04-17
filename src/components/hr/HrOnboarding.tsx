@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
+import CustomPicker from '@/components/shared/CustomPicker'
 import type { HrDB, OnboardingRun, RunTask } from './types'
 
 interface Props {
@@ -154,17 +155,24 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
             <div className="app-modal-body">
               <div className="form-group">
                 <label className="form-label">Employee</label>
-                <select className="form-input" value={runEmpId} onChange={e => setRunEmpId(e.target.value)}>
-                  {db.employees.length === 0
-                    ? <option value="">No employees yet — promote a candidate first</option>
-                    : [...db.employees].reverse().map(e => <option key={e.id} value={e.id}>{e.name} — {e.role} ({e.status})</option>)}
-                </select>
+                <CustomPicker
+                  placeholder={db.employees.length === 0 ? 'No employees yet — promote a candidate first' : 'Select employee\u2026'}
+                  options={[...db.employees].reverse().map(e => ({ value: e.id, label: e.name + ' \u2014 ' + e.role + ' (' + e.status + ')' }))}
+                  selected={runEmpId}
+                  onChange={v => setRunEmpId(v as string)}
+                  showUnassigned={false}
+                  disabled={db.employees.length === 0}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Track Template</label>
-                <select className="form-input" value={runTrackId} onChange={e => setRunTrackId(e.target.value)}>
-                  {db.tracks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                <CustomPicker
+                  placeholder="Select track\u2026"
+                  options={db.tracks.map(t => ({ value: t.id, label: t.name }))}
+                  selected={runTrackId}
+                  onChange={v => setRunTrackId(v as string)}
+                  showUnassigned={false}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Start Date</label>

@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
+import CustomPicker from '@/components/shared/CustomPicker'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Candidate } from './types'
 import { STAGES, getList } from './types'
 
@@ -59,6 +61,8 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
   const [dragId, setDragId]     = useState<string | null>(null)
   const { modal, showModal }    = useAppModal()
 
+  const { softDelete, toastEl } = useSoftDelete<Candidate>()
+
   const statuses = [...new Set(db.candidates.map(c => c.candStatus).filter(Boolean))]
   const depts    = [...new Set(db.candidates.map(c => c.dept).filter(Boolean))]
 
@@ -104,15 +108,23 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
     await save({ ...c, candStatus: newStatus, updatedAt: new Date().toISOString() })
   }
 
-  async function deleteCand(id: string) {
+  function deleteCand(id: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
-    const { buttonValue } = await showModal({ title: 'Delete Candidate', message: `Delete ${c.name}? This cannot be undone.`, confirmLabel: 'Delete', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
-    setDb(prev => ({ ...prev, candidates: prev.candidates.filter(x => x.id !== id) }))
-    if (selectedId === id) setSelectedId(null)
-    setSyncState('syncing')
-    try { await supabase.from('candidates').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+    softDelete(c, {
+      displayName: c.name,
+      onLocalRemove: () => {
+        setDb(prev => ({ ...prev, candidates: prev.candidates.filter(x => x.id !== id) }))
+        if (selectedId === id) setSelectedId(null)
+      },
+      onLocalRestore: cand => {
+        setDb(prev => ({ ...prev, candidates: [cand, ...prev.candidates] }))
+      },
+      onDeleteRecord: async () => {
+        setSyncState('syncing')
+        try { await supabase.from('candidates').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+      },
+    })
   }
 
   function tableSortBy(col: string) {
@@ -131,6 +143,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
   return (
     <div className="page page--split">
       {modal}
+      {toastEl}
       <div className="section-header">
         <div className="page-header">
           <div>
@@ -154,18 +167,27 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
             <input placeholder="Search name, role, city..." value={q} onChange={e => setQ(e.target.value)} />
           </div>
-          <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            {statuses.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select className="filter-select" value={stage} onChange={e => setStage(e.target.value)}>
-            <option value="">All stages</option>
-            {STAGES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-          </select>
-          <select className="filter-select" value={dept} onChange={e => setDept(e.target.value)}>
-            <option value="">All departments</option>
-            {depts.map(d => <option key={d}>{d}</option>)}
-          </select>
+          <CustomPicker
+            placeholder="All statuses"
+            options={statuses.map(s => ({ value: s, label: s }))}
+            selected={status}
+            onChange={v => setStatus(v as string)}
+            showUnassigned={false}
+          />
+          <CustomPicker
+            placeholder="All stages"
+            options={STAGES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
+            selected={stage}
+            onChange={v => setStage(v as string)}
+            showUnassigned={false}
+          />
+          <CustomPicker
+            placeholder="All departments"
+            options={depts.map(d => ({ value: d, label: d }))}
+            selected={dept}
+            onChange={v => setDept(v as string)}
+            showUnassigned={false}
+          />
           <div className="filter-search" style={{ minWidth: 140 }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 1.5"/></svg>
             <input placeholder="City, state..." value={location} onChange={e => setLocation(e.target.value)} />
