@@ -115,7 +115,7 @@ export default function ChatbotPanel({ accountId, data }: Props) {
             <textarea
               ref={inputRef}
               className="chatbot-input"
-              placeholder="Ask a question…"
+              placeholder="Type a message…"
               rows={1}
               value={input}
               onChange={e => setInput(e.target.value)}
