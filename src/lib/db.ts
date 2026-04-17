@@ -4,6 +4,12 @@ import type { Account, Engagement, Stakeholder, Action, Note, Opportunity, Proje
 export function toArray(val: string | string[] | null | undefined): string[] {
   if (!val) return []
   if (Array.isArray(val)) return val
+  if (val.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(val)
+      if (Array.isArray(parsed)) return parsed.filter(Boolean)
+    } catch { /* fall through to split */ }
+  }
   return val.split(/[;,]/).map(s => s.trim()).filter(Boolean)
 }
 
