@@ -14,13 +14,6 @@ function initials(name: string) {
   return (name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase()
 }
 
-function daysFromNow(dateStr: string) {
-  const d = new Date(dateStr)
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - now.getTime()) / 86400000)
-}
-
 function fmtDate(dateStr: string) {
   if (!dateStr) return 'TBD'
   return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -82,19 +75,6 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
     .filter(Boolean)
     .sort((a, b) => a!.date.localeCompare(b!.date))
     .slice(0, 4) as { candId: string; candName: string; role: string; interviewer: string; date: string; num: number; ini: string }[]
-
-  const recentIvs = db.interviews
-    .filter(iv => parseLocalDate(iv.date).getTime() < todayMs)
-    .map(iv => {
-      const cand = db.candidates.find(c => c.id === iv.candidateId)
-      if (!cand) return null
-      const allCandIvs = db.interviews.filter(i => i.candidateId === iv.candidateId).sort((a, b) => a.date.localeCompare(b.date))
-      const num = allCandIvs.findIndex(i => i.id === iv.id) + 1
-      return { candId: cand.id, candName: cand.name, role: cand.role, interviewer: iv.interviewers || '', date: iv.date, num, stage: cand.stage, ini: initials(cand.name) }
-    })
-    .filter(Boolean)
-    .sort((a, b) => b!.date.localeCompare(a!.date))
-    .slice(0, 4) as { candId: string; candName: string; role: string; interviewer: string; date: string; num: number; stage: string; ini: string }[]
 
   const recentCands = [...db.candidates]
     .sort((a, b) => (b.updatedAt || b.addedAt || '').localeCompare(a.updatedAt || a.addedAt || ''))
