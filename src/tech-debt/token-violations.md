@@ -185,3 +185,30 @@ Action: add to tokens.css:
   --color-overlay-border:  rgba(255,255,255,.18);
 Then update page.tsx to use the tokens.~~
 **RESOLVED 2026-04-16:** --color-overlay-subtle and --color-overlay-border added to tokens.css. hub.module.css updated to use both tokens. Violation closed.
+
+
+---
+
+## Database — tables required before production
+
+### app_users
+
+Created via Supabase migration `create_app_users` (2026-04-17).
+
+```sql
+create table if not exists app_users (
+  user_id text primary key,
+  email text not null unique,
+  name text,
+  role text not null default 'user',
+  page_permissions text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+**Seeding:** Insert admin users by email with a placeholder `user_id` (use email as placeholder).
+`upsertUser()` migrates the placeholder to the real Azure AD OID on first login.
+
+**Before production:** Add RLS policies to restrict reads to the authenticated user's own row
+plus admin-only writes. Table currently has no RLS.
