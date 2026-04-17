@@ -74,17 +74,27 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
     await upsertOpportunity({ ...o })
   }
 
+  const allOpps = data.opportunities.filter(o => o.account_id === accountId)
+  const countParts: string[] = []
+  const pursuing = allOpps.filter(o => o.status === 'Pursuing').length
+  const identified = allOpps.filter(o => o.status === 'Identified').length
+  const won = allOpps.filter(o => o.status === 'Won').length
+  if (pursuing) countParts.push(pursuing + ' Pursuing')
+  if (identified) countParts.push(identified + ' Identified')
+  if (won) countParts.push(won + ' Won')
+
   return (
     <div>
       <div className="app-section-header">
         <div className="app-section-title">Opportunities</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-link" onClick={() => setAdding(true)}>+ Add opportunity</button>
+            <button className="btn-link" id="btn-add-opp" onClick={() => setAdding(true)}>+ Add opportunity</button>
           </div>
           <div className="section-actions">
             <select
               className="sort-select"
+              id="opp-sort"
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
               aria-label="Sort opportunities"
@@ -94,6 +104,8 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
             </select>
             <button
               className={'filter-chip' + (showLost ? ' on' : '')}
+              id="btn-hide-lost"
+              title="Toggle lost opportunities"
               onClick={() => setShowLost(s => !s)}
             >
               {showLost ? 'Hide Lost' : 'Show Lost'}
@@ -102,28 +114,30 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
         </div>
       </div>
 
-      {opps.length === 0 && !adding && <div className="empty-state">No results</div>}
-
-      <div className="project-grid">
-        {adding && (
-          <InlineOppCard
-            accountId={accountId}
-            owners={owners}
-            onSaved={add}
-            onDiscard={() => setAdding(false)}
-          />
-        )}
-        {opps.map(o => (
-          <OppCard
-            key={o.opportunity_id}
-            opp={o}
-            owners={owners}
-            onSave={save}
-            onDelete={remove}
-            onPromote={promote}
-          />
-        ))}
+      <div id="opp-body">
+        {opps.length === 0 && !adding && <div className="empty-state">No results</div>}
+        <div className="project-grid">
+          {adding && (
+            <InlineOppCard
+              accountId={accountId}
+              owners={owners}
+              onSaved={add}
+              onDiscard={() => setAdding(false)}
+            />
+          )}
+          {opps.map(o => (
+            <OppCard
+              key={o.opportunity_id}
+              opp={o}
+              owners={owners}
+              onSave={save}
+              onDelete={remove}
+              onPromote={promote}
+            />
+          ))}
+        </div>
       </div>
+      <div className="section-count-footer" id="opp-count-footer">{countParts.join(' \u00b7 ')}</div>
     </div>
   )
 }

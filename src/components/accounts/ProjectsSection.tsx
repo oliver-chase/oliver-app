@@ -20,7 +20,7 @@ interface Props {
 
 export default function ProjectsSection({ accountId, data, setData }: Props) {
   const [adding, setAdding] = useState(false)
-  const [hideComplete, setHideComplete] = useState(false)
+  const [hideComplete, setHideComplete] = useState(true)
   const [sortBy, setSortBy] = useState('created_date')
 
   const projects = data.projects
@@ -69,27 +69,32 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
     await deleteRecord('projects', 'project_id', p.project_id)
   }
 
+  const activeCount = data.projects.filter(p => p.account_id === accountId && p.status === 'Active').length
+
   return (
     <div>
       <div className="app-section-header">
         <div className="app-section-title">Projects</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-link" onClick={() => setAdding(true)}>+ Add project</button>
+            <button className="btn-link" id="btn-add-proj" onClick={() => setAdding(true)}>+ Add project</button>
           </div>
           <div className="section-actions">
             <select
               className="sort-select"
+              id="proj-sort"
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
               aria-label="Sort projects"
             >
               <option value="created_date">Newest first</option>
-              <option value="project_name">Name A–Z</option>
+              <option value="project_name">Name A&ndash;Z</option>
               <option value="status">By status</option>
+              <option value="engagement_id">By engagement</option>
             </select>
             <button
               className={'filter-chip' + (hideComplete ? ' on' : '')}
+              id="btn-hide-complete"
               onClick={() => setHideComplete(s => !s)}
             >
               {hideComplete ? 'Show Complete' : 'Hide Complete'}
@@ -98,28 +103,30 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
         </div>
       </div>
 
-      {projects.length === 0 && !adding && <div className="empty-state">No results</div>}
-
-      <div className="project-grid">
-        {adding && (
-          <InlineProjCard
-            accountId={accountId}
-            clientStakeholders={clientStakeholders}
-            onSaved={add}
-            onDiscard={() => setAdding(false)}
-          />
-        )}
-        {projects.map(p => (
-          <ProjCard
-            key={p.project_id}
-            project={p}
-            clientStakeholders={clientStakeholders}
-            onSave={save}
-            onDelete={remove}
-            onMoveToOpp={moveToOpp}
-          />
-        ))}
+      <div id="proj-body">
+        {projects.length === 0 && !adding && <div className="empty-state">No results</div>}
+        <div className="project-grid">
+          {adding && (
+            <InlineProjCard
+              accountId={accountId}
+              clientStakeholders={clientStakeholders}
+              onSaved={add}
+              onDiscard={() => setAdding(false)}
+            />
+          )}
+          {projects.map(p => (
+            <ProjCard
+              key={p.project_id}
+              project={p}
+              clientStakeholders={clientStakeholders}
+              onSave={save}
+              onDelete={remove}
+              onMoveToOpp={moveToOpp}
+            />
+          ))}
+        </div>
       </div>
+      <div className="section-count-footer" id="proj-count-footer">{activeCount ? activeCount + ' active' : ''}</div>
     </div>
   )
 }

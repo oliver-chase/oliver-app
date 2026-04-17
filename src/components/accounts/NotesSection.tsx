@@ -71,10 +71,14 @@ export default function NotesSection({ accountId, data, setData }: Props) {
   const teamNames = getTeamNames(bg)
   const [search, setSearch] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const notes = data.notes
     .filter(n => n.account_id === accountId)
     .filter(n => {
+      if (dateFrom && n.date < dateFrom) return false
+      if (dateTo && n.date > dateTo) return false
       if (!search) return true
       const q = search.toLowerCase()
       return (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
@@ -125,17 +129,20 @@ export default function NotesSection({ accountId, data, setData }: Props) {
         <div className="app-section-title">Notes</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-link" onClick={createNote}>+ Add note</button>
+            <button className="btn-link" id="btn-add-note" onClick={createNote}>+ Add note</button>
           </div>
           <div className="section-actions">
             <input
               type="text"
+              id="notes-search"
               className="notes-search"
               placeholder="Search notes..."
               aria-label="Search notes"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+            <input type="date" className="filter-date" id="filter-date-from" aria-label="Notes from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <input type="date" className="filter-date" id="filter-date-to" aria-label="Notes to date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
             <select
               className="sort-select"
               id="notes-sort-btn"
@@ -150,17 +157,18 @@ export default function NotesSection({ accountId, data, setData }: Props) {
         </div>
       </div>
 
-      {notes.length === 0 && <div className="empty-state">No results</div>}
-
-      {notes.map(n => (
-        <NoteCard
-          key={n.note_id}
-          note={n}
-          teamNames={teamNames}
-          onSave={save}
-          onDelete={remove}
-        />
-      ))}
+      <div id="notes-body">
+        {notes.length === 0 && <div className="empty-state">No results</div>}
+        {notes.map(n => (
+          <NoteCard
+            key={n.note_id}
+            note={n}
+            teamNames={teamNames}
+            onSave={save}
+            onDelete={remove}
+          />
+        ))}
+      </div>
     </div>
   )
 }

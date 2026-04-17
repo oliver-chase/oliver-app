@@ -102,17 +102,25 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
     ? <span className="sort-arrow">{sortDir === 'asc' ? '▲' : '▼'}</span>
     : <span className="sort-arrow">▼</span>
 
+  const allActs = data.actions.filter(a => a.account_id === accountId)
+  const openCount = allActs.filter(a => a.status === 'Open').length
+  const inProgCount = allActs.filter(a => a.status === 'In Progress').length
+  const actParts: string[] = []
+  if (openCount) actParts.push(openCount + ' open')
+  if (inProgCount) actParts.push(inProgCount + ' in progress')
+
   return (
     <div>
       <div className="app-section-header">
         <div className="app-section-title">Actions</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-link" onClick={() => setAdding(true)}>+ Add action</button>
+            <button className="btn-link" id="btn-add-action" onClick={() => setAdding(true)}>+ Add action</button>
           </div>
           <div className="section-actions">
             <select
               className="sort-select"
+              id="filter-action-status"
               aria-label="Filter by action status"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -125,6 +133,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
           </div>
         </div>
       </div>
+      <div id="actions-body">
       <div className="table-wrap">
         <table className="data-table">
           <thead>
@@ -167,6 +176,8 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
           </tbody>
         </table>
       </div>
+      </div>
+      <div className="section-count-footer" id="actions-count-footer">{actParts.join(' \u00b7 ')}</div>
     </div>
   )
 }
