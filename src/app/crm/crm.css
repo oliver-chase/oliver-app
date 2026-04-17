@@ -1,0 +1,15 @@
+/* crm/crm.css — CRM & Business Development shell layout
+   Loads after shared/styles.css, shared/tokens.css, shared/components.css.
+   .coming-soon* classes live in shared/components-layout.css. */
+
+body{font-family:var(--font);background:var(--surface2);color:var(--text)}
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;z-index:40;gap:10px}
+.topbar-hamburger{display:none;width:32px;height:32px;align-items:center;justify-content:center;cursor:pointer;color:var(--gray);background:none;border:none;border-radius:var(--radius)}
+.topbar-hamburger:focus-visible{outline:2px solid var(--pink);outline-offset:1px}
+.topbar-name{font-size:var(--font-size-sm);font-weight:700;color:var(--text)}
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + var(--spacing-lg)) 24px 80px;box-sizing:border-box;min-height:100vh}
+@media (max-width:768px){
+  .topbar{left:0}
+  .topbar-hamburger{display:flex!important}
+  .main{margin-left:0}
+}
