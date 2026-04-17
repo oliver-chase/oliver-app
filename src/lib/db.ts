@@ -70,6 +70,12 @@ export async function deleteRecord(table: string, idCol: string, id: string) {
   if (error) throw error
 }
 
+export async function deleteAccountCascade(accountId: string) {
+  const related = ['stakeholders', 'actions', 'notes', 'opportunities', 'projects', 'background', 'engagements']
+  await Promise.all(related.map(table => supabase.from(table).delete().eq('account_id', accountId)))
+  await deleteRecord('accounts', 'account_id', accountId)
+}
+
 export function today() {
   return new Date().toISOString().split('T')[0]
 }
