@@ -179,10 +179,6 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                 </div>
               )}
             </div>
-            <div className="app-view-toggle" id="people-toggle">
-              <button className={'app-view-toggle-btn' + (view === 'cards' ? ' active' : '')} data-view="cards" onClick={() => setView('cards')}>Cards</button>
-              <button className={'app-view-toggle-btn' + (view === 'orgchart' ? ' active' : '')} data-view="orgchart" onClick={() => setView('orgchart')}>Org</button>
-            </div>
             <Picker
               value={PEOPLE_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PEOPLE_SORT_OPTS[0][1]}
               options={PEOPLE_SORT_OPTS.map(([, l]) => l)}
@@ -190,6 +186,10 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
               showUnassigned={false}
               onChange={val => { setSortBy(PEOPLE_SORT_OPTS.find(([, l]) => l === val)?.[0] ?? 'name'); setPage(0) }}
             />
+            <div className="app-view-toggle" id="people-toggle">
+              <button className={'app-view-toggle-btn' + (view === 'cards' ? ' active' : '')} data-view="cards" onClick={() => setView('cards')}>Cards</button>
+              <button className={'app-view-toggle-btn' + (view === 'orgchart' ? ' active' : '')} data-view="orgchart" onClick={() => setView('orgchart')}>Org</button>
+            </div>
           </div>
         </div>
       </div>
