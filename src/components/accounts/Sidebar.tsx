@@ -1,5 +1,6 @@
 'use client'
 import { useRef } from 'react'
+import Link from 'next/link'
 import type { Account } from '@/types'
 
 interface Props {
@@ -21,7 +22,7 @@ export default function Sidebar({
     <>
       <aside className={`app-sidebar${open ? ' open' : ''}`} id="sidebar">
         <div className="app-sidebar-logo">Account Strategy</div>
-        <a href="/" className="sidebar-back">&#8592; Back to Hub</a>
+        <Link href="/" className="sidebar-back">&#8592; Back to Hub</Link>
 
         <div className="app-sidebar-section">
           <div
