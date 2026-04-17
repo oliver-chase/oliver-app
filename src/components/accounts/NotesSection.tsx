@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { upsertNote, deleteRecord, newId, today } from '@/lib/db'
+import { upsertNote, upsertBackground, deleteRecord, newId, today } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Note, Background, AppState } from '@/types'
 import { Picker } from './Picker'
 
@@ -76,6 +78,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const { modal, showModal } = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<Note>()
 
   const notes = data.notes
     .filter(n => n.account_id === accountId)
@@ -96,19 +100,32 @@ export default function NotesSection({ accountId, data, setData }: Props) {
     await upsertNote(n)
   }
 
-  const remove = async (n: Note) => {
-    if (!window.confirm('Delete this note?')) return
-    setData(prev => ({ ...prev, notes: prev.notes.filter(x => x.note_id !== n.note_id) }))
-    await deleteRecord('notes', 'note_id', n.note_id)
+  const remove = (n: Note) => {
+    softDelete(n, {
+      displayName: n.title || 'Note',
+      onLocalRemove: () => setData(prev => ({ ...prev, notes: prev.notes.filter(x => x.note_id !== n.note_id) })),
+      onLocalRestore: () => setData(prev => ({ ...prev, notes: [...prev.notes, n] })),
+      onDeleteRecord: async () => { await deleteRecord('notes', 'note_id', n.note_id) },
+    })
+  }
+
+  const addPersonToTeam = async (name: string) => {
+    if (!bg) return
+    const cur = (bg.account_team || '').split(/[;\n,]/).map(s => s.trim()).filter(Boolean)
+    if (cur.includes(name)) return
+    cur.push(name)
+    const updated = { ...bg, account_team: cur.join('; ') }
+    setData(prev => ({ ...prev, background: prev.background.map(b => b.account_id === accountId && !b.engagement_id ? updated : b) }))
+    await upsertBackground(updated)
   }
 
   const createNote = async () => {
     const cadenceTitle = bg?.meeting_title?.trim() || ''
     let title = cadenceTitle
     if (!title) {
-      const t = window.prompt('Meeting title')?.trim()
-      if (!t) return
-      title = t
+      const { buttonValue, inputValue } = await showModal({ title: 'New meeting note', inputPlaceholder: 'Meeting title', confirmLabel: 'Create' })
+      if (buttonValue !== 'confirm' || !inputValue.trim()) return
+      title = inputValue.trim()
     }
     const cadenceNames = (bg?.meeting_attendees || '').split(';').map(s => s.trim()).filter(Boolean)
     const teamRaw = (bg?.account_team || '').split(/[;\n,]/).map(s => s.trim()).filter(Boolean)
@@ -128,6 +145,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
+      {modal}
+      {toastEl}
       <div className="app-section-header">
         <div className="app-section-title">Notes</div>
         <div className="section-header-row2">
@@ -166,6 +185,7 @@ export default function NotesSection({ accountId, data, setData }: Props) {
             teamNames={teamNames}
             onSave={save}
             onDelete={remove}
+            onAddPersonToTeam={addPersonToTeam}
           />
         ))}
       </div>
@@ -173,20 +193,19 @@ export default function NotesSection({ accountId, data, setData }: Props) {
   )
 }
 
-function NoteCard({ note, teamNames, onSave, onDelete }: {
+function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
   note: Note
   teamNames: string[]
   onSave: (n: Note) => Promise<void>
-  onDelete: (n: Note) => Promise<void>
+  onDelete: (n: Note) => void
+  onAddPersonToTeam?: (name: string) => Promise<void>
 }) {
+  const { modal: noteModal, showModal: noteShowModal } = useAppModal()
   const [expanded, setExpanded] = useState(false)
   const titleRef = useRef<HTMLDivElement>(null)
   const dateRef = useRef<HTMLSpanElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const [attendees, setAttendeesState] = useState<string[]>(() => getAttendees(note.template_data))
-  const [addingAttendee, setAddingAttendee] = useState(false)
-  const [newAttendee, setNewAttendee] = useState('')
-  const attInputRef = useRef<HTMLInputElement>(null)
 
   const copyToClipboard = async () => {
     const md = (note.title ? note.title + '\n\n' : '') + (note.body || '')
@@ -208,11 +227,11 @@ function NoteCard({ note, teamNames, onSave, onDelete }: {
     const n = name.trim()
     if (!n) return
     await saveAttendees([...attendees, n])
-    setNewAttendee('')
-    setAddingAttendee(false)
   }
 
   return (
+    <>
+    {noteModal}
     <div
       className={'note-card' + (expanded ? ' expanded' : '')}
       style={{ position: 'relative' }}
@@ -316,27 +335,20 @@ function NoteCard({ note, teamNames, onSave, onDelete }: {
                   >×</button>
                 </span>
               ))}
-              {addingAttendee ? (
-                <input
-                  ref={attInputRef}
-                  className="form-input"
-                  style={{ width: 140, margin: 0, padding: '2px 6px', fontSize: 'var(--font-size-xs)' }}
-                  placeholder="Name"
-                  value={newAttendee}
-                  onChange={e => setNewAttendee(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') { e.preventDefault(); addAttendee(newAttendee) }
-                    if (e.key === 'Escape') { setAddingAttendee(false); setNewAttendee('') }
-                  }}
-                  onBlur={() => { if (newAttendee.trim()) addAttendee(newAttendee); else { setAddingAttendee(false); setNewAttendee('') } }}
-                />
-              ) : (
-                <AttendeeAddBtn
-                  teamNames={teamNames.filter(n => !attendees.includes(n))}
-                  onSelect={name => addAttendee(name)}
-                  onAddNew={() => { setAddingAttendee(true); setTimeout(() => attInputRef.current?.focus(), 50) }}
-                />
-              )}
+              <AttendeeAddBtn
+                teamNames={teamNames.filter(n => !attendees.includes(n))}
+                onSelect={name => addAttendee(name)}
+                onAddNew={async () => {
+                  const r1 = await noteShowModal({ title: 'Add attendee', inputPlaceholder: 'Name', confirmLabel: 'Next \u2192' })
+                  if (r1.buttonValue !== 'confirm' || !r1.inputValue.trim()) return
+                  const nm = r1.inputValue.trim()
+                  if (!teamNames.includes(nm) && onAddPersonToTeam) {
+                    const r2 = await noteShowModal({ title: 'Also add to team?', message: 'Add ' + nm + ' to the account team as well?', confirmLabel: 'Add to team too', cancelLabel: 'Attendee only' })
+                    if (r2.buttonValue === 'confirm') await onAddPersonToTeam(nm)
+                  }
+                  await addAttendee(nm)
+                }}
+              />
             </div>
           </div>
 
@@ -360,13 +372,14 @@ function NoteCard({ note, teamNames, onSave, onDelete }: {
         </div>
       )}
     </div>
+    </>
   )
 }
 
 function AttendeeAddBtn({ teamNames, onSelect, onAddNew }: {
   teamNames: string[]
   onSelect: (name: string) => void
-  onAddNew: () => void
+  onAddNew: () => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -415,7 +428,7 @@ function AttendeeAddBtn({ teamNames, onSelect, onAddNew }: {
             {filtered.length === 0 && <div className="app-popover-empty">No matches</div>}
             <div
               className="app-popover-item"
-              onMouseDown={e => { e.preventDefault(); setOpen(false); setQuery(''); onAddNew() }}
+              onMouseDown={e => { e.preventDefault(); setOpen(false); setQuery(''); void onAddNew() }}
             >
               + Add new…
             </div>

@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { upsertProject, upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Project, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
 
@@ -23,6 +25,8 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
   const [adding, setAdding] = useState(false)
   const [hideComplete, setHideComplete] = useState(true)
   const [sortBy, setSortBy] = useState('created_date')
+  const { modal, showModal } = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<Project>()
 
   const projects = data.projects
     .filter(p => p.account_id === accountId)
@@ -47,13 +51,23 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
     setAdding(false)
   }
 
-  const remove = async (p: Project) => {
-    if (!window.confirm('Delete this project?')) return
-    setData(prev => ({ ...prev, projects: prev.projects.filter(x => x.project_id !== p.project_id) }))
-    await deleteRecord('projects', 'project_id', p.project_id)
+  const remove = (p: Project) => {
+    softDelete(p, {
+      displayName: p.project_name || 'Project',
+      onLocalRemove: () => setData(prev => ({ ...prev, projects: prev.projects.filter(x => x.project_id !== p.project_id) })),
+      onLocalRestore: () => setData(prev => ({ ...prev, projects: [...prev.projects, p] })),
+      onDeleteRecord: async () => { await deleteRecord('projects', 'project_id', p.project_id) },
+    })
   }
 
   const moveToOpp = async (p: Project) => {
+    const lossy = (p.client_stakeholder_ids || []).length > 0
+    const { buttonValue } = await showModal({
+      title: 'Move "' + (p.project_name || 'this project') + '" back to Opportunities?',
+      message: lossy ? 'Client stakeholder links will be removed.' : undefined,
+      confirmLabel: 'Move',
+    })
+    if (buttonValue !== 'confirm') return
     const statusMap: Record<string, string> = { Active: 'Pursuing', 'On Hold': 'Identified', Complete: 'Won' }
     const opp = {
       opportunity_id: newId('OPP'), account_id: accountId, engagement_id: p.engagement_id,
@@ -74,6 +88,8 @@ export default function ProjectsSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
+      {modal}
+      {toastEl}
       <div className="app-section-header">
         <div className="app-section-title">Projects</div>
         <div className="section-header-row2">
@@ -131,7 +147,7 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
   project: Project
   clientStakeholders: Array<{ stakeholder_id: string; name: string }>
   onSave: (p: Project) => Promise<void>
-  onDelete: (p: Project) => Promise<void>
+  onDelete: (p: Project) => void
   onMoveToOpp: (p: Project) => Promise<void>
 }) {
   const nameRef = useRef<HTMLDivElement>(null)

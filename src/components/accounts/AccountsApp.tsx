@@ -1,6 +1,8 @@
 'use client'
 import { useState, useCallback, Component } from 'react'
 import { useAccountsData } from '@/hooks/useAccountsData'
+import { deleteAccountCascade } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
 import Sidebar from './Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import Filterbar from './Filterbar'
@@ -31,6 +33,7 @@ export default function AccountsApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
+  const { modal, showModal } = useAppModal()
 
   const handleSelectAccount = useCallback((id: string) => {
     setCurrentAccountId(id)
@@ -49,15 +52,74 @@ export default function AccountsApp() {
   }, [data.accounts, saveAccount])
 
   const handleAddAccount = useCallback(async () => {
-    const name = window.prompt('Account name')?.trim()
-    if (!name) return
-    const rec = await addAccount(name)
+    const { buttonValue, inputValue } = await showModal({
+      title: 'New account',
+      inputPlaceholder: 'Account name',
+      confirmLabel: 'Create',
+    })
+    if (buttonValue !== 'confirm' || !inputValue.trim()) return
+    const rec = await addAccount(inputValue.trim())
     setCurrentAccountId(rec.account_id)
-  }, [addAccount])
+  }, [addAccount, showModal])
 
   const handleUpdateAccount = useCallback(async (account: Account) => {
     await saveAccount(account)
   }, [saveAccount])
+
+  const handleArchive = useCallback(async () => {
+    const acct = data.accounts.find(a => a.account_id === currentAccountId)
+    if (!acct) return
+    const isArchived = acct.status === 'Archived'
+    const { buttonValue } = await showModal({
+      title: isArchived ? 'Unarchive account' : 'Archive account',
+      message: isArchived
+        ? '"' + acct.account_name + '" will be restored to active status.'
+        : '"' + acct.account_name + '" will remain in the portfolio but sorted to the bottom and visually dimmed.',
+      confirmLabel: isArchived ? 'Unarchive' : 'Archive',
+    })
+    if (buttonValue !== 'confirm') return
+    await saveAccount({ ...acct, status: isArchived ? 'Active' : 'Archived' })
+  }, [currentAccountId, data.accounts, saveAccount, showModal])
+
+  const handleDelete = useCallback(async () => {
+    const acct = data.accounts.find(a => a.account_id === currentAccountId)
+    if (!acct) return
+    const { buttonValue } = await showModal({
+      title: 'Delete account',
+      message: 'Consider archiving instead — archived accounts remain visible and can be restored. Permanently delete "' + acct.account_name + '" and all its data? This cannot be undone.',
+      confirmLabel: 'Delete',
+      dangerConfirm: true,
+    })
+    if (buttonValue !== 'confirm') return
+    const id = currentAccountId!
+    try {
+      await deleteAccountCascade(id)
+      setData(prev => ({
+        ...prev,
+        stakeholders: prev.stakeholders.filter(x => x.account_id !== id),
+        actions: prev.actions.filter(x => x.account_id !== id),
+        notes: prev.notes.filter(x => x.account_id !== id),
+        opportunities: prev.opportunities.filter(x => x.account_id !== id),
+        projects: prev.projects.filter(x => x.account_id !== id),
+        background: prev.background.filter(x => x.account_id !== id),
+        engagements: prev.engagements.filter(x => x.account_id !== id),
+        accounts: prev.accounts.filter(a => a.account_id !== id),
+      }))
+      setCurrentAccountId(null)
+    } catch (e) {
+      console.error('[deleteAccount] failed:', e)
+    }
+  }, [currentAccountId, data.accounts, setData, showModal])
+
+  const handleFilterReset = useCallback(async () => {
+    const { buttonValue } = await showModal({
+      title: 'Reset filters',
+      message: 'Clear all active filters and return to default view?',
+      confirmLabel: 'Reset',
+    })
+    if (buttonValue !== 'confirm') return
+    setFilterSearch('')
+  }, [showModal])
 
   const currentAccount = data.accounts.find(a => a.account_id === currentAccountId)
   const engagement = currentEngagementId
@@ -78,6 +140,7 @@ export default function AccountsApp() {
 
   return (
     <div className="app-layout">
+      {modal}
       <Sidebar
         accounts={data.accounts}
         currentAccountId={currentAccountId}
@@ -104,12 +167,12 @@ export default function AccountsApp() {
           show={currentAccountId !== null}
           search={filterSearch}
           onSearch={setFilterSearch}
-          onReset={() => setFilterSearch('')}
+          onReset={handleFilterReset}
         />
 
         <main className="main" id="main-content">
           {loading ? (
-            <div className="section-loading">Loading…</div>
+            <div className="section-loading">Loading\u2026</div>
           ) : currentAccountId ? (
             <ErrorBoundary>
               <AccountView
@@ -117,19 +180,8 @@ export default function AccountsApp() {
                 data={data}
                 setData={setData}
                 onUpdateAccount={handleUpdateAccount}
-                onArchive={() => {
-                  const acct = currentAccount
-                  if (!acct) return
-                  const isArchived = acct.status === 'Archived'
-                  saveAccount({ ...acct, status: isArchived ? 'Active' : 'Archived' })
-                }}
-                onDelete={async () => {
-                  if (!currentAccount) return
-                  const confirmed = window.confirm(`Delete "${currentAccount.account_name}"? This cannot be undone.`)
-                  if (!confirmed) return
-                  // TODO: delete account + related records
-                  setCurrentAccountId(null)
-                }}
+                onArchive={handleArchive}
+                onDelete={handleDelete}
               />
             </ErrorBoundary>
           ) : (

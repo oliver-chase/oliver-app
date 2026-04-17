@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { upsertOpportunity, deleteRecord, newId, today, toArray } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
+import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Opportunity, Background, AppState } from '@/types'
 import { Picker, MultiPicker } from './Picker'
 
@@ -34,6 +36,8 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
   const [showLost, setShowLost] = useState(false)
   const [adding, setAdding] = useState(false)
   const [sortBy, setSortBy] = useState('created_date')
+  const { modal, showModal } = useAppModal()
+  const { softDelete, toastEl } = useSoftDelete<Opportunity>()
 
   const opps = data.opportunities
     .filter(o => o.account_id === accountId)
@@ -53,13 +57,22 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
     setAdding(false)
   }
 
-  const remove = async (o: Opportunity) => {
-    if (!window.confirm('Delete this opportunity?')) return
-    setData(prev => ({ ...prev, opportunities: prev.opportunities.filter(x => x.opportunity_id !== o.opportunity_id) }))
-    await deleteRecord('opportunities', 'opportunity_id', o.opportunity_id)
+  const remove = (o: Opportunity) => {
+    softDelete(o, {
+      displayName: o.description || 'Opportunity',
+      onLocalRemove: () => setData(prev => ({ ...prev, opportunities: prev.opportunities.filter(x => x.opportunity_id !== o.opportunity_id) })),
+      onLocalRestore: () => setData(prev => ({ ...prev, opportunities: [...prev.opportunities, o] })),
+      onDeleteRecord: async () => { await deleteRecord('opportunities', 'opportunity_id', o.opportunity_id) },
+    })
   }
 
   const promote = async (o: Opportunity) => {
+    const { buttonValue } = await showModal({
+      title: 'Promote to Project?',
+      message: "A new project will be created with this opportunity's details.",
+      confirmLabel: 'Promote',
+    })
+    if (buttonValue !== 'confirm') return
     const { upsertProject } = await import('@/lib/db')
     const proj = {
       project_id: newId('PROJ'), account_id: accountId, engagement_id: o.engagement_id,
@@ -86,6 +99,8 @@ export default function OpportunitiesSection({ accountId, data, setData }: Props
 
   return (
     <div>
+      {modal}
+      {toastEl}
       <div className="app-section-header">
         <div className="app-section-title">Opportunities</div>
         <div className="section-header-row2">
@@ -144,7 +159,7 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
   opp: Opportunity
   owners: string[]
   onSave: (o: Opportunity) => Promise<void>
-  onDelete: (o: Opportunity) => Promise<void>
+  onDelete: (o: Opportunity) => void
   onPromote: (o: Opportunity) => Promise<void>
 }) {
   const descRef = useRef<HTMLDivElement>(null)

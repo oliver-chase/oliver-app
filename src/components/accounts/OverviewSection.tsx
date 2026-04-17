@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { today, upsertBackground } from '@/lib/db'
+import { useAppModal } from '@/components/shared/AppModal'
 import type { AppState, Background, Note } from '@/types'
 import { Picker } from './Picker'
 
@@ -87,6 +88,7 @@ function getTeamNames(bg: Background | undefined): string[] {
 
 export default function OverviewSection({ accountId, data, setData }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
+  const { modal, showModal } = useAppModal()
 
   const ensureBg = useCallback((): Background => {
     if (bg) return bg
@@ -144,6 +146,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
 
   return (
     <div>
+      {modal}
       <div className="overview-row" style={{ marginBottom: '12px' }}>
         <div className="app-card overview-card-col">
           <div className="app-card-label">Account Director</div>
@@ -155,8 +158,9 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             onChange={async val => {
               const updated = { ...b }
               if (val === '+ Add person\u2026') {
-                const nm = window.prompt('Name')?.trim()
-                if (!nm) return
+                const { buttonValue, inputValue } = await showModal({ title: 'Add person', inputPlaceholder: 'Name', confirmLabel: 'Add' })
+                if (buttonValue !== 'confirm' || !inputValue.trim()) return
+                const nm = inputValue.trim()
                 const cur = (updated.account_team || '').split(/[;\n]/).map(s => s.trim()).filter(Boolean)
                 if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
                 updated.account_director = nm
@@ -175,8 +179,9 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             onChange={async val => {
               const updated = { ...b }
               if (val === '+ Add person\u2026') {
-                const nm = window.prompt('Name')?.trim()
-                if (!nm) return
+                const { buttonValue, inputValue } = await showModal({ title: 'Add person', inputPlaceholder: 'Name', confirmLabel: 'Add' })
+                if (buttonValue !== 'confirm' || !inputValue.trim()) return
+                const nm = inputValue.trim()
                 const cur = (updated.account_team || '').split(/[;\n]/).map(s => s.trim()).filter(Boolean)
                 if (!cur.includes(nm)) { cur.push(nm); updated.account_team = cur.join('; ') }
                 updated.account_manager = nm
