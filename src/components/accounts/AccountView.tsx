@@ -16,6 +16,19 @@ interface Props {
   onUpdateAccount: (account: Account) => void
   onArchive: () => void
   onDelete: () => void
+  filterSearch: string
+  filterActionStatus: string
+  onFilterActionStatusChange: (v: string) => void
+  filterDateFrom: string
+  onFilterDateFromChange: (v: string) => void
+  filterDateTo: string
+  onFilterDateToChange: (v: string) => void
+  filterExec: boolean
+  onFilterExecChange: (v: boolean) => void
+  filterIncomplete: boolean
+  onFilterIncompleteChange: (v: boolean) => void
+  filterVTwoOwner: string
+  onFilterVTwoOwnerChange: (v: string) => void
 }
 
 function fmtDate(d: string) {
@@ -24,7 +37,13 @@ function fmtDate(d: string) {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export default function AccountView({ accountId, data, setData, onUpdateAccount, onArchive, onDelete }: Props) {
+export default function AccountView({
+  accountId, data, setData, onUpdateAccount, onArchive, onDelete,
+  filterSearch, filterActionStatus, onFilterActionStatusChange,
+  filterDateFrom, onFilterDateFromChange, filterDateTo, onFilterDateToChange,
+  filterExec, onFilterExecChange, filterIncomplete, onFilterIncompleteChange,
+  filterVTwoOwner, onFilterVTwoOwnerChange,
+}: Props) {
   const acct = data.accounts.find(a => a.account_id === accountId)
   const [bttVisible, setBttVisible] = useState(false)
 
@@ -73,11 +92,21 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
       </div>
 
       <div id="people" className="section">
-        <PeopleSection accountId={accountId} data={data} setData={setData} />
+        <PeopleSection
+          accountId={accountId} data={data} setData={setData}
+          filterSearch={filterSearch}
+          filterExec={filterExec} onFilterExecChange={onFilterExecChange}
+          filterIncomplete={filterIncomplete} onFilterIncompleteChange={onFilterIncompleteChange}
+          filterVTwoOwner={filterVTwoOwner} onFilterVTwoOwnerChange={onFilterVTwoOwnerChange}
+        />
       </div>
 
       <div id="actions" className="section">
-        <ActionsSection accountId={accountId} data={data} setData={setData} />
+        <ActionsSection
+          accountId={accountId} data={data} setData={setData}
+          filterSearch={filterSearch}
+          statusFilter={filterActionStatus} onStatusFilterChange={onFilterActionStatusChange}
+        />
       </div>
 
       <div id="opportunities" className="section">
@@ -89,7 +118,11 @@ export default function AccountView({ accountId, data, setData, onUpdateAccount,
       </div>
 
       <div id="notes" className="section">
-        <NotesSection accountId={accountId} data={data} setData={setData} />
+        <NotesSection
+          accountId={accountId} data={data} setData={setData}
+          filterDateFrom={filterDateFrom} onFilterDateFromChange={onFilterDateFromChange}
+          filterDateTo={filterDateTo} onFilterDateToChange={onFilterDateToChange}
+        />
       </div>
 
       <button

@@ -35,17 +35,19 @@ interface Props {
   accountId: string
   data: AppState
   setData: React.Dispatch<React.SetStateAction<AppState>>
+  filterSearch: string
+  statusFilter: string
+  onStatusFilterChange: (v: string) => void
 }
 
 type StatusFilter = 'open-progress' | 'all' | 'Open' | 'Done'
 
-export default function ActionsSection({ accountId, data, setData }: Props) {
+export default function ActionsSection({ accountId, data, setData, filterSearch, statusFilter, onStatusFilterChange }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const owners = getTeamNames(bg)
   const [sortCol, setSortCol] = useState<SortCol>('created_date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [adding, setAdding] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open-progress')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Action>()
   const reportSync = useSyncReport()
@@ -55,6 +57,10 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
 
   const actions = data.actions.filter(a => {
     if (a.account_id !== accountId) return false
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase()
+      if (!(a.description || '').toLowerCase().includes(q)) return false
+    }
     if (statusFilter === 'open-progress') return a.status === 'Open' || a.status === 'In Progress'
     if (statusFilter === 'all') return true
     return a.status === statusFilter
@@ -152,7 +158,7 @@ export default function ActionsSection({ accountId, data, setData }: Props) {
               options={ACT_FILTER_OPTS.map(([, l]) => l)}
               triggerClass="sort-select"
               showUnassigned={false}
-              onChange={val => setStatusFilter((ACT_FILTER_OPTS.find(([, l]) => l === val)?.[0] ?? 'open-progress') as StatusFilter)}
+              onChange={val => onStatusFilterChange(ACT_FILTER_OPTS.find(([, l]) => l === val)?.[0] ?? 'open-progress')}
             />
           </div>
         </div>

@@ -49,18 +49,22 @@ interface Props {
   accountId: string
   data: AppState
   setData: React.Dispatch<React.SetStateAction<AppState>>
+  filterSearch: string
+  filterExec: boolean
+  onFilterExecChange: (v: boolean) => void
+  filterIncomplete: boolean
+  onFilterIncompleteChange: (v: boolean) => void
+  filterVTwoOwner: string
+  onFilterVTwoOwnerChange: (v: string) => void
 }
 
-export default function PeopleSection({ accountId, data, setData }: Props) {
+export default function PeopleSection({ accountId, data, setData, filterSearch, filterExec, onFilterExecChange, filterIncomplete, onFilterIncompleteChange, filterVTwoOwner, onFilterVTwoOwnerChange }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const owners = getTeamNames(bg)
   const [adding, setAdding] = useState(false)
   const [sortBy, setSortBy] = useState('name')
   const [view, setView] = useState<'cards' | 'orgchart'>('cards')
   const [page, setPage] = useState(0)
-  const [filterExec, setFilterExec] = useState(false)
-  const [filterIncomplete, setFilterIncomplete] = useState(false)
-  const [filterVTwoOwner, setFilterVTwoOwner] = useState('')
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const filterPanelRef = useRef<HTMLDivElement>(null)
   const { softDelete, toastEl } = useSoftDelete<Stakeholder>()
@@ -80,6 +84,10 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
   }, [filterPanelOpen])
 
   let people = data.stakeholders.filter(s => s.account_id === accountId && (s.organization || '').toLowerCase() !== 'v.two')
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase()
+    people = people.filter(s => (s.name || '').toLowerCase().includes(q))
+  }
   if (filterExec) people = people.filter(s => s.is_executive === 'true' || s.is_executive === 'TRUE')
   if (filterIncomplete) {
     people = people.filter(s => !s.department || !s.primary_owner || !s.secondary_owner || !s.reports_to)
@@ -142,15 +150,15 @@ export default function PeopleSection({ accountId, data, setData }: Props) {
               {filterPanelOpen && (
                 <div ref={filterPanelRef} className="people-filter-panel app-popover" id="people-filter-panel" role="dialog">
                   <div className="filter-checkbox-group">
-                    <label><input type="checkbox" id="filter-exec-check" checked={filterExec} onChange={e => { setFilterExec(e.target.checked); setPage(0) }} /> Executive</label>
-                    <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { setFilterIncomplete(e.target.checked); setPage(0) }} /> Incomplete</label>
+                    <label><input type="checkbox" id="filter-exec-check" checked={filterExec} onChange={e => { onFilterExecChange(e.target.checked); setPage(0) }} /> Executive</label>
+                    <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { onFilterIncompleteChange(e.target.checked); setPage(0) }} /> Incomplete</label>
                   </div>
                   {owners.length > 0 && (
                     <div className="filter-radio-group" style={{ marginTop: 10 }}>
                       <div className="filter-radio-divider">V.Two Owner</div>
-                      <label><input type="radio" name="vtwo-owner" value="" checked={filterVTwoOwner === ''} onChange={() => { setFilterVTwoOwner(''); setPage(0) }} /> All</label>
+                      <label><input type="radio" name="vtwo-owner" value="" checked={filterVTwoOwner === ''} onChange={() => { onFilterVTwoOwnerChange(''); setPage(0) }} /> All</label>
                       {owners.map(name => (
-                        <label key={name}><input type="radio" name="vtwo-owner" value={name} checked={filterVTwoOwner === name} onChange={() => { setFilterVTwoOwner(name); setPage(0) }} /> {name}</label>
+                        <label key={name}><input type="radio" name="vtwo-owner" value={name} checked={filterVTwoOwner === name} onChange={() => { onFilterVTwoOwnerChange(name); setPage(0) }} /> {name}</label>
                       ))}
                     </div>
                   )}

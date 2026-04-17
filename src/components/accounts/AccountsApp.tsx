@@ -33,6 +33,12 @@ export default function AccountsApp() {
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
+  const [filterActionStatus, setFilterActionStatus] = useState('open-progress')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterExec, setFilterExec] = useState(false)
+  const [filterIncomplete, setFilterIncomplete] = useState(false)
+  const [filterVTwoOwner, setFilterVTwoOwner] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
   const { modal, showModal } = useAppModal()
 
@@ -114,6 +120,12 @@ export default function AccountsApp() {
     })
     if (buttonValue !== 'confirm') return
     setFilterSearch('')
+    setFilterActionStatus('open-progress')
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setFilterExec(false)
+    setFilterIncomplete(false)
+    setFilterVTwoOwner('')
   }, [showModal])
 
   const currentAccount = data.accounts.find(a => a.account_id === currentAccountId)
@@ -177,6 +189,19 @@ export default function AccountsApp() {
                 onUpdateAccount={handleUpdateAccount}
                 onArchive={handleArchive}
                 onDelete={handleDelete}
+                filterSearch={filterSearch}
+                filterActionStatus={filterActionStatus}
+                onFilterActionStatusChange={setFilterActionStatus}
+                filterDateFrom={filterDateFrom}
+                onFilterDateFromChange={setFilterDateFrom}
+                filterDateTo={filterDateTo}
+                onFilterDateToChange={setFilterDateTo}
+                filterExec={filterExec}
+                onFilterExecChange={setFilterExec}
+                filterIncomplete={filterIncomplete}
+                onFilterIncompleteChange={setFilterIncomplete}
+                filterVTwoOwner={filterVTwoOwner}
+                onFilterVTwoOwnerChange={setFilterVTwoOwner}
               />
             </ErrorBoundary>
           ) : (

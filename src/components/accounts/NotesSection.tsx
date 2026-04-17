@@ -70,15 +70,17 @@ interface Props {
   accountId: string
   data: AppState
   setData: React.Dispatch<React.SetStateAction<AppState>>
+  filterDateFrom: string
+  onFilterDateFromChange: (v: string) => void
+  filterDateTo: string
+  onFilterDateToChange: (v: string) => void
 }
 
-export default function NotesSection({ accountId, data, setData }: Props) {
+export default function NotesSection({ accountId, data, setData, filterDateFrom, onFilterDateFromChange, filterDateTo, onFilterDateToChange }: Props) {
   const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
   const teamNames = getTeamNames(bg)
   const [search, setSearch] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Note>()
   const reportSync = useSyncReport()
@@ -86,8 +88,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
   const notes = data.notes
     .filter(n => n.account_id === accountId)
     .filter(n => {
-      if (dateFrom && n.date < dateFrom) return false
-      if (dateTo && n.date > dateTo) return false
+      if (filterDateFrom && n.date < filterDateFrom) return false
+      if (filterDateTo && n.date > filterDateTo) return false
       if (!search) return true
       const q = search.toLowerCase()
       return (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
@@ -168,8 +170,8 @@ export default function NotesSection({ accountId, data, setData }: Props) {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            <input type="date" className="filter-date" id="filter-date-from" aria-label="Notes from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-            <input type="date" className="filter-date" id="filter-date-to" aria-label="Notes to date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <input type="date" className="filter-date" id="filter-date-from" aria-label="Notes from date" value={filterDateFrom} onChange={e => onFilterDateFromChange(e.target.value)} />
+            <input type="date" className="filter-date" id="filter-date-to" aria-label="Notes to date" value={filterDateTo} onChange={e => onFilterDateToChange(e.target.value)} />
             <Picker
               value={NOTES_SORT_OPTS.find(([v]) => v === sortDir)?.[1] ?? NOTES_SORT_OPTS[0][1]}
               options={NOTES_SORT_OPTS.map(([, l]) => l)}
