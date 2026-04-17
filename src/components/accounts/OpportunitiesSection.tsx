@@ -22,7 +22,6 @@ const statusBadgeClass = (s: string) => {
   return 'app-badge app-badge--clickable app-badge-' + (map[s] || 'identified')
 }
 
-const PH_NOTES = 'Add notes…'
 const OPP_SORT_OPTS: [string, string][] = [['created_date', 'Newest first'], ['status', 'By status']]
 
 interface Props {
@@ -171,6 +170,11 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
   const descTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const yearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [notesOpen, setNotesOpen] = useState(false)
+
+  useEffect(() => {
+    if (notesOpen && notesRef.current) notesRef.current.focus()
+  }, [notesOpen])
 
   return (
     <div className="project-card" title={'Last updated: ' + (opp.last_updated || '')}>
@@ -241,31 +245,33 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
       </div>
 
       {/* Notes */}
-      <div className="card-section-label">NOTES</div>
-      <div
-        ref={notesRef}
-        className="card-body-text"
-        contentEditable
-        suppressContentEditableWarning
-        role="textbox"
-        aria-label="Notes"
-        style={!opp.notes ? { fontStyle: 'italic' } : undefined}
-        onFocus={() => { if (!opp.notes && notesRef.current && notesRef.current.textContent === PH_NOTES) { notesRef.current.textContent = ''; notesRef.current.style.fontStyle = '' } }}
-        onBlur={() => {
-          const v = notesRef.current?.textContent?.trim() || ''
-          if (!v || v === PH_NOTES) {
-            if (notesRef.current) { notesRef.current.textContent = PH_NOTES; notesRef.current.style.fontStyle = 'italic' }
-          } else {
-            if (notesRef.current) notesRef.current.style.fontStyle = ''
-          }
-          if (notesTimer.current) clearTimeout(notesTimer.current)
-          notesTimer.current = setTimeout(() => {
-            if (!v || v === PH_NOTES) { if (opp.notes) onSave({ ...opp, notes: '', last_updated: today() }) }
-            else if (v !== opp.notes) onSave({ ...opp, notes: v, last_updated: today() })
-          }, 500)
-        }}
-      >
-        {opp.notes || PH_NOTES}
+      <div style={{ position: 'relative' }}>
+        <div
+          className="card-section-label"
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setNotesOpen(true)}
+        >NOTES{opp.notes ? ' \u2022' : ''}</div>
+        {notesOpen && (
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+            <div
+              ref={notesRef}
+              className="card-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="Notes"
+              onBlur={() => {
+                const v = notesRef.current?.textContent?.trim() || ''
+                if (notesTimer.current) clearTimeout(notesTimer.current)
+                notesTimer.current = setTimeout(() => {
+                  if (!v) { if (opp.notes) onSave({ ...opp, notes: '', last_updated: today() }) }
+                  else if (v !== opp.notes) onSave({ ...opp, notes: v, last_updated: today() })
+                }, 500)
+                setNotesOpen(false)
+              }}
+            >{opp.notes || ''}</div>
+          </div>
+        )}
       </div>
 
       <button className="card-action-link" onClick={() => onPromote(opp)}>→ Promote to Project</button>

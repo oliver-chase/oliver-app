@@ -267,6 +267,7 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showExpand, setShowExpand] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [rtoError, setRtoError] = useState(false)
   useEffect(() => {
     if (!rtoError) return
@@ -295,6 +296,10 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
     if (expanded) { setShowExpand(true); return }
     setShowExpand(bodyRef.current.scrollHeight > bodyRef.current.clientHeight + 2)
   }, [expanded, person])
+
+  useEffect(() => {
+    if (notesOpen && notesRef.current) notesRef.current.focus()
+  }, [notesOpen])
 
   return (
     <div className="person-card">
@@ -403,23 +408,6 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           />
         </div>
 
-        <div className="card-section-label">Notes</div>
-        <div className="card-notes-wrap">
-          <div
-            ref={notesRef}
-            className="card-body-text"
-            contentEditable
-            suppressContentEditableWarning
-            role="textbox"
-            aria-label="Notes"
-            onFocus={() => { if (!expanded) setExpanded(true) }}
-            onBlur={() => {
-              const v = notesRef.current?.textContent?.trim() || ''
-              if (v !== person.notes) debouncedSave(() => onSave({ ...person, notes: v, last_updated: today() }))
-            }}
-          >{person.notes}</div>
-          <button type="button" className="card-notes-close" aria-label="Collapse notes" onClick={() => setExpanded(false)}>×</button>
-        </div>
       </div>
 
       {showExpand && (
@@ -429,6 +417,31 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           onClick={() => setExpanded(e => !e)}
         >{expanded ? '\u25b4' : '\u25be'}</button>
       )}
+
+      <div style={{ position: 'relative', borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 4 }}>
+        <div
+          className="card-section-label"
+          style={{ cursor: 'pointer', marginTop: 0, userSelect: 'none' }}
+          onClick={() => setNotesOpen(true)}
+        >Notes{person.notes ? ' \u2022' : ''}</div>
+        {notesOpen && (
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+            <div
+              ref={notesRef}
+              className="card-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="Notes"
+              onBlur={() => {
+                const v = notesRef.current?.textContent?.trim() || ''
+                debouncedSave(() => onSave({ ...person, notes: v, last_updated: today() }))
+                setNotesOpen(false)
+              }}
+            >{person.notes || ''}</div>
+          </div>
+        )}
+      </div>
 
       <button
         className="project-delete"

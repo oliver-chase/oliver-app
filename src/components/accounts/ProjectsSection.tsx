@@ -13,7 +13,6 @@ const statusBadgeClass = (s: string) => {
   return 'app-badge app-badge--clickable proj-status app-badge-' + (map[s] || 'active')
 }
 
-const PH_NOTES = 'Add notes…'
 const PROJ_SORT_OPTS: [string, string][] = [['created_date', 'Newest first'], ['project_name', 'Name A\u2013Z'], ['status', 'By status'], ['engagement_id', 'By engagement']]
 
 interface Props {
@@ -160,6 +159,11 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
   const yearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [status, setStatus] = useState(project.status)
+  const [notesOpen, setNotesOpen] = useState(false)
+
+  useEffect(() => {
+    if (notesOpen && notesRef.current) notesRef.current.focus()
+  }, [notesOpen])
 
   const cycleStatus = async () => {
     const next = PROJ_STATUS[(PROJ_STATUS.indexOf(status) + 1) % PROJ_STATUS.length]
@@ -245,31 +249,33 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
       </div>
 
       {/* Notes */}
-      <div className="card-section-label">NOTES</div>
-      <div
-        ref={notesRef}
-        className="card-body-text"
-        contentEditable
-        suppressContentEditableWarning
-        role="textbox"
-        aria-label="Notes"
-        style={!project.notes ? { fontStyle: 'italic' } : undefined}
-        onFocus={() => { if (!project.notes && notesRef.current && notesRef.current.textContent === PH_NOTES) { notesRef.current.textContent = ''; notesRef.current.style.fontStyle = '' } }}
-        onBlur={() => {
-          const v = notesRef.current?.textContent?.trim() || ''
-          if (!v || v === PH_NOTES) {
-            if (notesRef.current) { notesRef.current.textContent = PH_NOTES; notesRef.current.style.fontStyle = 'italic' }
-          } else {
-            if (notesRef.current) notesRef.current.style.fontStyle = ''
-          }
-          if (notesTimer.current) clearTimeout(notesTimer.current)
-          notesTimer.current = setTimeout(() => {
-            if (!v || v === PH_NOTES) { if (project.notes) onSave({ ...project, notes: '', last_updated: today() }) }
-            else if (v !== project.notes) onSave({ ...project, notes: v, last_updated: today() })
-          }, 500)
-        }}
-      >
-        {project.notes || PH_NOTES}
+      <div style={{ position: 'relative' }}>
+        <div
+          className="card-section-label"
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setNotesOpen(true)}
+        >NOTES{project.notes ? ' \u2022' : ''}</div>
+        {notesOpen && (
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+            <div
+              ref={notesRef}
+              className="card-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="Notes"
+              onBlur={() => {
+                const v = notesRef.current?.textContent?.trim() || ''
+                if (notesTimer.current) clearTimeout(notesTimer.current)
+                notesTimer.current = setTimeout(() => {
+                  if (!v) { if (project.notes) onSave({ ...project, notes: '', last_updated: today() }) }
+                  else if (v !== project.notes) onSave({ ...project, notes: v, last_updated: today() })
+                }, 500)
+                setNotesOpen(false)
+              }}
+            >{project.notes || ''}</div>
+          </div>
+        )}
       </div>
 
       <button className="card-action-link" onClick={e => { e.stopPropagation(); onMoveToOpp(project) }}>← Move back to Opportunities</button>

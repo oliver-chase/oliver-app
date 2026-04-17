@@ -161,14 +161,12 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           <PersonPill
             value={b.account_director || ''}
             teamNames={teamNames}
-            addLabel="+ Add director"
             onChange={async nm => await saveBg({ ...b, account_director: nm })}
           />
           <div className="app-card-label" style={{ marginTop: '10px' }}>Account Manager</div>
           <PersonPill
             value={b.account_manager || ''}
             teamNames={teamNames}
-            addLabel="+ Add manager"
             onChange={async nm => await saveBg({ ...b, account_manager: nm })}
           />
           <div className="app-card-label" style={{ marginTop: '10px' }}>Account Team (V.Two)</div>
@@ -346,7 +344,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
   )
 }
 
-function PersonPill({ value, teamNames, addLabel = '+ Add', onChange }: {
+function PersonPill({ value, teamNames, addLabel = 'Select person\u2026', onChange }: {
   value: string
   teamNames: string[]
   addLabel?: string
@@ -382,69 +380,40 @@ function PersonPill({ value, teamNames, addLabel = '+ Add', onChange }: {
   }
 
   return (
-    <div className="overview-chip-row">
-      {value && (
-        <span className="app-chip">
-          {value}
-          <button type="button" className="app-chip-remove" title="Remove" onClick={() => onChange('')}>×</button>
-        </span>
-      )}
-      {!value && (
-        <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-          <button type="button" className="btn-link" onClick={handleOpen}>{addLabel}</button>
-          {open && (
-            <div className="app-popover" style={{ minWidth: 180 }}>
-              <input ref={searchRef} className="app-popover-search" placeholder="Search…" value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
-              />
-              <div className="app-popover-list">
-                {filtered.map(n => (
-                  <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); onChange(n); setOpen(false); setQuery('') }}>{n}</div>
-                ))}
-                {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
-              </div>
-              {addingNew ? (
-                <input ref={newInputRef} className="app-popover-search" placeholder="Enter name…" value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') commitNew(); if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) } }}
-                  onBlur={() => { if (newName.trim()) commitNew() }}
-                />
-              ) : (
-                <div className="app-popover-add-new" onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}>
-                  + Add new person
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      {value && (
-        <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-          <button type="button" className="btn-link" onClick={handleOpen}>Change</button>
-          {open && (
-            <div className="app-popover" style={{ minWidth: 180 }}>
-              <input ref={searchRef} className="app-popover-search" placeholder="Search…" value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
-              />
-              <div className="app-popover-list">
-                {filtered.map(n => (
-                  <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); onChange(n); setOpen(false); setQuery('') }}>{n}</div>
-                ))}
-                {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
-              </div>
-              {addingNew ? (
-                <input ref={newInputRef} className="app-popover-search" placeholder="Enter name…" value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') commitNew(); if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) } }}
-                  onBlur={() => { if (newName.trim()) commitNew() }}
-                />
-              ) : (
-                <div className="app-popover-add-new" onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}>
-                  + Add new person
-                </div>
-              )}
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+      <button
+        type="button"
+        className={'overview-stat-val overview-picker-btn' + (!value ? ' faded' : '')}
+        aria-haspopup="listbox"
+        onClick={handleOpen}
+      >
+        {value || addLabel}
+      </button>
+      {open && (
+        <div className="app-popover" style={{ minWidth: 180 }}>
+          <input ref={searchRef} className="app-popover-search" placeholder="Search…" value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+          />
+          <div className="app-popover-list">
+            {filtered.map(n => (
+              <div key={n} className="app-popover-item" onMouseDown={e => { e.preventDefault(); onChange(n); setOpen(false); setQuery('') }}>{n}</div>
+            ))}
+            {filtered.length === 0 && !addingNew && <div className="app-popover-empty">No matches</div>}
+            <div
+              className="app-popover-item app-popover-item--unassigned"
+              onMouseDown={e => { e.preventDefault(); onChange(''); setOpen(false); setQuery('') }}
+            >None</div>
+          </div>
+          {addingNew ? (
+            <input ref={newInputRef} className="app-popover-search" placeholder="Enter name…" value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commitNew(); if (e.key === 'Escape') { setAddingNew(false); setNewName(''); setTimeout(() => searchRef.current?.focus(), 0) } }}
+              onBlur={() => { if (newName.trim()) commitNew() }}
+            />
+          ) : (
+            <div className="app-popover-add-new" onMouseDown={e => { e.preventDefault(); setAddingNew(true); setTimeout(() => newInputRef.current?.focus(), 0) }}>
+              + Add new person
             </div>
           )}
         </div>
