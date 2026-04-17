@@ -43,10 +43,14 @@ const ALL_MODULES: Module[] = [
 ]
 
 export default function HubPage() {
-  const { isAdmin, hasPermission } = useUser()
+  const { appUser, isAdmin, hasPermission } = useUser()
 
+  // TODO: remove bypass once app_users table is created in Supabase and permissions are configured.
+  // Run: scripts/setup-app-users.sql, then seed the current user as admin via /admin.
+  const permissionsReady = appUser !== null
   const visibleModules = ALL_MODULES.filter(m => {
     if (m.comingSoon) return isAdmin
+    if (!permissionsReady) return true
     return hasPermission(m.id as PagePermission)
   })
 
