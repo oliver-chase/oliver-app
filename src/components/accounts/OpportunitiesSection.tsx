@@ -252,7 +252,7 @@ function OppCard({ opp, owners, onSave, onDelete, onPromote }: {
           onClick={() => setNotesOpen(true)}
         >NOTES{opp.notes ? ' \u2022' : ''}</div>
         {notesOpen && (
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+          <div className="card-notes-popup">
             <div
               ref={notesRef}
               className="card-body-text"
