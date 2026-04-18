@@ -168,7 +168,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                     <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { onFilterIncompleteChange(e.target.checked); setPage(0) }} /> Incomplete</label>
                   </div>
                   {owners.length > 0 && (
-                    <div className="filter-radio-group" style={{ marginTop: 10 }}>
+                    <div className="filter-radio-group" style={{ marginTop: 'var(--spacing-10)' }}>
                       <div className="filter-radio-divider">V.Two Owner</div>
                       <label><input type="radio" name="vtwo-owner" value="" checked={filterVTwoOwner === ''} onChange={() => { onFilterVTwoOwnerChange(''); setPage(0) }} /> All</label>
                       {owners.map(name => (
@@ -245,10 +245,10 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
 
 function PaginationRow({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
+    <div className="pagination-row">
       <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(0)}>{'\u27e8'}</button>
       <button className="btn btn--compact" disabled={page === 0} onClick={() => onChange(page - 1)}>{'\u2190'}</button>
-      <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', margin: '0 8px' }}>Page {page + 1} of {total}</span>
+      <span className="pagination-label">Page {page + 1} of {total}</span>
       <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(page + 1)}>{'\u2192'}</button>
       <button className="btn btn--compact" disabled={page === total - 1} onClick={() => onChange(total - 1)}>{'\u27e9'}</button>
     </div>
@@ -376,7 +376,7 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           ))}
         </div>
 
-        <div className="card-meta-row" style={{ marginTop: 14 }}>
+        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
           <span className="card-meta-label">Reports To:</span>
           <Picker
             value={otherPeople.find(p => p.stakeholder_id === person.reports_to)?.name || ''}
@@ -394,12 +394,12 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           />
         </div>
         {rtoError && (
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 4, paddingLeft: 8 }}>
+          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 'var(--spacing-xs)', paddingLeft: 'var(--spacing-sm)' }}>
             Cannot create circular reporting relationship
           </div>
         )}
 
-        <div className="card-meta-row" style={{ marginTop: 14 }}>
+        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
           <EngPicker
             ids={curEngIds}
             items={engItems}
@@ -418,14 +418,14 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
         >{expanded ? '\u25b4' : '\u25be'}</button>
       )}
 
-      <div style={{ position: 'relative', borderTop: '1px solid var(--border)', marginTop: 8, paddingTop: 4 }}>
+      <div style={{ position: 'relative', borderTop: '1px solid var(--border)', marginTop: 'var(--spacing-sm)', paddingTop: 'var(--spacing-xs)' }}>
         <div
           className="card-section-label"
           style={{ cursor: 'pointer', marginTop: 0, userSelect: 'none' }}
           onClick={() => setNotesOpen(true)}
         >Notes{person.notes ? ' \u2022' : ''}</div>
         {notesOpen && (
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+          <div className="card-notes-popup">
             <div
               ref={notesRef}
               className="card-body-text"

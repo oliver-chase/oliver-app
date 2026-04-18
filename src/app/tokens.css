@@ -110,15 +110,23 @@
 
   /* xs (13px) is the minimum permitted size — labels and metadata only.
      WCAG small-text threshold: 14px normal / 18.66px bold. */
+  --font-size-3xs:     9px;
+  --font-size-2xs:     11px;
   --font-size-xs:      13px;
   --font-size-sm:      14px;
+  --font-size-md:      16px;
   --font-size-base:    15px;
   --font-size-lg:      17px;
   --font-size-xl:      20px;
   --font-size-2xl:     24px;
   --font-size-display: 26px;
+  --font-size-hero:    48px;
+  --font-size-hero-sm: 36px;
 
-  --letter-spacing-caps:  0.08em;
+  --letter-spacing-caps:   0.08em;
+  --letter-spacing-mid:    0.1em;
+  --letter-spacing-wide:   0.12em;
+  --letter-spacing-xwide:  0.28em;
 
   --font-weight-normal:   400;
   --font-weight-medium:   500;
@@ -140,9 +148,11 @@
   --spacing-12:  12px;
   --spacing-14:  14px;
   --spacing-md:  16px;
+  --spacing-20:  20px;
   --spacing-lg:  24px;
   --spacing-xl:  32px;
   --spacing-2xl: 48px;
+  --spacing-56:  56px;
 
   /* ── Radius ──────────────────────────────────────────────────────────── */
   --radius-sm:   4px;
@@ -167,9 +177,11 @@
   --z-toast:   300;
 
   /* ── Motion ──────────────────────────────────────────────────────────── */
-  --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 300ms ease;
+  --transition-quick: 180ms ease;
+  --transition-fast:  150ms ease;
+  --transition-base:  250ms ease;
+  --transition-slow:  300ms ease;
+  --transform-lift:   translateY(-1px);
 
   /* ── Layout ──────────────────────────────────────────────────────────── */
   --sidebar-w:   220px;
@@ -194,6 +206,17 @@
   --editable-radius:             var(--radius-sm);
   --inline-form-padding:         14px 16px;
   --notes-clamp-height:          36px; /* ~2 lines at 14px/1.4 */
+  --hub-card-max-w:              420px;
+  --hub-top-offset:              22vh;
+  --hub-top-offset-sm:           16vh;
+  --z-dropdown:                  20;
+  --notes-popup-min-h:           60px;
+  --badge-min-height:            18px;
+  --cadence-row-min-h:           28px;
+  --day-btn-size:                32px;
+  --rev-legend-size:             10px;
+  --interval-input-w:            50px;
+  --rev-input-w:                 110px;
 
   /* ── LEGACY ALIASES — do not use in new components ───────────────────── */
   --font:         var(--font-family-base);

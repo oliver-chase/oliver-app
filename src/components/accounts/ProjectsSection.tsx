@@ -243,7 +243,7 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           options={stkOptions}
           placeholder="Select people"
           triggerClass="picker-btn"
-          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: '2px 4px', minHeight: 18, color: 'var(--gray)', borderRadius: 3, cursor: 'pointer', textAlign: 'left', fontStyle: toArray(project.client_stakeholder_ids).length ? undefined : 'italic' }}
+          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: 'var(--spacing-2xs) var(--spacing-xs)', minHeight: 'var(--badge-min-height)', color: 'var(--gray)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left', fontStyle: toArray(project.client_stakeholder_ids).length ? undefined : 'italic' }}
           onChange={names => onSave({ ...project, client_stakeholder_ids: names.map(stkNameToId), last_updated: today() })}
         />
       </div>
@@ -256,7 +256,7 @@ function ProjCard({ project, clientStakeholders, onSave, onDelete, onMoveToOpp }
           onClick={() => setNotesOpen(true)}
         >NOTES{project.notes ? ' \u2022' : ''}</div>
         {notesOpen && (
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 12px rgba(0,0,0,.1)', padding: 8, minHeight: 60 }}>
+          <div className="card-notes-popup">
             <div
               ref={notesRef}
               className="card-body-text"
@@ -379,7 +379,7 @@ function InlineProjCard({ accountId, clientStakeholders, onSaved, onDiscard }: {
           options={clientStakeholders.map(s => s.name)}
           placeholder="Select people"
           triggerClass="picker-btn"
-          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: '2px 4px', color: 'var(--gray)', borderRadius: 3, cursor: 'pointer', fontStyle: 'italic' }}
+          triggerStyle={{ border: 'none', background: 'transparent', fontSize: 'var(--font-size-xs)', padding: 'var(--spacing-2xs) var(--spacing-xs)', color: 'var(--gray)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontStyle: 'italic' }}
           onChange={names => { rec.current.client_stakeholder_ids = names.map(n => clientStakeholders.find(s => s.name === n)?.stakeholder_id || n) }}
         />
       </div>

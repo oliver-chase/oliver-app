@@ -10,20 +10,20 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-height: 100vh;
-  padding: 32px;
-  padding-top: 22vh;
+  padding: var(--spacing-xl);
+  padding-top: var(--hub-top-offset);
   background: var(--color-nav-bg);
   color: var(--color-nav-text);
 }
 
 .brand {
   text-align: center;
-  margin-bottom: 56px;
+  margin-bottom: var(--spacing-56);
 }
 
 .wordmark {
   font-family: var(--font-family-base);
-  font-size: 48px;
+  font-size: var(--font-size-hero);
   font-weight: 700;
   color: var(--color-nav-text);
   letter-spacing: -0.02em;
@@ -32,19 +32,19 @@ body {
 
 .subtitle {
   font-family: var(--font-family-mono);
-  font-size: 11px;
-  letter-spacing: 0.28em;
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-xwide);
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
-  margin-top: 12px;
+  margin-top: var(--spacing-12);
 }
 
 .cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-12);
   width: 100%;
-  max-width: 420px;
+  max-width: var(--hub-card-max-w);
 }
 
 .card {
@@ -52,55 +52,55 @@ body {
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
+  padding: var(--spacing-20) var(--spacing-lg);
   text-decoration: none;
   color: var(--color-nav-text);
-  transition: all 0.18s;
+  transition: var(--transition-quick);
   cursor: pointer;
 }
 
 .card:hover {
   background: var(--color-brand-purple-light);
   border-color: var(--color-overlay-border);
-  transform: translateY(-1px);
+  transform: var(--transform-lift);
 }
 
 .cardName {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: var(--spacing-xs);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .badge {
   font-family: var(--font-family-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: var(--font-size-3xs);
+  letter-spacing: var(--letter-spacing-mid);
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
   background: var(--color-overlay-subtle);
-  padding: 2px 8px;
+  padding: var(--spacing-2xs) var(--spacing-sm);
   border-radius: var(--radius-full);
 }
 
 .cardDesc {
-  font-size: 13px;
+  font-size: var(--font-size-xs);
   color: var(--color-nav-text-muted);
   line-height: 1.5;
 }
 
 .footer {
   position: fixed;
-  bottom: 24px;
+  bottom: var(--spacing-lg);
   left: 0;
   right: 0;
   text-align: center;
   font-family: var(--font-family-mono);
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   color: var(--color-nav-text-faint);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .disabled {
@@ -111,19 +111,19 @@ body {
 
 .adminBtn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
   border-radius: var(--radius-md);
   color: var(--color-nav-text-faint);
   font-family: var(--font-family-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-mid);
   text-transform: uppercase;
   text-decoration: none;
-  padding: 8px 16px;
-  transition: all 0.18s;
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: var(--transition-quick);
 }
 
 .adminBtn:hover {
@@ -132,24 +132,24 @@ body {
 }
 
 .empty {
-  font-size: 13px;
+  font-size: var(--font-size-xs);
   color: var(--color-nav-text-muted);
   text-align: center;
-  padding: 32px 0;
+  padding: var(--spacing-xl) 0;
 }
 
 @media (max-width: 600px) {
   .hub {
-    padding: 24px 20px;
-    padding-top: 16vh;
+    padding: var(--spacing-lg) var(--spacing-20);
+    padding-top: var(--hub-top-offset-sm);
   }
   .wordmark {
-    font-size: 36px;
+    font-size: var(--font-size-hero-sm);
   }
   .cards {
     max-width: 100%;
   }
   .card {
-    padding: 16px 20px;
+    padding: var(--spacing-md) var(--spacing-20);
   }
 }

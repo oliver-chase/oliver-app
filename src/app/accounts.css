@@ -349,3 +349,10 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .new-card{border:1.5px dashed var(--pink)!important}
 /* Inline new action row — pink dashed outline */
 .new-row{outline:1.5px dashed var(--pink);outline-offset:-1px}
+/* Card notes popup (PersonCard, ProjectCard) */
+.card-notes-popup{position:absolute;left:0;right:0;top:100%;z-index:var(--z-dropdown);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-popover);padding:var(--spacing-sm);min-height:var(--notes-popup-min-h)}
+/* Pagination controls row */
+.pagination-row{display:flex;align-items:center;justify-content:center;gap:var(--spacing-6);margin-top:var(--spacing-md)}
+.pagination-label{font-size:var(--font-size-sm);color:var(--gray);margin:0 var(--spacing-sm)}
+/* Actions table cell — overrides default td padding */
+.action-cell{padding:var(--spacing-12) var(--spacing-14);vertical-align:middle}

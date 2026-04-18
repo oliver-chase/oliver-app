@@ -249,7 +249,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
 
   return (
     <tr className="new-row">
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle', lineHeight: 1.4 }}>
+      <td className="action-cell" style={{ lineHeight: 1.4 }}>
         <span
           ref={descRef}
           className="action-text field-required-highlight"
@@ -263,7 +263,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveIfReady() } if (e.key === 'Escape') onDiscard() }}
         />
       </td>
-      <td style={{ whiteSpace: 'nowrap', padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell" style={{ whiteSpace: 'nowrap' }}>
         <EngPickerBtn
           value={ownerVal}
           options={owners.map(n => ({ value: n, label: n }))}
@@ -272,7 +272,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
           addNew={async () => { const nm = await onAddPerson(); if (nm) { setOwnerVal(nm); rec.current.owner = nm } }}
         />
       </td>
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell">
         <EngPickerBtn
           value={engVal}
           options={engOptions}
@@ -281,7 +281,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
           onChange={v => { setEngVal(v); rec.current.engagement_id = v }}
         />
       </td>
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell">
         <Picker
           value={statusVal}
           options={[...STATUS_OPTIONS] as unknown as string[]}
@@ -294,7 +294,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
       <td style={{ width: 40, textAlign: 'center', padding: 'var(--spacing-xs)', verticalAlign: 'middle' }}>
         <button
           className="project-delete"
-          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static', width: 20, height: 20 }}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static' }}
           onClick={onDiscard}
         >×</button>
       </td>
@@ -318,7 +318,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
 
   return (
     <tr className={action.status === 'Done' ? 'done-row' : ''} style={rowStyle}>
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle', lineHeight: 1.4 }}>
+      <td className="action-cell" style={{ lineHeight: 1.4 }}>
         <span
           ref={descRef}
           className="action-text"
@@ -341,7 +341,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
           </span>
         )}
       </td>
-      <td style={{ whiteSpace: 'nowrap', padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell" style={{ whiteSpace: 'nowrap' }}>
         <EngPickerBtn
           value={action.owner}
           options={owners.map(n => ({ value: n, label: n }))}
@@ -350,7 +350,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
           addNew={async () => { const nm = await onAddPerson(); if (nm) onSave({ ...action, owner: nm, last_updated: today() }) }}
         />
       </td>
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell">
         <EngPickerBtn
           value={action.engagement_id}
           options={engOptions}
@@ -359,7 +359,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
           onChange={v => onSave({ ...action, engagement_id: v, last_updated: today() })}
         />
       </td>
-      <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+      <td className="action-cell">
         <Picker
           value={action.status}
           options={[...STATUS_OPTIONS] as unknown as string[]}
@@ -372,7 +372,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
       <td style={{ width: 40, textAlign: 'center', padding: 'var(--spacing-xs)', verticalAlign: 'middle' }}>
         <button
           className="project-delete"
-          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static', width: 20, height: 20 }}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', position: 'static' }}
           onClick={() => onDelete(action)}
         >×</button>
       </td>

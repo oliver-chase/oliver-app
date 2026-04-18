@@ -155,7 +155,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
   return (
     <div>
       {modal}
-      <div className="overview-row" style={{ marginBottom: '12px' }}>
+      <div className="overview-row" style={{ marginBottom: 'var(--spacing-12)' }}>
         <div className="app-card overview-card-col">
           <div className="app-card-label">Account Director</div>
           <PersonPill
@@ -163,13 +163,13 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             teamNames={teamNames}
             onChange={async nm => await saveBg({ ...b, account_director: nm })}
           />
-          <div className="app-card-label" style={{ marginTop: '10px' }}>Account Manager</div>
+          <div className="app-card-label" style={{ marginTop: 'var(--spacing-10)' }}>Account Manager</div>
           <PersonPill
             value={b.account_manager || ''}
             teamNames={teamNames}
             onChange={async nm => await saveBg({ ...b, account_manager: nm })}
           />
-          <div className="app-card-label" style={{ marginTop: '10px' }}>Account Team (V.Two)</div>
+          <div className="app-card-label" style={{ marginTop: 'var(--spacing-10)' }}>Account Team (V.Two)</div>
           <TeamPills
             members={teamMembers}
             teamNames={teamNames}
@@ -188,7 +188,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
         <div className="app-card overview-card-col overview-meeting-card">
           <div className="overview-stat-label">MEETING CADENCE</div>
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', minHeight: '28px', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', minHeight: 'var(--cadence-row-min-h)', cursor: 'pointer' }}
             onClick={() => setCadenceOpen(o => !o)}
           >
             <span style={{
@@ -200,7 +200,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             </span>
           </div>
           {cadenceOpen && (
-            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--border)', marginTop: '6px' }}>
+            <div style={{ paddingTop: 'var(--spacing-sm)', borderTop: '1px solid var(--border)', marginTop: 'var(--spacing-6)' }}>
               <Picker
                 value={getFreqLabel(b.meeting_frequency || '')}
                 options={FREQ_OPTS.map(([, label]) => label)}
@@ -213,7 +213,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 }}
               />
               {b.meeting_frequency && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-6)', marginTop: 'var(--spacing-6)' }}>
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text)', fontFamily: 'var(--font)' }}>Every</span>
                   <IntervalInput value={b.meeting_interval || '1'} onChange={v => saveBg({ ...b, meeting_interval: v })} />
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text)', fontFamily: 'var(--font)' }}>
@@ -222,13 +222,13 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 </div>
               )}
               {(b.meeting_frequency === 'weekly' || b.meeting_frequency === 'biweekly') && (
-                <div className="overview-chip-row" style={{ marginTop: '6px' }}>
-                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', fontFamily: 'var(--font)', marginRight: '2px' }}>On</span>
+                <div className="overview-chip-row" style={{ marginTop: 'var(--spacing-6)' }}>
+                  <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', fontFamily: 'var(--font)', marginRight: 'var(--spacing-2xs)' }}>On</span>
                   {DAY_LABELS.map(([val, label]) => (
                     <button key={val} type="button" title={val}
                       style={{
                         fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', fontWeight: 600,
-                        width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', border: 'none',
+                        width: 'var(--day-btn-size)', height: 'var(--day-btn-size)', borderRadius: '50%', cursor: 'pointer', border: 'none',
                         background: b.meeting_day === val ? 'var(--purple)' : 'var(--surface2)',
                         color: b.meeting_day === val ? 'var(--white)' : 'var(--gray)',
                       }}
@@ -277,14 +277,14 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
           ) : (
             <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', fontStyle: 'italic' }}>Not scheduled</div>
           )}
-          <div style={{ marginTop: '4px' }}>
+          <div style={{ marginTop: 'var(--spacing-xs)' }}>
             {!showDateInput ? (
               <button type="button" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--pink)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontFamily: 'var(--font)' }} onClick={() => setShowDateInput(true)}>
                 Set date →
               </button>
             ) : (
               <input type="date"
-                style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '3px 6px', marginTop: '4px', background: 'var(--surface)', color: 'var(--text)', outline: 'none' }}
+                style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--spacing-3) var(--spacing-6)', marginTop: 'var(--spacing-xs)', background: 'var(--surface)', color: 'var(--text)', outline: 'none' }}
                 autoFocus
                 onChange={e => { if (e.currentTarget.value) { saveBg({ ...b, next_meeting_override: e.currentTarget.value }); setShowDateInput(false) } }}
                 onBlur={() => setShowDateInput(false)}
@@ -313,15 +313,15 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
         </div>
       </div>
 
-      <div className="overview-row" style={{ marginTop: '12px' }}>
+      <div className="overview-row" style={{ marginTop: 'var(--spacing-12)' }}>
         <div className="overview-chart-card">
-          <div className="app-card-label" style={{ marginBottom: '4px' }}>Revenue History</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
+          <div className="app-card-label" style={{ marginBottom: 'var(--spacing-xs)' }}>Revenue History</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-sm)' }}>
             <RevLegend color="var(--color-chart-bar)" label="Projected" />
             <RevLegend color="var(--purple)" label="Closed" />
           </div>
           <div ref={chartRef} style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0 }} />
-          <button type="button" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--pink)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontFamily: 'var(--font)', marginTop: '8px', textAlign: 'left' }} onClick={() => setShowHistForm(v => !v)}>
+          <button type="button" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--pink)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontFamily: 'var(--font)', marginTop: 'var(--spacing-sm)', textAlign: 'left' }} onClick={() => setShowHistForm(v => !v)}>
             + Add historical year
           </button>
           {showHistForm && (
@@ -542,7 +542,7 @@ function IntervalInput({ value, onChange }: { value: string; onChange: (v: strin
   const ref = useRef<HTMLInputElement>(null)
   return (
     <input ref={ref} type="number" min={1} defaultValue={value || '1'}
-      style={{ width: '50px', fontFamily: 'var(--font)', fontSize: 'var(--font-size-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '4px 6px', color: 'var(--text)', background: 'var(--surface)', outline: 'none' }}
+      style={{ width: 'var(--interval-input-w)', fontFamily: 'var(--font)', fontSize: 'var(--font-size-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--spacing-xs) var(--spacing-6)', color: 'var(--text)', background: 'var(--surface)', outline: 'none' }}
       onBlur={() => { const v = String(parseInt(ref.current?.value || '1') || 1); if (ref.current) ref.current.value = v; onChange(v) }}
     />
   )
@@ -550,8 +550,8 @@ function IntervalInput({ value, onChange }: { value: string; onChange: (v: strin
 
 function RevLegend({ color, label }: { color: string; label: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--gray)' }}>
-      <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', background: color }} />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--spacing-xs)', fontSize: 'var(--font-size-xs)', color: 'var(--gray)' }}>
+      <span style={{ display: 'inline-block', width: 'var(--rev-legend-size)', height: 'var(--rev-legend-size)', borderRadius: 'var(--spacing-2xs)', background: color }} />
       {label}
     </span>
   )
@@ -583,18 +583,18 @@ function HistoricalYearForm({ bg, onSave, onCancel }: {
   const existing = bg.revenue[year] || {}
   const yearOptions = Array.from({ length: curYear - 2017 }, (_, i) => String(curYear - 1 - i))
   return (
-    <div style={{ marginTop: '6px', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface2)' }}>
-      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={{ marginTop: 'var(--spacing-6)', padding: 'var(--spacing-sm) var(--spacing-10)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface2)' }}>
+      <div style={{ display: 'flex', gap: 'var(--spacing-6)', alignItems: 'center', flexWrap: 'wrap' }}>
         <Picker
           value={String(year)}
           options={yearOptions}
           showUnassigned={false}
           onChange={v => setYear(Number(v))}
         />
-        <input ref={projRef} type="text" defaultValue={existing.projected || ''} placeholder="Projected (e.g. $450K)" style={{ width: '110px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '4px 6px', background: 'var(--surface)' }} />
-        <input ref={closedRef} type="text" defaultValue={existing.closed || ''} placeholder="Closed (e.g. $380K)" style={{ width: '110px', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '4px 6px', background: 'var(--surface)' }} />
-        <button type="button" className="btn-primary btn--compact" style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px' }} onClick={() => onSave(year, projRef.current?.value.trim() || '', closedRef.current?.value.trim() || '')}>Save</button>
-        <button type="button" className="btn-ghost btn--compact" style={{ fontSize: 'var(--font-size-xs)', padding: '4px 8px' }} onClick={onCancel}>Cancel</button>
+        <input ref={projRef} type="text" defaultValue={existing.projected || ''} placeholder="Projected (e.g. $450K)" style={{ width: 'var(--rev-input-w)', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--spacing-xs) var(--spacing-6)', background: 'var(--surface)' }} />
+        <input ref={closedRef} type="text" defaultValue={existing.closed || ''} placeholder="Closed (e.g. $380K)" style={{ width: 'var(--rev-input-w)', fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--spacing-xs) var(--spacing-6)', background: 'var(--surface)' }} />
+        <button type="button" className="btn-primary btn--compact" style={{ fontSize: 'var(--font-size-xs)', padding: 'var(--spacing-xs) var(--spacing-sm)' }} onClick={() => onSave(year, projRef.current?.value.trim() || '', closedRef.current?.value.trim() || '')}>Save</button>
+        <button type="button" className="btn-ghost btn--compact" style={{ fontSize: 'var(--font-size-xs)', padding: 'var(--spacing-xs) var(--spacing-sm)' }} onClick={onCancel}>Cancel</button>
       </div>
     </div>
   )

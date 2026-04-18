@@ -231,10 +231,10 @@ export default function NotesSection({ accountId, data, setData, filterDateFrom,
           />
         ))}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
+          <div className="pagination-row">
             <button className="btn btn--compact" disabled={safePage === 0} onClick={() => setPage(0)}>{'\u27e8'}</button>
             <button className="btn btn--compact" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>{'\u2190'}</button>
-            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', margin: '0 8px' }}>Page {safePage + 1} of {totalPages}</span>
+            <span className="pagination-label">Page {safePage + 1} of {totalPages}</span>
             <button className="btn btn--compact" disabled={safePage === totalPages - 1} onClick={() => setPage(safePage + 1)}>{'\u2192'}</button>
             <button className="btn btn--compact" disabled={safePage === totalPages - 1} onClick={() => setPage(totalPages - 1)}>{'\u27e9'}</button>
           </div>
