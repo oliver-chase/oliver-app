@@ -48,6 +48,13 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
 - `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
 
+**Fixed (Apr 18) — commits #7/#8:**
+- `accounts.css`: `.section-actions gap:6px` already using `var(--spacing-6)` — clean
+- `PeopleSection.tsx`: `+ Add person` button correctly changed `btn-ghost btn--compact` → `btn-link` (matches other add buttons)
+- `ChatbotPanel.tsx` (`UploadConfirmCard`): `marginTop: 8` → `var(--spacing-sm)`
+- `chatbot.css`: `width/height: 48px` → `var(--chatbot-trigger-size)`; `width/height: 6px` (typing dots) → `var(--chatbot-typing-dot-size)`; hover shadow `rgba(83,41,118,.4)` (old purple) → `var(--color-purple-overlay)`; `line-height: 1.4` on input → `var(--line-height-compact)`; `font-size: 11px` upload hint → `var(--font-size-2xs)`
+- Intentional no-token values in chatbot.css: `font-size: 12px` (trigger, no token between 11/13px), `font-size: 10px` (model tag, below 11px), trigger box-shadow pink `rgba(230,0,117,.35)` (custom pink shadow, no shadow token), various layout heights (84px, 480px, 72px bottom nav clearance)
+
 **Fixed (Apr 18) — user design feedback:**
 - `tokens.css`: `--color-brand-purple` updated `#562aa7` → `#171433`
 - `design-system/page.tsx`: display value updated to match
