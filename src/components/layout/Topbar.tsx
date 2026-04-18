@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useRef } from 'react';
 import SyncDot from '@/components/shared/SyncDot';
 
 type SyncStatus = 'syncing' | 'ok' | 'err';
@@ -23,8 +23,7 @@ interface TopbarProps {
   engagementName?: string;
   onHamburgerClick?: () => void;
   activeSection?: string;
-  // NOTE: source makes accountName contentEditable with blur-save.
-  // Add onAccountNameChange?: (name: string) => void when implementing editable account name.
+  onAccountNameChange?: (name: string) => void;
 }
 
 export default function Topbar({
@@ -36,8 +35,11 @@ export default function Topbar({
   engagementName,
   onHamburgerClick,
   activeSection,
+  onAccountNameChange,
 }: TopbarProps) {
+  const titleRef = useRef<HTMLDivElement>(null);
   const showDetail = currentAccountId !== null;
+  const editable = showDetail && !!onAccountNameChange;
   const title = showDetail ? (accountName ?? 'Account') : 'All Accounts';
 
   return (
@@ -54,7 +56,24 @@ export default function Topbar({
         &#9776;
       </button>
 
-      <div id="topbar-account" className="topbar-account">{title}</div>
+      <div
+        ref={titleRef}
+        id="topbar-account"
+        className="topbar-account"
+        contentEditable={editable || undefined}
+        suppressContentEditableWarning
+        title={editable ? 'Click to edit account name' : undefined}
+        onBlur={() => {
+          if (editable && titleRef.current && onAccountNameChange) {
+            const v = titleRef.current.textContent?.trim() || ''
+            if (v) onAccountNameChange(v)
+            else titleRef.current.textContent = title
+          }
+        }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); titleRef.current?.blur() } }}
+      >
+        {title}
+      </div>
 
       <span
         id="topbar-sep"

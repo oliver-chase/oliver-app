@@ -186,6 +186,7 @@
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   line-height: 1;
+  text-decoration: none;
 }
 .picker-btn {
   font-size: var(--font-size-xs);

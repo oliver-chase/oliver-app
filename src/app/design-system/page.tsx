@@ -34,7 +34,7 @@ const COLOR_GROUPS = [
     group: 'Brand',
     tokens: [
       { name: '--color-white',            value: '#FEFFFF' },
-      { name: '--color-brand-purple',     value: '#562aa7' },
+      { name: '--color-brand-purple',     value: '#171433' },
       { name: '--color-brand-pink',       value: '#dc0170' },
       { name: '--color-brand-pink-light', value: '#fce4f0' },
     ],

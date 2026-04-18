@@ -168,6 +168,7 @@ export default function AccountsApp() {
           syncText={syncText}
           onExportClick={() => setExportOpen(true)}
           onHamburgerClick={() => setSidebarOpen(s => !s)}
+          onAccountNameChange={currentAccount ? (name => handleUpdateAccount({ ...currentAccount, account_name: name })) : undefined}
         />
 
         <Filterbar
