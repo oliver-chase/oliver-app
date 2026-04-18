@@ -279,7 +279,6 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
   const deptRef = useRef<HTMLSpanElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
-  const avatarRef = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isClient = (person.organization || '').toLowerCase() !== 'v.two'
 
@@ -304,7 +303,6 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
   return (
     <div className="person-card">
       <div className="person-card-top">
-        <div ref={avatarRef} className={'avatar ' + (isClient ? 'client' : 'vtwo')}>{initials(person.name)}</div>
         <div className="person-card-info">
           <div
             ref={nameRef}
@@ -317,7 +315,6 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
               const v = nameRef.current?.textContent?.trim() || ''
               if (!v) { if (nameRef.current) nameRef.current.textContent = person.name; return }
               if (v !== person.name) {
-                if (avatarRef.current) avatarRef.current.textContent = initials(v)
                 debouncedSave(() => onSave({ ...person, name: v, last_updated: today() }))
               }
             }}
@@ -541,7 +538,6 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
   const nameRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
   const deptRef = useRef<HTMLSpanElement>(null)
-  const avatarRef = useRef<HTMLDivElement>(null)
   const saved = useRef(false)
 
   useEffect(() => { nameRef.current?.focus() }, [])
@@ -576,7 +572,6 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
       <button className="project-delete" title="Discard" onClick={onDiscard}>×</button>
 
       <div className="person-card-top">
-        <div ref={avatarRef} className="avatar client">?</div>
         <div className="person-card-info">
           <div
             ref={nameRef}
@@ -591,7 +586,6 @@ function InlinePersonCard({ accountId, owners, acctProjs, acctOpps, onSaved, onD
               const v = nameRef.current?.textContent?.trim() || ''
               rec.current.name = v
               if (nameRef.current) nameRef.current.classList.toggle('field-required-highlight', !v)
-              if (avatarRef.current) avatarRef.current.textContent = v ? initials(v) : '?'
             }}
             onBlur={() => {
               rec.current.name = nameRef.current?.textContent?.trim() || ''

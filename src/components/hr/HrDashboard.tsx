@@ -153,7 +153,6 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
             {upcomingStarts.length === 0 ? <EmptyRow msg="No upcoming start dates" /> : upcomingStarts.map(e => (
               <div key={e.id} className="dash-row" onClick={() => onNav('directory')}>
                 <div className="dash-row-left">
-                  <div className="dash-av dash-av--start">{initials(e.name)}</div>
                   <div>
                     <div className="dash-row-name">{e.name}</div>
                     <div className="dash-row-sub">{e.role}</div>
@@ -192,7 +191,6 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
           <div className="card">
             {upcomingIvs.length === 0 ? <EmptyRow msg="No upcoming interviews" /> : upcomingIvs.map(iv => (
               <div key={iv.candId + iv.date} className="dash-row" style={{ gap: 'var(--spacing-10)', padding: '9px 0' }} onClick={() => onNav('hiring')}>
-                <div className="dash-av dash-av--iv">{iv.ini}</div>
                 <div className="dash-row-mid">
                   <div className="dash-row-name dash-row-ellipsis">{iv.candName}</div>
                   <div className="dash-row-sub dash-row-ellipsis">with {iv.interviewer || 'TBD'} &middot; {iv.role}</div>
@@ -231,7 +229,6 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
               return (
                 <div key={e.id} className="dash-row" onClick={() => onNav('offboarding')}>
                   <div className="dash-row-left">
-                    <div className="dash-av dash-av--offboard">{initials(e.name)}</div>
                     <div>
                       <div className="dash-row-name">{e.name}</div>
                       <div className="dash-row-sub">{e.role}</div>

@@ -574,9 +574,6 @@ function OrgNodeCard({ stk, isUnmapped, draggedId, dropTargetId, kbDragId, onDra
       ) : null}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', padding: 'var(--spacing-10) var(--spacing-12) var(--spacing-6) var(--spacing-12)', minWidth: 0 }}>
-        <div className="avatar" style={{ width: 28, height: 28, fontSize: 'var(--font-size-xs)', flexShrink: 0, background: 'var(--purple)', color: 'var(--white)' }}>
-          {initials(stk.name)}
-        </div>
         <div className="org-node-name">{stk.name || ''}</div>
       </div>
       {titleParts && <div className="org-node-meta">{titleParts}</div>}
@@ -632,9 +629,6 @@ function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSa
       <div className="person-detail-content">
         <div className="person-card">
           <div className="person-card-top">
-            <div className={'avatar ' + ((stk.organization || '').toLowerCase() !== 'v.two' ? 'client' : 'vtwo')}>
-              {initials(stk.name)}
-            </div>
             <div className="person-card-info">
               <div
                 ref={nameRef}

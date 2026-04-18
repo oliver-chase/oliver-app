@@ -292,7 +292,6 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                       <tr key={c.id} className={'clickable' + (selectedId === c.id ? ' selected' : '')} onClick={() => setSelectedId(selectedId === c.id ? null : c.id)}>
                         <td>
                           <div className="person-cell">
-                            <div className="person-av" style={{ background: 'var(--accent-light)', color: 'var(--accent-text)' }}>{initials(c.name)}</div>
                             <div>
                               <div className="person-name">{c.name}</div>
                               {c.email && <div className="person-sub">{c.email}</div>}
@@ -326,7 +325,6 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
               <div className="detail-header">
                 <div className="detail-person-main">
                   <div className="detail-person-hdr">
-                    <div className="person-av person-av--lg" style={{ background: 'var(--accent-light)', color: 'var(--accent-text)' }}>{initials(selected.name)}</div>
                     <div>
                       <div className="detail-person-name">{selected.name}</div>
                       <div className="detail-person-role">{selected.role}{selected.seniority ? ' · ' + selected.seniority : ''}</div>
