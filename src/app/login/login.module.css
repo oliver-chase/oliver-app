@@ -17,8 +17,8 @@
 
 .wordmark {
   font-family: var(--font-family-base);
-  font-size: 48px;
-  font-weight: 700;
+  font-size: var(--font-size-hero);
+  font-weight: var(--font-weight-bold);
   color: var(--color-nav-text);
   letter-spacing: -0.02em;
   line-height: 1;
@@ -26,26 +26,26 @@
 
 .subtitle {
   font-family: var(--font-family-mono);
-  font-size: 11px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
-  margin-top: 12px;
-  margin-bottom: 48px;
+  margin-top: var(--spacing-12);
+  margin-bottom: var(--spacing-2xl);
 }
 
 .msBtn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-10);
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
   border-radius: var(--radius-md);
   color: var(--color-nav-text);
   font-family: var(--font-family-base);
   font-size: 14px;
-  font-weight: 500;
-  padding: 12px 24px;
+  font-weight: var(--font-weight-medium);
+  padding: var(--spacing-12) var(--spacing-lg);
   cursor: pointer;
   transition: all 0.18s;
 }
@@ -62,7 +62,7 @@
 
 .footer {
   position: fixed;
-  bottom: 24px;
+  bottom: var(--spacing-lg);
   left: 0;
   right: 0;
   text-align: center;
