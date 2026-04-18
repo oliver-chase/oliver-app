@@ -482,7 +482,7 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
                   <div className="detail-row">
                     <span className="detail-key">Skills</span>
                     <div className="detail-val">
-                      {empSkills.length ? empSkills.map((s, i) => <span key={i} className="pill pill-gray" style={{ margin: 2 }}>{s}</span>) : <span>—</span>}
+                      {empSkills.length ? empSkills.map((s, i) => <span key={i} className="pill pill-gray" style={{ margin: 'var(--spacing-2xs)' }}>{s}</span>) : <span>—</span>}
                     </div>
                   </div>
                 </div>

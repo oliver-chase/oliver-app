@@ -104,7 +104,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
       </div>
 
       {tab === 'dropdowns' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
           {LIST_KEYS.map(({ key, label }) => {
             const vals = getList(db.lists, key)
             return (
@@ -121,11 +121,11 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
                     </span>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-10)' }}>
                   <input
                     className="form-input settings-input-sm"
                     placeholder="Add value..."
-                    style={{ flex: 1, padding: '6px 10px' }}
+                    style={{ flex: 1, padding: 'var(--spacing-6) var(--spacing-10)' }}
                     value={newVals[key] || ''}
                     onChange={e => setNewVals(v => ({ ...v, [key]: e.target.value }))}
                     onKeyDown={e => { if (e.key === 'Enter') addItem(key) }}
@@ -140,10 +140,10 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
 
       {tab === 'data' && (
         <div className="card" style={{ maxWidth: 520 }}>
-          <div className="settings-label" style={{ marginBottom: 6 }}>Database</div>
+          <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Database</div>
           <p className="modal-body-p" style={{ marginBottom: 24 }}>All data is stored in Supabase. Use the Export JSON button below to create a local backup.</p>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
-            <div className="settings-label" style={{ marginBottom: 6 }}>Export JSON Backup</div>
+            <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Export JSON Backup</div>
             <p className="modal-body-p" style={{ marginBottom: 12 }}>Download a full backup of all your data.</p>
             <button className="btn btn-secondary" onClick={exportData}>Export JSON</button>
           </div>

@@ -191,7 +191,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
           <SectionHdr title="Upcoming interviews" nav="hiring" onNav={onNav} />
           <div className="card">
             {upcomingIvs.length === 0 ? <EmptyRow msg="No upcoming interviews" /> : upcomingIvs.map(iv => (
-              <div key={iv.candId + iv.date} className="dash-row" style={{ gap: 10, padding: '9px 0' }} onClick={() => onNav('hiring')}>
+              <div key={iv.candId + iv.date} className="dash-row" style={{ gap: 'var(--spacing-10)', padding: '9px 0' }} onClick={() => onNav('hiring')}>
                 <div className="dash-av dash-av--iv">{iv.ini}</div>
                 <div className="dash-row-mid">
                   <div className="dash-row-name dash-row-ellipsis">{iv.candName}</div>

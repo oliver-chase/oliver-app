@@ -228,7 +228,7 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
           <div className="page-title">{title}</div>
           <div className="page-subtitle">{groups.length} active</div>
         </div>
-        <div className="page-header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="page-header-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
           {type === 'offboarding' && (
             <button
               className={'btn btn-secondary btn-sm' + (showCompleted ? ' btn-active' : '')}

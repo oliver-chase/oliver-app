@@ -150,7 +150,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
             <div className="page-title">Hiring Pipeline</div>
             <div className="page-subtitle">{subtitle}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <button className="btn btn-primary" onClick={async () => {
               const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
               if (buttonValue !== 'confirm' || !inputValue.trim()) return
@@ -397,7 +397,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                       </button>
                     ))}
                   </div>
-                  {selected.rejectionReason && <div className="detail-row" style={{ marginTop: 10 }}><span className="detail-key">Reason</span><span className="detail-val detail-rej-reason">{selected.rejectionReason}</span></div>}
+                  {selected.rejectionReason && <div className="detail-row" style={{ marginTop: 'var(--spacing-10)' }}><span className="detail-key">Reason</span><span className="detail-val detail-rej-reason">{selected.rejectionReason}</span></div>}
                 </div>
 
                 {(selected.stage === 'offer' || selected.stage === 'hired') && (selected.offerAmount || selected.offerDate || selected.offerStatus) && (

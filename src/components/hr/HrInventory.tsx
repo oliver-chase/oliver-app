@@ -278,7 +278,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
         <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
           <div className="app-modal" role="dialog" aria-modal="true">
             <div className="app-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-10)' }}>
                 <div className="device-type-badge">{focusDev.type || 'Device'}</div>
                 <div>
                   <div className="app-modal-title">{focusDev.name}</div>
@@ -290,7 +290,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
             <div className="app-modal-body">
               <div className="detail-row"><span className="detail-key">Make / Model</span><span className="detail-val">{focusDev.make} {focusDev.model}</span></div>
               <div className="detail-row"><span className="detail-key">Serial #</span>
-                <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                   <span className="device-serial-val">{focusDev.serial || '—'}</span>
                   {focusDev.serial && <button className="btn btn-sm btn-secondary copy-btn" onClick={() => navigator.clipboard.writeText(focusDev.serial)}>Copy</button>}
                 </div>
@@ -301,7 +301,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
               {focusDev.purchaseStore && <div className="detail-row"><span className="detail-key">Store</span><span className="detail-val">{focusDev.purchaseStore}</span></div>}
               {focusDev.orderNumber && (
                 <div className="detail-row"><span className="detail-key">Order #</span>
-                  <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                     <span className="device-serial-val">{focusDev.orderNumber}</span>
                     <button className="btn btn-sm btn-secondary copy-btn" onClick={() => navigator.clipboard.writeText(focusDev.orderNumber)}>Copy</button>
                   </div>
@@ -378,7 +378,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
             </div>
             <div className="app-modal-body">
               <p style={{ margin: '0 0 16px' }}>Return <strong>{focusDev.name}</strong> from <strong>{assigneeFirstName || 'employee'}</strong>. Set new status:</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
                 <button className="btn btn-secondary" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => finalizeReturn('available')}>Available — back in stock</button>
                 <button className="btn btn-secondary" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => finalizeReturn('inactive')}>Inactive — retired or broken</button>
                 <button className="btn btn-secondary btn--danger-text" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => finalizeReturn('lost')}>Lost — cannot locate</button>

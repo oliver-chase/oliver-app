@@ -73,7 +73,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="report-card-label">Date Range</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-10)', flexWrap: 'wrap' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">From</label>
             <input type="date" className="form-input" value={from} onChange={e => setFrom(e.target.value)} style={{ width: 150 }} />

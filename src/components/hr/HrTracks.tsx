@@ -254,7 +254,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                   <div className="page-title">{selectedTrack.name}</div>
                   <div className="page-subtitle">Type: {selectedTrack.type} &middot; Auto-apply: {selectedTrack.autoApply === 'true' || selectedTrack.autoApply === true ? 'Yes' : 'No'}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <button className="btn btn-sm btn-secondary" title="Edit" onClick={() => openEditTrack(selectedTrack)}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 2l4 4-6 6H4v-4l6-6z"/></svg>
                   </button>
@@ -262,7 +262,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                 </div>
               </div>
               <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-14)' }}>
                   <div className="track-sidebar-label" style={{ marginBottom: 0, padding: 0 }}>Tasks ({trackTasks.length})</div>
                   <button className="btn btn-sm btn-secondary" onClick={openAddTask}>+ Add Task</button>
                 </div>

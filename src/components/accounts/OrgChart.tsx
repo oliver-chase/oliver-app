@@ -227,7 +227,7 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
   return (
     <>
       {msgToast && (
-        <div style={{ position: 'fixed', bottom: 80, right: 20, background: 'var(--color-text-primary)', color: 'var(--color-text-inverse)', padding: '8px 16px', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-xs)', fontWeight: 600, zIndex: 300, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', bottom: 80, right: 'var(--spacing-20)', background: 'var(--color-text-primary)', color: 'var(--color-text-inverse)', padding: 'var(--spacing-sm) var(--spacing-md)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', zIndex: 'var(--z-toast)', pointerEvents: 'none' }}>
           {msgToast}
         </div>
       )}
@@ -702,7 +702,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSa
                 </div>
               ))}
             </div>
-            <div className="card-meta-row" style={{ marginTop: 14 }}>
+            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
               <span className="card-meta-label">Reports To:</span>
               <Picker
                 value={otherPeople.find(p => p.stakeholder_id === stk.reports_to)?.name || ''}
@@ -720,11 +720,11 @@ function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSa
               />
             </div>
             {rtoError && (
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 4, paddingLeft: 8 }}>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-red)', marginTop: 'var(--spacing-xs)', paddingLeft: 'var(--spacing-sm)' }}>
                 Cannot create circular reporting relationship
               </div>
             )}
-            <div className="card-meta-row" style={{ marginTop: 14 }}>
+            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
               <OrgEngPicker
                 ids={curEngIds}
                 items={engItems}
