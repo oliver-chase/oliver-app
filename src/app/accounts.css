@@ -42,6 +42,9 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text);font-s
 .filter-checkbox-group label{display:flex;align-items:center;gap:var(--spacing-6);font-size:var(--font-size-sm);color:var(--text);cursor:pointer;user-select:none}
 .filter-checkbox-group input[type="checkbox"],.filter-checkbox-group input[type="radio"]{cursor:pointer;accent-color:var(--pink)}
 .main{margin-left:var(--sidebar-w);padding-top:calc(var(--topbar-h) + var(--filterbar-h));padding-left:var(--spacing-lg);padding-right:var(--spacing-lg);padding-bottom:80px;box-sizing:border-box;max-width:100%}
+@media (max-width:500px){
+.main{margin-left:0;padding-left:var(--spacing-md);padding-right:var(--spacing-md)}
+}
 .section{margin-bottom:var(--spacing-xl);scroll-margin-top:calc(var(--topbar-h) + var(--filterbar-h) + var(--spacing-lg))}
 .section-header-row2{display:flex;align-items:center;justify-content:space-between;min-height:var(--cadence-row-min-h)}
 .section-header-left{display:flex;align-items:center;gap:var(--spacing-xs)}
@@ -356,3 +359,9 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .pagination-label{font-size:var(--font-size-sm);color:var(--gray);margin:0 var(--spacing-sm)}
 /* Actions table cell */
 .action-cell{padding:var(--spacing-12) var(--spacing-14);vertical-align:middle;line-height:var(--line-height-compact)}
+/* Sidebar backdrop overlay — mobile only */
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:var(--color-modal-overlay);z-index:49;opacity:0;transition:opacity var(--transition-base);pointer-events:none}
+.sidebar-backdrop.open{opacity:1;pointer-events:auto}
+@media (max-width:500px){
+.sidebar-backdrop{display:block}
+}

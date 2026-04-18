@@ -157,10 +157,10 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * Responsive — collapse/stack below 768px
+ * Responsive — collapse/stack below 500px
  * ══════════════════════════════════════════════════════════════════════════ */
 
-@media (max-width: 768px) {
+@media (max-width: 500px) {
   .app-card { width: 100%; }
 
   .app-sidebar {
