@@ -157,7 +157,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-md);
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-modal-overlay);
 }
 .app-modal {
   background: var(--color-bg-card);

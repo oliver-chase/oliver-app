@@ -1,6 +1,6 @@
 # oliver-app Migration Audit
 **Last updated:** 2026-04-18
-**Scope:** 93 commits over 48 hours (Apr 16–18 2026). Full 50-commit deep audit of most recent commits completed.
+**Scope:** 93 commits over 48 hours (Apr 16–18 2026). Full audit of all 92 original commits complete.
 
 ---
 
@@ -51,6 +51,19 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 **Fixed (Apr 18) — commits #25/#26:**
 - Commit #25 (`e024554`): filter prop drilling across AccountView, AccountsApp, ActionsSection, NotesSection, PeopleSection — logic only, no inline style changes, clean
 - Commit #26 (`77c5b30`): hr.css + sdr.css — full file rewrite tokenizing all raw spacing/gap/margin/padding, font-weight 500/600/700 → medium/semibold/bold tokens, z-index 1→var(--z-base), 100→var(--z-popover); sdr.css P1 resolved: `rgba(0,0,0,.4)`→`var(--color-modal-overlay)`, `rgba(0,0,0,.35)`→`var(--color-backdrop-overlay)`; font-size 11px→var(--font-size-2xs). Intentional: `z-index:40/49/400/500`, `7px/9px/11px/14px` unmatched sizes, avatar pixel widths (28/30/38/40px), layout widths (260/380/420/560px), `rgba()` opacity values with no overlay token, `28px` font-size on stat values, `22px` cp-fab icon, bottom-nav `60px` clearance
+
+**Fixed (Apr 18) — commits #35–#92 (foundation + early feature commits):**
+- Commits #35–#68 (`cdd26e3`…`4f7ed6e`): sidebar editable/navigation fixes, hub bypass, auth gate add/remove, CF build fixes, HR pixel-accurate migration, admin/guards/hub features — logic changes only or superseded by later token passes; all clean
+- Commits #69–#73 (`5d00b93`…`0ff7b09`): QA docs, sidebar focus fix, visual QA pass — no CSS values introduced; AccountsApp/Sidebar/Topbar TSX inline styles are `display:''/'none'` conditional visibility only, clean
+- Commit #74 (`02fb02f`): Topbar/AccountsApp/accounts.css — layout ids, nav order; accounts.css already clean from prior passes
+- Commits #75–#76 (`b8d49da`, `59eb291`): tokens.css dedup + 10 new tokens added; hub.module.css created — verified clean in earlier pass
+- Commits #77–#79 (`461f38e`…`4b60b00`): type fixes, tech-debt docs — no CSS; AccountsApp ErrorBoundary `color:'red',padding:16` intentional debug display, not a token violation
+- Commit #80 (`41e9de6`): type correction only, clean
+- Commit #81 (`bd0b17a`): CustomPicker, ConfirmModal, InlineForm, Sidebar components — all inline styles use `var(--token)`; `components-interactive.css` added with 1 violation: `.app-modal-overlay background:rgba(0,0,0,0.4)` → fixed → `var(--color-modal-overlay)`. Intentional: `right:7px` (SVG bg-position), `width/height:16px` (checkbox), `width:14px` (checkmark), layout maxes (560/260/200px)
+- Commit #82 (`bc1d91e`): MSAL removal + Topbar/AppBadge/AppChip/SyncDot added; globals.css clean; components checked — no violations
+- Commits #83–#87 (`216a41a`…`58df2a4`): section headers, exact rewrites — superseded by later audits; current state of all section files verified clean (remaining raw values: `width:36` checkbox column intentional, `position:'relative'` positional-only)
+- Commits #88–#89 (`57ee407`, `47f2773`): initial section implementations + legacy token aliases — superseded; clean
+- Commits #90–#92 (`0814035`…`bf4e6aa`): table name fixes, initial CSS, scaffold — `components-layout.css` had violations: `.coming-soon gap:12px`→`var(--spacing-12)`, `font-weight:600/700`→semibold/bold tokens, `padding:4px 12px`→`var(--spacing-xs) var(--spacing-12)`; sidebar rgba values: `rgba(255,255,255,0.12)`→`var(--color-nav-border)`, `rgba(255,255,255,0.07)`→`var(--color-nav-hover-bg)`. Intentional: `rgba(254,255,255,0.75/0.8)` nav text (no exact token at .75/.8), `rgba(255,255,255,0.11/0.08)` sidebar active/border (no exact token)
 
 **Fixed (Apr 18) — commits #23/#24:**
 - Commit #23 (`b39a014`): debounce logic only — no token issues across ActionsSection, NotesSection, OpportunitiesSection, OverviewSection, ProjectsSection
