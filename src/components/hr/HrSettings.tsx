@@ -141,10 +141,10 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
       {tab === 'data' && (
         <div className="card" style={{ maxWidth: 520 }}>
           <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Database</div>
-          <p className="modal-body-p" style={{ marginBottom: 24 }}>All data is stored in Supabase. Use the Export JSON button below to create a local backup.</p>
+          <p className="modal-body-p" style={{ marginBottom: 'var(--spacing-lg)' }}>All data is stored in Supabase. Use the Export JSON button below to create a local backup.</p>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
             <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Export JSON Backup</div>
-            <p className="modal-body-p" style={{ marginBottom: 12 }}>Download a full backup of all your data.</p>
+            <p className="modal-body-p" style={{ marginBottom: 'var(--spacing-12)' }}>Download a full backup of all your data.</p>
             <button className="btn btn-secondary" onClick={exportData}>Export JSON</button>
           </div>
         </div>

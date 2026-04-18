@@ -428,7 +428,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                   })}
                 </div>
 
-                <div className="detail-section" style={{ paddingTop: 8 }}>
+                <div className="detail-section" style={{ paddingTop: 'var(--spacing-sm)' }}>
                   <button
                     className="btn btn-sm btn-secondary btn--danger-text"
                     onClick={() => deleteCand(selected.id)}

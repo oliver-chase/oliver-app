@@ -241,12 +241,12 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
           <button onClick={() => setZoom(z => parseFloat(Math.min(1.5, z + 0.1).toFixed(1)))}>+</button>
         </div>
 
-        <div className="overview-stat-label" style={{ marginBottom: 10 }}>REPORTING STRUCTURE</div>
+        <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-10)' }}>REPORTING STRUCTURE</div>
 
         <div
           ref={treeRef}
           className="org-tree"
-          style={{ display: 'flex', flexDirection: 'row', gap: 48, alignItems: 'flex-start', padding: 16, transform: 'scale(' + zoom.toFixed(1) + ')' }}
+          style={{ display: 'flex', flexDirection: 'row', gap: 'var(--spacing-2xl)', alignItems: 'flex-start', padding: 'var(--spacing-md)', transform: 'scale(' + zoom.toFixed(1) + ')' }}
         >
           {zone1Ids.size === 0 ? (
             <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', fontStyle: 'italic', padding: '12px 0' }}>
@@ -302,7 +302,7 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
               if (did) await doRemoveFromTree(did)
             }}
           >
-            <div className="overview-stat-label" style={{ marginBottom: 10 }}>NOT YET PLACED &#8212; drag to assign reporting</div>
+            <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-10)' }}>NOT YET PLACED &#8212; drag to assign reporting</div>
 
             {Object.entries(deptGrouped).map(([dept, people]) => (
               <div key={dept}>
@@ -573,7 +573,7 @@ function OrgNodeCard({ stk, isUnmapped, draggedId, dropTargetId, kbDragId, onDra
         >×</button>
       ) : null}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px 12px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', padding: 'var(--spacing-10) var(--spacing-12) var(--spacing-6) var(--spacing-12)', minWidth: 0 }}>
         <div className="avatar" style={{ width: 28, height: 28, fontSize: 'var(--font-size-xs)', flexShrink: 0, background: 'var(--purple)', color: 'var(--white)' }}>
           {initials(stk.name)}
         </div>

@@ -199,7 +199,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
                 </div>
                 <div className="dash-row-right">
                   <div className="dash-row-date">{fmtDate(iv.date)}</div>
-                  <div className="dash-row-sub" style={{ marginTop: 2 }}>Interview #{iv.num}</div>
+                  <div className="dash-row-sub" style={{ marginTop: 'var(--spacing-2xs)' }}>Interview #{iv.num}</div>
                 </div>
               </div>
             ))}

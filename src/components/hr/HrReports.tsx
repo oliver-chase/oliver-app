@@ -71,7 +71,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 'var(--spacing-20)' }}>
         <div className="report-card-label">Date Range</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-10)', flexWrap: 'wrap' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -82,12 +82,12 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
             <label className="form-label">To</label>
             <input type="date" className="form-input" value={to} onChange={e => setTo(e.target.value)} style={{ width: 150 }} />
           </div>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={applyFilter}>Apply</button>
+          <button className="btn btn-primary btn-sm" style={{ marginTop: 'var(--spacing-md)' }} onClick={applyFilter}>Apply</button>
         </div>
       </div>
 
       <div className="section-sublabel">All-time</div>
-      <div className="stat-grid" style={{ marginBottom: 12 }}>
+      <div className="stat-grid" style={{ marginBottom: 'var(--spacing-12)' }}>
         <div className="stat-card"><div className="stat-label">Total Candidates</div><div className="stat-value">{total}</div></div>
         <div className="stat-card"><div className="stat-label">Hired</div><div className="stat-value stat-value-green">{hired}</div></div>
         <div className="stat-card"><div className="stat-label">Active Pipeline</div><div className="stat-value">{active}</div></div>
@@ -146,7 +146,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       </div>
 
       {depts.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
+        <div className="card" style={{ marginTop: 'var(--spacing-md)' }}>
           <div className="card-section-hdr">By Department</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             {depts.map(sp => (
@@ -159,7 +159,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
         </div>
       )}
 
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card" style={{ marginTop: 'var(--spacing-md)' }}>
         <div className="card-section-hdr">
           Recent Activity
           {db.activities.length > 0 && (

@@ -377,7 +377,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
               <button className="detail-close" aria-label="Close" onClick={closeModal}>&times;</button>
             </div>
             <div className="app-modal-body">
-              <p style={{ margin: '0 0 16px' }}>Return <strong>{focusDev.name}</strong> from <strong>{assigneeFirstName || 'employee'}</strong>. Set new status:</p>
+              <p style={{ margin: '0 0 var(--spacing-md)' }}>Return <strong>{focusDev.name}</strong> from <strong>{assigneeFirstName || 'employee'}</strong>. Set new status:</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
                 <button className="btn btn-secondary" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => finalizeReturn('available')}>Available — back in stock</button>
                 <button className="btn btn-secondary" style={{ textAlign: 'left', justifyContent: 'flex-start' }} onClick={() => finalizeReturn('inactive')}>Inactive — retired or broken</button>
