@@ -48,6 +48,13 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
 - `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
 
+**Fixed (Apr 18) — commits #11–#18:**
+- Commits #11/#12 (`87e25e0`, `dd246a9`): day label shortening + RLS docs — no token issues
+- Commits #13/#14 (`97f17e7`, `b02725b`): `users.ts` upsert rewrite + hub bypass — logic only, clean
+- Commits #15/#16 (`aeaa608`, `2f40a41`): auth gate removal + CF Function import path fix — clean
+- Commit #17 (`807cee5`): chatbot v1 — superseded by rebuild in commit #8, already audited
+- Commit #18 (`a881455`): NotesSection pagination inline styles (`gap:6px`, `marginTop:16px`, `margin:0 8px`) already converted to `.pagination-row` / `.pagination-label` CSS classes using tokens in a later commit; Picker.tsx `minWidth:160/180` on popovers intentional
+
 **Fixed (Apr 18) — commits #9/#10:**
 - `PeopleSection.tsx` (commit #9): sort/toggle order swap — logic only, no token issues
 - `OpportunitiesSection.tsx` (commit #10): notes popup had inline styles `zIndex:20, padding:8, minHeight:60, rgba(0,0,0,.1)` → replaced with `className="card-notes-popup"` (class already existed in accounts.css with all proper tokens)
