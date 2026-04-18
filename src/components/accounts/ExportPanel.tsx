@@ -79,13 +79,13 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
       '.owner-name{font-weight:bold;font-size:13px;margin-bottom:4px}',
       'ul{margin:0;padding-left:18px}',
       'li{margin-bottom:3px}',
-      '.meta{color:#6c6c6f;font-size:11px;margin-bottom:24px}', // #6c6c6f = var(--color-text-secondary)
+      '.meta{color:#4a4a4e;font-size:11px;margin-bottom:24px}', // #4a4a4e = var(--color-text-secondary)
       '@media print{body{padding:0}}',
     ].join('\n')
 
     const parts: string[] = []
     parts.push('<h1>' + esc(acct.account_name) + '</h1>')
-    parts.push('<p class="meta">' + esc(fmtDate(today())) + '&nbsp;&nbsp;&bull;&nbsp;&nbsp;<span style="color:#767679">Confidential</span></p>') // #767679 = var(--color-text-placeholder)
+    parts.push('<p class="meta">' + esc(fmtDate(today())) + '&nbsp;&nbsp;&bull;&nbsp;&nbsp;<span style="color:#4a4a4e">Confidential</span></p>') // #4a4a4e = var(--color-text-placeholder)
 
     if (inclActions) {
       const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
@@ -164,7 +164,7 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
       if (rows.length) {
         parts.push('<table style="width:100%;border-collapse:collapse;font-size:12px">')
         rows.forEach(([label, val]) => {
-          parts.push('<tr><td style="padding:5px 10px 5px 0;color:#6c6c6f;font-weight:bold;width:200px;vertical-align:top">' + esc(label) + '</td><td style="padding:5px 0;vertical-align:top">' + esc(val) + '</td></tr>') // #6c6c6f = var(--color-text-secondary)
+          parts.push('<tr><td style="padding:5px 10px 5px 0;color:#4a4a4e;font-weight:bold;width:200px;vertical-align:top">' + esc(label) + '</td><td style="padding:5px 0;vertical-align:top">' + esc(val) + '</td></tr>') // #4a4a4e = var(--color-text-secondary)
         })
         parts.push('</table>')
       }
@@ -176,11 +176,11 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
         parts.push('<h2>Active Projects</h2>')
         projs.forEach(proj => {
           parts.push('<h3>' + esc(proj.project_name || '') + '</h3>')
-          if (proj.year) parts.push('<p style="color:#6c6c6f;font-size:11px">Year: ' + esc(proj.year) + '</p>') // #6c6c6f = var(--color-text-secondary)
+          if (proj.year) parts.push('<p style="color:#4a4a4e;font-size:11px">Year: ' + esc(proj.year) + '</p>') // #4a4a4e = var(--color-text-secondary)
           if (proj.notes) parts.push('<p>' + esc(proj.notes) + '</p>')
           const csIds = Array.isArray(proj.client_stakeholder_ids) ? proj.client_stakeholder_ids : []
           const csNames = csIds.map(id => data.stakeholders.find(s => s.stakeholder_id === id)?.name || '').filter(Boolean)
-          if (csNames.length) parts.push('<p style="color:#6c6c6f;font-size:11px">Client: ' + esc(csNames.join(', ')) + '</p>') // #6c6c6f = var(--color-text-secondary)
+          if (csNames.length) parts.push('<p style="color:#4a4a4e;font-size:11px">Client: ' + esc(csNames.join(', ')) + '</p>') // #4a4a4e = var(--color-text-secondary)
         })
       }
     }
@@ -195,8 +195,8 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
           if (opp.status) oppParts.push(opp.status)
           const owners = Array.isArray(opp.owners) ? opp.owners : []
           if (owners.length) oppParts.push('Owner(s): ' + owners.join(', '))
-          if (oppParts.length) parts.push(' <span style="color:#6c6c6f;font-size:11px">(' + esc(oppParts.join(' \u00b7 ')) + ')</span>') // #6c6c6f = var(--color-text-secondary)
-          if (opp.notes) parts.push('<br><span style="color:#6c6c6f;font-size:11px">' + esc(opp.notes) + '</span>') // #6c6c6f = var(--color-text-secondary)
+          if (oppParts.length) parts.push(' <span style="color:#4a4a4e;font-size:11px">(' + esc(oppParts.join(' \u00b7 ')) + ')</span>') // #4a4a4e = var(--color-text-secondary)
+          if (opp.notes) parts.push('<br><span style="color:#4a4a4e;font-size:11px">' + esc(opp.notes) + '</span>') // #4a4a4e = var(--color-text-secondary)
           parts.push('</li>')
         })
         parts.push('</ul>')
@@ -222,8 +222,8 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
         people.forEach(s => {
           const titleDept = [s.title, s.department].filter(Boolean).join(' \u00b7 ')
           parts.push('<tr style="border-bottom:1px solid #f0f0f1"><td style="padding:7px 8px 7px 0;vertical-align:top;width:55%"><strong>' + esc(s.name || '') + '</strong>') // #f0f0f1 = var(--color-bg-hover)
-          if (titleDept) parts.push('<br><span style="color:#6c6c6f;font-size:10px">' + esc(titleDept) + '</span>') // #6c6c6f = var(--color-text-secondary)
-          parts.push('</td><td style="padding:7px 0;vertical-align:top;font-size:10px;color:#6c6c6f">') // #6c6c6f = var(--color-text-secondary)
+          if (titleDept) parts.push('<br><span style="color:#4a4a4e;font-size:10px">' + esc(titleDept) + '</span>') // #4a4a4e = var(--color-text-secondary)
+          parts.push('</td><td style="padding:7px 0;vertical-align:top;font-size:10px;color:#4a4a4e">') // #4a4a4e = var(--color-text-secondary)
           if (s.primary_owner) parts.push('Primary: <strong style="color:#1a1a1a">' + esc(s.primary_owner) + '</strong><br>') // #1a1a1a = var(--color-text-primary)
           if (s.secondary_owner) parts.push('Secondary: <strong style="color:#1a1a1a">' + esc(s.secondary_owner) + '</strong>') // #1a1a1a = var(--color-text-primary)
           parts.push('</td></tr>')

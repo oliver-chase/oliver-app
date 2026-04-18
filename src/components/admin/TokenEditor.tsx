@@ -7,8 +7,6 @@ import styles from './admin.module.css'
 // Token categories surfaced from tokens.css
 const BASE_TOKENS: { name: string; category: string }[] = [
   { name: '--color-brand-purple', category: 'brand' },
-  { name: '--color-brand-purple-light', category: 'brand' },
-  { name: '--color-brand-purple-dark', category: 'brand' },
   { name: '--color-brand-pink', category: 'brand' },
   { name: '--color-brand-pink-light', category: 'brand' },
   { name: '--color-text-primary', category: 'text' },

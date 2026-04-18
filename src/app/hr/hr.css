@@ -3,7 +3,7 @@
    Sidebar uses .app-sidebar from components.css (purple, canonical).
    :root override adjusts --bg and secondary text colors for HR's lighter content area. */
 
-:root{--bg:var(--surface2);--text2:#6b6a65;--text3:#767679}
+:root{--bg:var(--surface2);--text2:#6b6a65;--text3:var(--color-text-placeholder)}
 html,body{background:var(--bg);color:var(--text)}
 /* .app-sidebar provided by components.css — purple, fixed, 220px */
 .main{margin-left:var(--sidebar-w);display:flex;flex-direction:column;min-height:100vh}

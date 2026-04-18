@@ -60,7 +60,7 @@ body {
 }
 
 .card:hover {
-  background: var(--color-brand-purple-light);
+  background: var(--color-brand-purple);
   border-color: var(--color-overlay-border);
   transform: var(--transform-lift);
 }

@@ -2,67 +2,61 @@
  * CANONICAL TOKEN FILE — oliver-app Next.js rewrite
  * Use semantic names (--color-*, --font-size-*, --spacing-*) in all new components.
  * Legacy aliases at bottom are for backward compatibility only — do not use in new code.
- * ⚠ --color-brand-primary and --color-focus-ring are stubs — verify before shipping chatbot.
  */
 
 :root {
 
   /* ── Brand colors ─────────────────────────────────────────────────────── */
-  --color-brand-purple:       #532976; /* on #fff = 7.6:1 ✅ */
-  --color-brand-purple-light: #6b3895; /* hover states; 4.8:1 on #fff ✅ */
-  --color-brand-purple-dark:  #3d1f5c;
-  --color-brand-pink:         #E60075; /* 4.45:1 on #fff — non-text use only */
-  --color-brand-pink-light:   #fce4f0;
-
-  /* ⚠ stubs — referenced in chatbot.css but never defined in source */
-  --color-brand-primary: #E60075;
-  --color-focus-ring:    rgba(230,0,117,.15);
+  --color-white:       #FEFFFF;
+  --color-brand-purple: #562aa7;
+  --color-brand-pink:   #dc0170;
+  --color-brand-pink-light: #fce4f0;
 
   /* ── Text ─────────────────────────────────────────────────────────────── */
-  --color-text-primary:     #1a1a1a; /* on #fff = 16.1:1 ✅ */
-  --color-text-secondary:   #6c6c6f; /* 5.69:1 ✅ */
-  --color-text-placeholder: #767679; /* 4.89:1 ✅ */
-  --color-text-inverse:     #FEFFFF; /* on --color-brand-purple = 15.8:1 ✅ */
+  --color-text-primary:     #1a1a1a;
+  --color-text-secondary:   #4a4a4e;
+  --color-text-placeholder: #4a4a4e;
+  --color-text-inverse:     var(--color-white);
 
   /* ── Backgrounds ─────────────────────────────────────────────────────── */
   --color-bg-page:  #f5f5f6;
-  --color-bg-card:  #FEFFFF;
-  --color-bg-input: #FEFFFF;
+  --color-bg-card:  var(--color-white);
+  --color-bg-input: var(--color-white);
   --color-bg-hover: #f0f0f1;
 
   /* ── Borders ─────────────────────────────────────────────────────────── */
   --color-border:        #e0e0e2;
-  --color-border-focus:  #E60075;
-  --color-border-dashed: #E60075;
+  --color-border-focus:  var(--color-brand-pink);
+  --color-border-dashed: var(--color-brand-pink);
 
-  /* ── Sentiment pills — fg/bg pairs verified ≥4.5:1 ──────────────────── */
-  --color-sentiment-champion:     #532976; /* on champion-bg = 7.8:1 ✅ */
+  /* ── Sentiment pills — fg/bg pairs ──────────────────────────────────── */
+  --color-sentiment-champion:     var(--color-brand-purple);
   --color-sentiment-champion-bg:  #efe7f5;
-  --color-sentiment-supporter:    #532976; /* on supporter-bg = 7.5:1 ✅ */
+  --color-sentiment-supporter:    var(--color-brand-purple);
   --color-sentiment-supporter-bg: #fce4f0;
-  --color-sentiment-neutral:      #5a5a5d; /* on neutral-bg = 7.0:1 ✅ */
+  --color-sentiment-neutral:      #5a5a5d;
   --color-sentiment-neutral-bg:   #f5f5f6;
-  --color-sentiment-detractor:    #a12e22; /* on detractor-bg = 5.6:1 ✅ */
+  --color-sentiment-detractor:    #a12e22;
   --color-sentiment-detractor-bg: #fdecea;
   --color-sentiment-unknown:      #5a5a5d;
   --color-sentiment-unknown-bg:   #f5f5f6;
 
-  /* ── Status badges — fg/bg pairs verified ≥4.5:1 ────────────────────── */
-  --color-status-active:        #532976; /* on active-bg = 7.1:1 ✅ */
+  /* ── Status badges — fg/bg pairs ────────────────────────────────────── */
+  --color-status-active:        var(--color-brand-purple);
   --color-status-active-bg:     #ece3f3;
-  --color-status-complete:      #5a5a5d; /* on surface2 = 7.0:1 ✅ */
+  --color-status-complete:      #5a5a5d;
   --color-status-complete-bg:   #f5f5f6;
-  --color-status-open:          #532976; /* on open-bg = 7.4:1 ✅ */
+  --color-status-open:          var(--color-brand-purple);
   --color-status-open-bg:       #ebe3f2;
   --color-status-lost:          #5a5a5d;
   --color-status-lost-bg:       #f5f5f6;
   --color-status-identified:    #5a5a5d;
   --color-status-identified-bg: #f5f5f6;
-  --color-status-pursuing:      #532976; /* on pursuing-bg = 7.5:1 ✅ */
+  --color-status-pursuing:      var(--color-brand-purple);
   --color-status-pursuing-bg:   #fce4f0;
-  --color-status-won:           #FEFFFF; /* on won-bg = 15.8:1 ✅ */
-  --color-status-won-bg:        #532976;
-  --color-status-success:       #065f46; /* on success-bg = 5.8:1 ✅ */
+  --color-status-won:           var(--color-white);
+  --color-status-won-bg:        var(--color-brand-purple);
+  --color-status-success:       #065f46;
   --color-status-success-bg:    #d1fae5;
 
   /* ── Account tier — left border indicators ───────────────────────────── */
@@ -72,10 +66,10 @@
   --color-tier-at-risk:     #c0392b;
 
   /* ── Navigation (dark sidebar/topbar) ────────────────────────────────── */
-  --color-nav-bg:           #532976;
-  --color-nav-bg-deep:      #3d1f5c;
+  --color-nav-bg:           var(--color-brand-purple);
+  --color-nav-bg-deep:      var(--color-brand-purple);
   --color-nav-border:       rgba(255,255,255,.12);
-  --color-nav-text:         #FEFFFF;
+  --color-nav-text:         var(--color-white);
   --color-nav-text-muted:   rgba(254,255,255,.7);
   --color-nav-text-faint:   rgba(254,255,255,.4);
   --color-nav-accent:       var(--color-brand-pink);
@@ -86,10 +80,10 @@
   --color-overlay-border: rgba(255,255,255,.18);
 
   /* ── Functional colors ───────────────────────────────────────────────── */
-  --color-bg-overdue:       rgba(230,0,117,.06);   /* action row overdue tint */
-  --color-bg-required:      rgba(230,0,117,.08);   /* inline required-field tint */
-  --color-chart-bar:        rgba(83,41,118,.25);   /* revenue chart projected bar */
-  --color-bg-sidebar-focus: rgba(255,255,255,.15); /* editable on dark sidebar */
+  --color-bg-overdue:       rgba(220,1,112,.06);
+  --color-bg-required:      rgba(220,1,112,.08);
+  --color-chart-bar:        rgba(86,42,167,.25);
+  --color-bg-sidebar-focus: rgba(255,255,255,.15);
 
   /* ── Status colors (non-badge) ───────────────────────────────────────── */
   --color-green:       #1a9c6e;
@@ -101,15 +95,10 @@
   --color-blue:        #1a6fb5;
   --color-blue-light:  #e8f2fc;
 
-  /* Note: --color-amber, --color-green, --color-red defined above as direct values.
-     Legacy aliases --amber, --green, --red below map to these same values. */
-
   /* ── Typography ──────────────────────────────────────────────────────── */
   --font-family-base: 'Aptos', system-ui, -apple-system, sans-serif;
   --font-family-mono: 'DM Mono', ui-monospace, monospace;
 
-  /* xs (13px) is the minimum permitted size — labels and metadata only.
-     WCAG small-text threshold: 14px normal / 18.66px bold. */
   --font-size-3xs:     9px;
   --font-size-2xs:     11px;
   --font-size-xs:      13px;
@@ -189,10 +178,10 @@
   --filterbar-h: 52px;
 
   /* ── Accessibility ───────────────────────────────────────────────────── */
-  --touch-target: 44px; /* WCAG 2.5.5 AAA; iOS/Android guideline */
+  --touch-target: 44px;
 
   /* ── Component tokens ────────────────────────────────────────────────── */
-  --chip-bg:                     rgba(83,41,118,0.1);
+  --chip-bg:                     rgba(86,42,167,0.1);
   --chip-padding-y:              2px;
   --sync-dot-size:               7px;
   --avatar-size:                 34px;
@@ -205,7 +194,7 @@
   --editable-padding:            1px 3px;
   --editable-radius:             var(--radius-sm);
   --inline-form-padding:         14px 16px;
-  --notes-clamp-height:          36px; /* ~2 lines at 14px/1.4 */
+  --notes-clamp-height:          36px;
   --hub-card-max-w:              420px;
   --hub-top-offset:              22vh;
   --hub-top-offset-sm:           16vh;
@@ -221,7 +210,7 @@
   /* ── LEGACY ALIASES — do not use in new components ───────────────────── */
   --font:         var(--font-family-base);
   --mono:         var(--font-family-mono);
-  --white:        var(--color-text-inverse);
+  --white:        var(--color-white);
   --pink:         var(--color-brand-pink);
   --purple:       var(--color-brand-purple);
   --border:       var(--color-border);
@@ -232,12 +221,11 @@
   --accent-light: var(--color-brand-pink-light);
   --accent-text:  var(--color-brand-purple);
   --radius:       var(--radius-md);
-  /* additional legacy names used across accounts.css / hr.css */
   --gray-light:  #8c8c8f;
   --bg:          var(--color-bg-card);
   --border2:     #d0d0d3;
   --text2:       #797979;
-  --text3:       #767679;
+  --text3:       var(--color-text-placeholder);
   --accent:      var(--color-brand-pink);
   --green:       var(--color-green);
   --green-light: var(--color-green-light);
@@ -254,5 +242,9 @@
   --hub-text2:   var(--color-nav-text-muted);
   --hub-text3:   var(--color-nav-text-faint);
   --hub-accent:  var(--color-brand-pink);
+
+  /* stubs — referenced in chatbot.css */
+  --color-brand-primary: var(--color-brand-pink);
+  --color-focus-ring:    rgba(220,1,112,.15);
 
 }

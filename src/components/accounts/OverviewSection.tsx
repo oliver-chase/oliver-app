@@ -627,10 +627,10 @@ function renderChart(bg: Background, container: HTMLDivElement, onSave: (bg: Bac
     years.forEach((y, i) => {
       const xMid = ML + i * colW + colW / 2
       const xt = document.createElementNS(NS, 'text')
-      xt.setAttribute('x', String(xMid)); xt.setAttribute('y', String(H - 8)); xt.setAttribute('text-anchor', 'middle'); xt.setAttribute('font-size', '10'); xt.setAttribute('fill', /* var(--color-text-secondary) */ '#6c6c6f'); xt.textContent = String(y); svg.appendChild(xt)
+      xt.setAttribute('x', String(xMid)); xt.setAttribute('y', String(H - 8)); xt.setAttribute('text-anchor', 'middle'); xt.setAttribute('font-size', '10'); xt.setAttribute('fill', /* var(--color-text-secondary) */ '#4a4a4e'); xt.textContent = String(y); svg.appendChild(xt)
     })
     const msg = document.createElementNS(NS, 'text')
-    msg.setAttribute('x', String(W / 2)); msg.setAttribute('y', String((H - 28) / 2 + 10)); msg.setAttribute('text-anchor', 'middle'); msg.setAttribute('font-size', '11'); msg.setAttribute('fill', /* var(--color-text-placeholder) */ '#767679'); msg.setAttribute('font-style', 'italic'); msg.textContent = 'No revenue data \u2014 click bars to add'; svg.appendChild(msg)
+    msg.setAttribute('x', String(W / 2)); msg.setAttribute('y', String((H - 28) / 2 + 10)); msg.setAttribute('text-anchor', 'middle'); msg.setAttribute('font-size', '11'); msg.setAttribute('fill', /* var(--color-text-placeholder) */ '#4a4a4e'); msg.setAttribute('font-style', 'italic'); msg.textContent = 'No revenue data \u2014 click bars to add'; svg.appendChild(msg)
     container.appendChild(svg); return
   }
   const H = 110; const BP = 22; const ML = 44
@@ -656,7 +656,7 @@ function renderChart(bg: Background, container: HTMLDivElement, onSave: (bg: Bac
     const line = document.createElementNS(NS, 'line')
     line.setAttribute('x1', String(ML - 4)); line.setAttribute('y1', String(y)); line.setAttribute('x2', String(chartW)); line.setAttribute('y2', String(y)); line.setAttribute('stroke', /* var(--color-border) */ '#e0e0e2'); line.setAttribute('stroke-width', '1'); svg.appendChild(line)
     const txt = document.createElementNS(NS, 'text')
-    txt.setAttribute('x', String(ML - 6)); txt.setAttribute('y', String(y + 4)); txt.setAttribute('text-anchor', 'end'); txt.setAttribute('font-size', '9'); txt.setAttribute('fill', /* var(--color-text-placeholder) */ '#767679'); txt.textContent = axisLabel(v); svg.appendChild(txt)
+    txt.setAttribute('x', String(ML - 6)); txt.setAttribute('y', String(y + 4)); txt.setAttribute('text-anchor', 'end'); txt.setAttribute('font-size', '9'); txt.setAttribute('fill', /* var(--color-text-placeholder) */ '#4a4a4e'); txt.textContent = axisLabel(v); svg.appendChild(txt)
   }
   const tooltip = document.createElement('div')
   tooltip.style.cssText = 'position:fixed;background:var(--text);color:var(--white);font-size:var(--font-size-xs);padding:5px 9px;border-radius:4px;pointer-events:none;z-index:100;display:none;white-space:nowrap'
@@ -687,7 +687,7 @@ function renderChart(bg: Background, container: HTMLDivElement, onSave: (bg: Bac
       svg.appendChild(rect)
     }
     const xt = document.createElementNS(NS, 'text')
-    xt.setAttribute('x', String(xBase + barW + gap / 2)); xt.setAttribute('y', String(H - 8)); xt.setAttribute('text-anchor', 'middle'); xt.setAttribute('font-size', '10'); xt.setAttribute('fill', /* var(--color-text-secondary) */ '#6c6c6f'); xt.textContent = String(y); svg.appendChild(xt)
+    xt.setAttribute('x', String(xBase + barW + gap / 2)); xt.setAttribute('y', String(H - 8)); xt.setAttribute('text-anchor', 'middle'); xt.setAttribute('font-size', '10'); xt.setAttribute('fill', /* var(--color-text-secondary) */ '#4a4a4e'); xt.textContent = String(y); svg.appendChild(xt)
   })
   container.appendChild(svg)
 }

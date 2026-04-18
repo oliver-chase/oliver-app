@@ -47,14 +47,14 @@
   color: var(--color-text-inverse);
   border-color: var(--color-brand-pink);
 }
-.btn-primary:hover:not(:disabled) { background: var(--color-brand-purple-dark); border-color: var(--color-brand-purple-dark); }
+.btn-primary:hover:not(:disabled) { background: var(--color-brand-purple); border-color: var(--color-brand-purple); }
 
 .btn-secondary {
   background: var(--color-brand-purple);
   color: var(--color-text-inverse);
   border-color: var(--color-brand-purple);
 }
-.btn-secondary:hover:not(:disabled) { background: var(--color-brand-purple-light); border-color: var(--color-brand-purple-light); }
+.btn-secondary:hover:not(:disabled) { background: var(--color-brand-purple); border-color: var(--color-brand-purple); }
 
 .btn-ghost {
   background: transparent;
