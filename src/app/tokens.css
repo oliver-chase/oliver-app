@@ -74,7 +74,7 @@
 
   /* ── Account tier — left border indicators ───────────────────────────── */
   --color-tier-strategic:   #1a9c6e;
-  --color-tier-growth:      #1a6fb5;
+  --color-tier-growth:      #4c2594;
   --color-tier-maintenance: #B0B1B5;
   --color-tier-at-risk:     #c0392b;
 
@@ -102,7 +102,7 @@
   --color-amber-light: #fef3e2;
   --color-red:         #c0392b;
   --color-red-light:   #fdecea;
-  --color-blue:        #1a6fb5;
+  --color-blue:        #4c2594;
   --color-blue-light:  #e8f2fc;
 
   /* ── Typography ──────────────────────────────────────────────────────── */

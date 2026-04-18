@@ -107,7 +107,7 @@ const COLOR_GROUPS = [
     group: 'Account Tier',
     tokens: [
       { name: '--color-tier-strategic',   value: '#1a9c6e' },
-      { name: '--color-tier-growth',      value: '#1a6fb5' },
+      { name: '--color-tier-growth',      value: '#4c2594' },
       { name: '--color-tier-maintenance', value: '#B0B1B5' },
       { name: '--color-tier-at-risk',     value: '#c0392b' },
     ],
@@ -132,7 +132,7 @@ const COLOR_GROUPS = [
       { name: '--color-amber-light', value: '#fef3e2' },
       { name: '--color-red',         value: '#c0392b' },
       { name: '--color-red-light',   value: '#fdecea' },
-      { name: '--color-blue',        value: '#1a6fb5' },
+      { name: '--color-blue',        value: '#4c2594' },
       { name: '--color-blue-light',  value: '#e8f2fc' },
       { name: '--color-chart-bar',   value: 'rgba(86,42,167,.25)' },
     ],
