@@ -256,3 +256,32 @@
   background: var(--color-brand-pink);
   transition: width linear;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Mobile responsive — below 500px
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 500px) {
+  .app-modal {
+    width: calc(100vw - var(--spacing-md) * 2);
+    max-width: 100%;
+  }
+
+  .app-modal-actions {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .app-modal-actions .btn {
+    width: 100%;
+    min-height: var(--touch-target);
+  }
+
+  .app-popover {
+    min-width: auto;
+    max-width: calc(100vw - var(--spacing-md) * 2);
+    position: fixed !important;
+    left: var(--spacing-md) !important;
+    right: var(--spacing-md) !important;
+  }
+}
