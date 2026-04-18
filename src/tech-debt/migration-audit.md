@@ -48,6 +48,14 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
 - `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
 
+**Fixed (Apr 18) — commits #9/#10:**
+- `PeopleSection.tsx` (commit #9): sort/toggle order swap — logic only, no token issues
+- `OpportunitiesSection.tsx` (commit #10): notes popup had inline styles `zIndex:20, padding:8, minHeight:60, rgba(0,0,0,.1)` → replaced with `className="card-notes-popup"` (class already existed in accounts.css with all proper tokens)
+- `ProjectsSection.tsx` (commit #10): already used `card-notes-popup` — clean
+- `PeopleSection.tsx` (commit #10): popup uses `card-notes-popup`; outer wrapper inline styles already tokenized
+- `OverviewSection.tsx` (commit #10): PersonPill rebuilt as unified picker — all inline styles use tokens; `minWidth:180` on popover intentional (no token)
+- `accounts.css` (commit #10): `.section-actions` flex-wrap change + sort icon SVG update — no token issues
+
 **Fixed (Apr 18) — commits #7/#8:**
 - `accounts.css`: `.section-actions gap:6px` already using `var(--spacing-6)` — clean
 - `PeopleSection.tsx`: `+ Add person` button correctly changed `btn-ghost btn--compact` → `btn-link` (matches other add buttons)
