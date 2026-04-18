@@ -146,7 +146,7 @@ th.sorted .sort-arrow{opacity:1;color:var(--pink)}
 .project-card:hover{border-color:var(--border2);box-shadow:var(--shadow-card)}
 .proj-name{font-weight:var(--font-weight-bold);font-size:var(--font-size-sm);padding-right:70px}
 .proj-meta{font-size:var(--font-size-xs);color:var(--gray);margin-top:var(--spacing-3)}
-.project-delete{position:absolute;bottom:var(--spacing-10);right:var(--spacing-10);width:var(--spacing-20);height:var(--spacing-20);border-radius:var(--radius-xs, var(--radius-sm));background:none;color:var(--gray-light);font-size:var(--font-size-base);display:none;align-items:center;justify-content:center;cursor:pointer;border:none;font-family:var(--font);line-height:1}
+.project-delete{position:absolute;bottom:var(--spacing-10);right:var(--spacing-10);width:var(--spacing-20);height:var(--spacing-20);border-radius:var(--radius-sm);background:none;color:var(--gray-light);font-size:var(--font-size-base);display:none;align-items:center;justify-content:center;cursor:pointer;border:none;font-family:var(--font);line-height:1}
 .project-delete:hover{background:var(--red-light);color:var(--red)}
 .project-delete:focus-visible{outline:2px solid var(--color-border-focus);outline-offset:1px;display:flex}
 .project-card:hover .project-delete{display:flex}
@@ -276,7 +276,7 @@ th.sorted .sort-arrow{opacity:1;color:var(--pink)}
 .card-notes-wrap.has-overflow .card-body-text{cursor:pointer}
 .card-notes-wrap.expanded .card-body-text{max-height:none;overflow:visible}
 .card-notes-wrap.editing .card-body-text{max-height:none;overflow:visible;cursor:text}
-.card-notes-close{display:none!important;position:absolute;top:var(--spacing-6);right:var(--spacing-6);width:var(--spacing-20);height:var(--spacing-20);border-radius:var(--radius-xs, var(--radius-sm));background:none;color:var(--gray-light);font-size:var(--font-size-base);border:none;font-family:var(--font);line-height:1;cursor:pointer;padding:0}
+.card-notes-close{display:none!important;position:absolute;top:var(--spacing-6);right:var(--spacing-6);width:var(--spacing-20);height:var(--spacing-20);border-radius:var(--radius-sm);background:none;color:var(--gray-light);font-size:var(--font-size-base);border:none;font-family:var(--font);line-height:1;cursor:pointer;padding:0}
 .card-notes-close:hover{background:var(--red-light);color:var(--red)}
 .card-notes-wrap.expanded .card-notes-close{display:flex!important;align-items:center;justify-content:center}
 /* Note full-text overlay */
@@ -316,7 +316,7 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .app-layout{min-height:100vh}
 .app-layout-content{min-height:100vh}
 .app-error{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--red);font-size:var(--font-size-sm)}
-.section-loading{padding-top:40px;color:var(--gray);font-size:var(--font-size-sm)}
+.section-loading{padding-top:var(--spacing-2xl);color:var(--gray);font-size:var(--font-size-sm)}
 /* Portfolio */
 .account-card-name-row{display:flex;align-items:center;gap:var(--spacing-sm)}
 .account-card.archived{opacity:0.5}
