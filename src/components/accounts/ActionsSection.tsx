@@ -249,7 +249,7 @@ function InlineAddRow({ accountId, owners, engOptions, engLabel, onAddPerson, on
 
   return (
     <tr className="new-row">
-      <td className="action-cell" style={{ lineHeight: 1.4 }}>
+      <td className="action-cell">
         <span
           ref={descRef}
           className="action-text field-required-highlight"
@@ -318,7 +318,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
 
   return (
     <tr className={action.status === 'Done' ? 'done-row' : ''} style={rowStyle}>
-      <td className="action-cell" style={{ lineHeight: 1.4 }}>
+      <td className="action-cell">
         <span
           ref={descRef}
           className="action-text"
@@ -336,7 +336,7 @@ function ActionRow({ action, owners, engOptions, engLabel, onSave, onDelete, onA
           {action.description}
         </span>
         {age >= 7 && (
-          <span style={{ fontSize: 'var(--font-size-xs)', fontStyle: 'italic', marginLeft: 4, color: age > 14 ? 'var(--pink)' : 'var(--gray)' }}>
+          <span style={{ fontSize: 'var(--font-size-xs)', fontStyle: 'italic', marginLeft: 'var(--spacing-xs)', color: age > 14 ? 'var(--pink)' : 'var(--gray)' }}>
             ({age}d)
           </span>
         )}

@@ -353,4 +353,4 @@ select,select option{font-family:var(--font)!important;font-size:var(--font-size
 .pagination-row{display:flex;align-items:center;justify-content:center;gap:var(--spacing-6);margin-top:var(--spacing-md)}
 .pagination-label{font-size:var(--font-size-sm);color:var(--gray);margin:0 var(--spacing-sm)}
 /* Actions table cell */
-.action-cell{padding:var(--spacing-12) var(--spacing-14);vertical-align:middle}
+.action-cell{padding:var(--spacing-12) var(--spacing-14);vertical-align:middle;line-height:var(--line-height-compact)}
