@@ -120,8 +120,7 @@ const COLOR_GROUPS = [
       { name: '--color-nav-text',         value: 'var(--color-white)' },
       { name: '--color-nav-text-muted',   value: 'rgba(254,255,255,.7)' },
       { name: '--color-nav-text-faint',   value: 'rgba(254,255,255,.4)' },
-      { name: '--color-nav-accent',       value: '#E60075' },
-      { name: '--color-nav-accent-hover', value: '#ff3399' },
+      { name: '--color-nav-accent',       value: '#dc0170' },
     ],
   },
   {
@@ -257,9 +256,9 @@ const PICKER_OPTIONS = [
 // ── Layout tokens ───────────────────────────────────────────────────────────
 
 const LAYOUT_BARS = [
-  { token: '--sidebar-w',          value: '220px',  label: 'Sidebar width',       color: 'var(--color-brand-purple)',    dir: 'h' as const },
-  { token: '--chatbot-drawer-w',   value: '360px',  label: 'Chatbot panel width', color: 'var(--color-brand-purple-light)', dir: 'h' as const },
-  { token: '--hub-card-max-w',     value: '420px',  label: 'Hub card max-width',  color: 'var(--color-brand-purple-dark)',  dir: 'h' as const },
+  { token: '--sidebar-w',          value: '220px',  label: 'Sidebar width',       color: 'var(--color-brand-purple)',      dir: 'h' as const },
+  { token: '--chatbot-drawer-w',   value: '360px',  label: 'Chatbot panel width', color: 'var(--color-status-active-bg)',  dir: 'h' as const },
+  { token: '--hub-card-max-w',     value: '420px',  label: 'Hub card max-width',  color: 'var(--color-purple-overlay)',    dir: 'h' as const },
   { token: '--topbar-h',           value: '50px',   label: 'Topbar height',       color: 'var(--color-brand-pink)',       dir: 'v' as const },
   { token: '--filterbar-h',        value: '52px',   label: 'Filterbar height',    color: 'var(--color-brand-pink-light)', dir: 'v' as const },
   { token: '--touch-target',       value: '44px',   label: 'Touch target (WCAG)', color: 'var(--color-green)',             dir: 'v' as const },

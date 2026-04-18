@@ -23,23 +23,25 @@ UserProvider/permissions system scaffolded — wiring deferred (intentional, tra
 
 ## Open Issues by Priority
 
-### P1 — Token cleanup (3 items remaining)
-Accounts.css and ModuleCard.module.css fully resolved (Apr 18). Remaining:
+### P1 — Token cleanup (2 items remaining)
+All resolved except sdr.css:
 
 | File | Values | Token equivalent |
 |------|--------|-----------------|
 | `src/app/sdr/sdr.css` | `rgba(0,0,0,.4/.35)` backdrops | `--color-modal-overlay` / `--color-backdrop-overlay` |
 | `src/app/sdr/sdr.css` | `28px`, `11px`, `13px`, `18px` font sizes | `--font-size-*` tokens exist |
 
-**Fixed (Apr 18):**
-- `tokens.css`: removed dead `--color-nav-accent-hover: #ff3399` (never referenced anywhere)
-- `tokens.css`: added `--color-nav-focus-ring`, `--color-backdrop-overlay`, `--color-danger-border`, `--color-danger-bg-hover`
-- `accounts.css`: all 4 hardcoded rgba() values replaced with new tokens
+Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) have no exact token match — intentional custom values, not P1.
+
+**Fixed (Apr 18) — commits #1/#2:**
+- `tokens.css`: removed dead `--color-nav-accent-hover: #ff3399`; added 4 new tokens
+- `accounts.css`: all 4 hardcoded rgba() values → tokens; `--radius-xs` ghost fallbacks → `var(--radius-sm)`; `padding-top: 40px` → `var(--spacing-2xl)`
 - `ModuleCard.module.css`: `transition: all 0.18s` → `var(--transition-quick)`; `translateY(-1px)` → `var(--transform-lift)`
 
-### P1 — Design system page data bug
-`src/app/design-system/page.tsx` line 123: hardcodes `value: '#E60075'` for `--color-nav-accent`.
-Actual resolved value is `#dc0170` (via `var(--color-brand-pink)`). Display is wrong.
+**Fixed (Apr 18) — commits #3/#4:**
+- `components-base.css`: `.btn-ai-icon font-size: 11px` → `var(--font-size-2xs)`; `.app-chip` wrong purple `rgba(83,41,118,.1)` → `var(--chip-bg)`; `padding: 2px 8px` → token vars; `border-radius: 12px` → `var(--radius-pill)`; `gap: 4px` in section header → `var(--spacing-xs)`; `padding: 4px 12px` in view toggle → `var(--spacing-xs) var(--spacing-12)`
+- `hr/hr.css`: sidebar backdrop `rgba(0,0,0,.4)` → `var(--color-modal-overlay)`
+- `design-system/page.tsx`: nav-accent value corrected `#E60075` → `#dc0170`; dead `--color-nav-accent-hover` entry removed; undefined `--color-brand-purple-light/dark` → valid tokens
 
 ### P2 — UserProvider not mounted (intentional deferral)
 `UserContext.tsx` exports `UserProvider` but it is never imported or mounted in `layout.tsx`.

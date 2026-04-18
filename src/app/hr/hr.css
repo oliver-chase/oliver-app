@@ -15,7 +15,7 @@ html,body{background:var(--bg);color:var(--text)}
 .nav-icon{width:16px;height:16px;opacity:.7;flex-shrink:0}
 .app-sidebar-item.active .nav-icon{opacity:1}
 /* sidebar backdrop — shown on mobile when sidebar is open */
-.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49;pointer-events:none}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:var(--color-modal-overlay);z-index:49;pointer-events:none}
 /* push global search to the right of topbar */
 .gs-wrap{margin-left:auto}
 .avatar{width:30px;height:30px;border-radius:50%;background:var(--accent-light);color:var(--accent-text);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold)}
