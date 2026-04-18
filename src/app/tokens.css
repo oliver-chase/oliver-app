@@ -28,6 +28,9 @@
 
   /* ── Overlays ────────────────────────────────────────────────────────── */
   --color-modal-overlay:    rgba(0,0,0,.4);
+  --color-backdrop-overlay: rgba(0,0,0,.35);
+  --color-danger-border:    rgba(220,50,50,.35);
+  --color-danger-bg-hover:  rgba(220,50,50,.06);
   --color-pink-overlay-sm:  rgba(220,1,112,.15);
   --color-pink-overlay:     rgba(220,1,112,.2);
   --color-purple-overlay:   rgba(86,42,167,.15);
@@ -86,7 +89,7 @@
   --color-nav-border-entry: rgba(255,255,255,.28);
   --color-nav-hover-bg:     rgba(255,255,255,.07);
   --color-nav-accent:       var(--color-brand-pink);
-  --color-nav-accent-hover: #ff3399;
+  --color-nav-focus-ring:   rgba(255,255,255,.8);
 
   /* ── Functional ──────────────────────────────────────────────────────── */
   --color-chart-bar:        rgba(86,42,167,.25);
