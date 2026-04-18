@@ -467,7 +467,7 @@ function UploadConfirmCard({ file, accounts, currentAccountId, onSend, onCancel 
       <div className="chatbot-confirm-form">
         <label className="chatbot-confirm-label">Account</label>
         <div className="chatbot-confirm-picker-btn">{currentAcct?.account_name ?? 'Unknown account'}</div>
-        <label className="chatbot-confirm-label" style={{ marginTop: 8 }}>Context</label>
+        <label className="chatbot-confirm-label" style={{ marginTop: 'var(--spacing-sm)' }}>Context</label>
         <input
           type="text"
           className="chatbot-confirm-input"

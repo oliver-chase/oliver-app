@@ -13,8 +13,8 @@
   position: fixed;
   right: 20px;
   bottom: 24px;
-  width: 48px;
-  height: 48px;
+  width: var(--chatbot-trigger-size);
+  height: var(--chatbot-trigger-size);
   background: var(--color-brand-primary);
   color: var(--white);
   border: none;
@@ -42,7 +42,7 @@
 .chatbot-trigger:hover {
   background: var(--color-brand-purple);
   transform: scale(1.08);
-  box-shadow: 0 6px 16px rgba(83,41,118,.4);
+  box-shadow: 0 6px 16px var(--color-purple-overlay);
 }
 
 .chatbot-trigger:focus-visible {
@@ -212,8 +212,8 @@
 }
 
 .chatbot-typing-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--chatbot-typing-dot-size);
+  height: var(--chatbot-typing-dot-size);
   background: var(--text2);
   border-radius: 50%;
   animation: chatbot-bounce 1.2s infinite ease-in-out;
@@ -248,7 +248,7 @@
   font-family: var(--font);
   color: var(--text);
   background: var(--white);
-  line-height: 1.4;
+  line-height: var(--line-height-compact);
   min-height: 36px;
   max-height: 80px;
   overflow-y: auto;
@@ -278,7 +278,7 @@
 }
 
 .chatbot-upload-hint {
-  font-size: 11px;
+  font-size: var(--font-size-2xs);
   color: var(--text3);
   letter-spacing: .01em;
 }
