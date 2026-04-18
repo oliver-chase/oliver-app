@@ -1,12 +1,12 @@
 /*
  * CANONICAL TOKEN FILE — oliver-app Next.js rewrite
- * Use semantic names (--color-*, --font-size-*, --spacing-*) in all new components.
- * Legacy aliases at bottom are for backward compatibility only — do not use in new code.
+ * Every value in the app must reference a token from this file.
+ * No hardcoded hex, rgba, px, or em values in component CSS or TSX.
  */
 
 :root {
 
-  /* ── Brand colors ─────────────────────────────────────────────────────── */
+  /* ── Brand ───────────────────────────────────────────────────────────── */
   --color-white:       #FEFFFF;
   --color-brand-purple: #562aa7;
   --color-brand-pink:   #dc0170;
@@ -19,10 +19,20 @@
   --color-text-inverse:     var(--color-white);
 
   /* ── Backgrounds ─────────────────────────────────────────────────────── */
-  --color-bg-page:  #f5f5f6;
-  --color-bg-card:  var(--color-white);
-  --color-bg-input: var(--color-white);
-  --color-bg-hover: #f0f0f1;
+  --color-bg-page:     #f5f5f6;
+  --color-bg-card:     var(--color-white);
+  --color-bg-input:    var(--color-white);
+  --color-bg-hover:    #f0f0f1;
+  --color-bg-overdue:  rgba(220,1,112,.06);
+  --color-bg-required: rgba(220,1,112,.08);
+
+  /* ── Overlays ────────────────────────────────────────────────────────── */
+  --color-modal-overlay:    rgba(0,0,0,.4);
+  --color-pink-overlay-sm:  rgba(220,1,112,.15);
+  --color-pink-overlay:     rgba(220,1,112,.2);
+  --color-purple-overlay:   rgba(86,42,167,.15);
+  --color-overlay-subtle:   rgba(255,255,255,.06);
+  --color-overlay-border:   rgba(255,255,255,.18);
 
   /* ── Borders ─────────────────────────────────────────────────────────── */
   --color-border:        #e0e0e2;
@@ -72,16 +82,13 @@
   --color-nav-text:         var(--color-white);
   --color-nav-text-muted:   rgba(254,255,255,.7);
   --color-nav-text-faint:   rgba(254,255,255,.4);
+  --color-nav-text-entry:   rgba(254,255,255,.65);
+  --color-nav-border-entry: rgba(255,255,255,.28);
+  --color-nav-hover-bg:     rgba(255,255,255,.07);
   --color-nav-accent:       var(--color-brand-pink);
   --color-nav-accent-hover: #ff3399;
 
-  /* ── Overlay utilities (dark surfaces) ───────────────────────────────── */
-  --color-overlay-subtle: rgba(255,255,255,.06);
-  --color-overlay-border: rgba(255,255,255,.18);
-
-  /* ── Functional colors ───────────────────────────────────────────────── */
-  --color-bg-overdue:       rgba(220,1,112,.06);
-  --color-bg-required:      rgba(220,1,112,.08);
+  /* ── Functional ──────────────────────────────────────────────────────── */
   --color-chart-bar:        rgba(86,42,167,.25);
   --color-bg-sidebar-focus: rgba(255,255,255,.15);
 
@@ -130,6 +137,7 @@
   --spacing-2xs: 2px;
   --spacing-3:   3px;
   --spacing-xs:  4px;
+  --spacing-5:   5px;
   --spacing-6:   6px;
   --spacing-7:   7px;
   --spacing-sm:  8px;
@@ -137,6 +145,7 @@
   --spacing-12:  12px;
   --spacing-14:  14px;
   --spacing-md:  16px;
+  --spacing-18:  18px;
   --spacing-20:  20px;
   --spacing-lg:  24px;
   --spacing-xl:  32px;
@@ -144,17 +153,20 @@
   --spacing-56:  56px;
 
   /* ── Radius ──────────────────────────────────────────────────────────── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
-  --radius-full: 9999px;
+  --radius-sm:     4px;
+  --radius-md:     8px;
+  --radius-lg:     12px;
+  --radius-xl:     16px;
+  --radius-pill:   10px;
+  --radius-pill-lg: 20px;
+  --radius-full:   9999px;
 
   /* ── Elevation ───────────────────────────────────────────────────────── */
-  --shadow-card:       0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.10);
-  --shadow-popover:    0 4px 12px rgba(0, 0, 0, 0.12);
-  --shadow-modal:      0 4px 20px rgba(0, 0, 0, 0.15);
+  --shadow-card:       0 2px 8px rgba(0,0,0,.06);
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,.10);
+  --shadow-popover:    0 4px 12px rgba(0,0,0,.12);
+  --shadow-modal:      0 4px 20px rgba(0,0,0,.15);
+  --shadow-btt:        0 1px 4px rgba(0,0,0,.10);
 
   /* ── Z-index ─────────────────────────────────────────────────────────── */
   --z-base:    1;
@@ -176,12 +188,10 @@
   --sidebar-w:   220px;
   --topbar-h:    50px;
   --filterbar-h: 52px;
-
-  /* ── Accessibility ───────────────────────────────────────────────────── */
   --touch-target: 44px;
 
   /* ── Component tokens ────────────────────────────────────────────────── */
-  --chip-bg:                     rgba(86,42,167,0.1);
+  --chip-bg:                     rgba(86,42,167,.10);
   --chip-padding-y:              2px;
   --sync-dot-size:               7px;
   --avatar-size:                 34px;
@@ -221,27 +231,27 @@
   --accent-light: var(--color-brand-pink-light);
   --accent-text:  var(--color-brand-purple);
   --radius:       var(--radius-md);
-  --gray-light:  #8c8c8f;
-  --bg:          var(--color-bg-card);
-  --border2:     #d0d0d3;
-  --text2:       #797979;
-  --text3:       var(--color-text-placeholder);
-  --accent:      var(--color-brand-pink);
-  --green:       var(--color-green);
-  --green-light: var(--color-green-light);
-  --amber:       var(--color-amber);
-  --amber-light: var(--color-amber-light);
-  --red:         var(--color-red);
-  --red-light:   var(--color-red-light);
-  --blue:        var(--color-blue);
-  --blue-light:  var(--color-blue-light);
-  --hub-bg:      var(--color-nav-bg);
-  --hub-bg2:     var(--color-nav-bg-deep);
-  --hub-border:  var(--color-nav-border);
-  --hub-text:    var(--color-nav-text);
-  --hub-text2:   var(--color-nav-text-muted);
-  --hub-text3:   var(--color-nav-text-faint);
-  --hub-accent:  var(--color-brand-pink);
+  --gray-light:   #8c8c8f;
+  --bg:           var(--color-bg-card);
+  --border2:      #d0d0d3;
+  --text2:        #797979;
+  --text3:        var(--color-text-placeholder);
+  --accent:       var(--color-brand-pink);
+  --green:        var(--color-green);
+  --green-light:  var(--color-green-light);
+  --amber:        var(--color-amber);
+  --amber-light:  var(--color-amber-light);
+  --red:          var(--color-red);
+  --red-light:    var(--color-red-light);
+  --blue:         var(--color-blue);
+  --blue-light:   var(--color-blue-light);
+  --hub-bg:       var(--color-nav-bg);
+  --hub-bg2:      var(--color-nav-bg-deep);
+  --hub-border:   var(--color-nav-border);
+  --hub-text:     var(--color-nav-text);
+  --hub-text2:    var(--color-nav-text-muted);
+  --hub-text3:    var(--color-nav-text-faint);
+  --hub-accent:   var(--color-brand-pink);
 
   /* stubs — referenced in chatbot.css */
   --color-brand-primary: var(--color-brand-pink);

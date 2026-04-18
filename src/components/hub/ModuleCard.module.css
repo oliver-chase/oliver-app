@@ -3,7 +3,7 @@
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
+  padding: var(--spacing-20) var(--spacing-lg);
   text-decoration: none;
   color: var(--color-nav-text);
   transition: all 0.18s;
@@ -17,29 +17,29 @@
 }
 
 .cardName {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xs);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .badge {
   font-family: var(--font-family-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
+  font-size: var(--font-size-3xs);
+  letter-spacing: var(--letter-spacing-mid);
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
   background: var(--color-overlay-subtle);
-  padding: 2px 8px;
+  padding: var(--spacing-2xs) var(--spacing-sm);
   border-radius: var(--radius-full);
 }
 
 .cardDesc {
-  font-size: 13px;
+  font-size: var(--font-size-xs);
   color: var(--color-nav-text-muted);
-  line-height: 1.5;
+  line-height: var(--line-height-base);
 }
 
 .disabled {
