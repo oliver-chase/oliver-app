@@ -109,10 +109,15 @@ body {
   pointer-events: none;
 }
 
-.adminBtn {
+.adminLinks {
   position: fixed;
   bottom: var(--spacing-lg);
   right: var(--spacing-lg);
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.adminBtn {
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
   border-radius: var(--radius-md);

@@ -79,9 +79,10 @@ export default function HubPage() {
       </div>
 
       {isAdmin && (
-        <Link href="/admin" className={styles.adminBtn}>
-          Admin
-        </Link>
+        <div className={styles.adminLinks}>
+          <Link href="/design-system" className={styles.adminBtn}>Design System</Link>
+          <Link href="/admin" className={styles.adminBtn}>Admin</Link>
+        </div>
       )}
 
       <div className={styles.footer}>V.TWO &middot; 2026</div>
