@@ -48,6 +48,11 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
 - `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
 
+**Fixed (Apr 18) — commits #19–#22:**
+- Commits #19/#20: SDR inline margins tokenized; ExportPanel/OverviewSection SVG+PDF hex values documented with `// = var(--token)` — intentional pattern, clean
+- Commit #21 (`83196e8`): OrgChart toast div — `padding:'8px 16px'`→tokens, `fontWeight:600`→`var(--font-weight-semibold)`, `right:20`→`var(--spacing-20)`, `zIndex:300`→`var(--z-toast)`; detail panel `marginTop:14`→`var(--spacing-14)` (×2), error div `marginTop:4,paddingLeft:8`→tokens. Drag ghost cssText `z-index:9999` intentional (above all overlays, no token)
+- Commit #22 (`6474461`): HR files — `gap:8/10/16`, `marginTop:10`, `marginBottom:6/14`, `padding:'6px 10px'`, `margin:2` all tokenized across HrDirectory, HrHiring, HrInventory, HrOnboarding, HrSettings, HrTracks, HrDashboard, HrReports. `padding:'9px 0'` in HrDashboard dash-row intentional (no 9px token)
+
 **Fixed (Apr 18) — commits #11–#18:**
 - Commits #11/#12 (`87e25e0`, `dd246a9`): day label shortening + RLS docs — no token issues
 - Commits #13/#14 (`97f17e7`, `b02725b`): `users.ts` upsert rewrite + hub bypass — logic only, clean
