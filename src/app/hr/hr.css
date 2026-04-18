@@ -216,7 +216,7 @@ tr.selected td{background:var(--accent-light)}
 /* Bottom nav — hidden on desktop, shown on mobile */
 .bottom-nav{display:none}
 /* ── MOBILE ─────────────────────────────────────────────── */
-@media (max-width: 768px) {
+@media (max-width: 500px) {
   /* App layout — make room for bottom nav */
   .main{margin-left:0;width:100%;padding-bottom:60px}
 
@@ -336,11 +336,6 @@ tr.selected td{background:var(--accent-light)}
   div[style*="width:260px"]{width:100%!important;border-right:none;border-bottom:1px solid var(--border);max-height:50vh}
 }
 
-@media (max-width: 480px) {
-  .stat-grid{grid-template-columns:1fr}
-  .device-grid{grid-template-columns:1fr}
-  .page{padding:var(--spacing-12)}
-}
 /* ── GLOBAL SEARCH ───────────────────────────────────────────────────────── */
 .gs-wrap{position:relative;display:flex;align-items:center;gap:var(--spacing-6)}
 .gs-icon-btn{background:none;border:none;cursor:pointer;color:var(--text2);padding:var(--spacing-xs);display:flex;align-items:center;justify-content:center;border-radius:var(--radius)}

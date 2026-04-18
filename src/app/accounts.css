@@ -257,6 +257,9 @@ th.sorted .sort-arrow{opacity:1;color:var(--pink)}
   .overview-stat{min-width:100%!important;flex:1 1 100%!important}
   .account-header-actions{flex-direction:column;width:100%;gap:var(--spacing-sm)}
   .account-header-actions .btn-acct-action{width:100%;min-height:var(--touch-target)}
+  .table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch;scrollbar-width:auto}
+  .data-table{font-size:var(--font-size-xs)}
+  .data-table th,.data-table td{padding:var(--spacing-6) var(--spacing-10);white-space:nowrap}
   .overview-grid,.people-grid,.project-grid,.portfolio-grid{grid-template-columns:1fr}
   .app-section-header{flex-wrap:wrap;gap:var(--spacing-sm)}
   .filter-chip,.app-view-toggle-btn,.sort-select,.filter-reset,.btn-dashed,.btn--compact,.sidebar-add-btn{min-height:var(--touch-target);padding-top:var(--spacing-10);padding-bottom:var(--spacing-10)}
