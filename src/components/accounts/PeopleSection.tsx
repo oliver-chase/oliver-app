@@ -149,7 +149,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
         <div className="app-section-title">People</div>
         <div className="section-header-row2">
           <div className="section-header-left">
-            <button className="btn-ghost btn--compact" id="btn-add-person" onClick={() => { setView('cards'); setAdding(true) }}>+ Add person</button>
+            <button className="btn-link" id="btn-add-person" onClick={() => { setView('cards'); setAdding(true) }}>+ Add person</button>
           </div>
           <div className="section-actions">
             <div className="people-filter-wrapper">
