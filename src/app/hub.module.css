@@ -24,7 +24,7 @@ body {
 .wordmark {
   font-family: var(--font-family-base);
   font-size: var(--font-size-hero);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--color-nav-text);
   letter-spacing: -0.02em;
   line-height: 1;
@@ -67,7 +67,7 @@ body {
 
 .cardName {
   font-size: var(--font-size-md);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin-bottom: var(--spacing-xs);
   display: flex;
   align-items: center;
