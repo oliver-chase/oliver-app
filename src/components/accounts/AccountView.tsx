@@ -136,10 +136,11 @@ export default function AccountView({
 
       <button
         id="btt"
-        className={'btt' + (bttVisible ? ' show' : '')}
+        className={'btn btn-ghost' + (bttVisible ? '' : ' hidden')}
         aria-label="Back to top"
         title="Back to top"
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        style={{ position: 'fixed', bottom: 'var(--spacing-20)', right: 'var(--spacing-20)', display: bttVisible ? 'inline-flex' : 'none' }}
       >
         {'\u2191'}
       </button>

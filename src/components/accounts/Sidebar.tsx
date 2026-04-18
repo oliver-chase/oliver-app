@@ -49,7 +49,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        <button className="sidebar-add-btn" id="btn-add-account" onClick={onAddAccount}>
+        <button className="btn btn-primary btn--compact" id="btn-add-account" onClick={onAddAccount}>
           + Add Account
         </button>
       </aside>
