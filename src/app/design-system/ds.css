@@ -67,7 +67,7 @@
 }
 
 .swatchBlock {
-  height: 56px;
+  height: var(--spacing-56);
   width: 100%;
 }
 
@@ -167,7 +167,7 @@
 }
 
 .spacingBar {
-  height: 16px;
+  height: var(--spacing-md);
   background: var(--color-brand-purple);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
