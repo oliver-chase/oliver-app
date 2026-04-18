@@ -163,6 +163,15 @@
 @media (max-width: 500px) {
   .app-card { width: 100%; }
 
+  .org-node {
+    width: 100%;
+    max-width: calc(100vw - var(--spacing-md) * 2);
+  }
+
+  .org-branch {
+    flex-direction: column;
+  }
+
   .app-sidebar {
     transform: translateX(-100%);
     transition: transform var(--transition-base);

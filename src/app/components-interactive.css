@@ -80,6 +80,12 @@
   color: var(--color-text-primary);
   cursor: pointer;
   user-select: none;
+  min-height: var(--touch-target);
+}
+@media (max-width: 500px) {
+  .app-popover-item {
+    padding: var(--spacing-10) var(--spacing-sm);
+  }
 }
 .app-popover-item:hover { background: var(--color-bg-hover); }
 .app-popover-item.selected { background: var(--color-brand-pink-light); font-weight: var(--font-weight-bold); }
