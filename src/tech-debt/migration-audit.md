@@ -48,6 +48,10 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
 - `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
 
+**Fixed (Apr 18) — commits #25/#26:**
+- Commit #25 (`e024554`): filter prop drilling across AccountView, AccountsApp, ActionsSection, NotesSection, PeopleSection — logic only, no inline style changes, clean
+- Commit #26 (`77c5b30`): hr.css + sdr.css — full file rewrite tokenizing all raw spacing/gap/margin/padding, font-weight 500/600/700 → medium/semibold/bold tokens, z-index 1→var(--z-base), 100→var(--z-popover); sdr.css P1 resolved: `rgba(0,0,0,.4)`→`var(--color-modal-overlay)`, `rgba(0,0,0,.35)`→`var(--color-backdrop-overlay)`; font-size 11px→var(--font-size-2xs). Intentional: `z-index:40/49/400/500`, `7px/9px/11px/14px` unmatched sizes, avatar pixel widths (28/30/38/40px), layout widths (260/380/420/560px), `rgba()` opacity values with no overlay token, `28px` font-size on stat values, `22px` cp-fab icon, bottom-nav `60px` clearance
+
 **Fixed (Apr 18) — commits #23/#24:**
 - Commit #23 (`b39a014`): debounce logic only — no token issues across ActionsSection, NotesSection, OpportunitiesSection, OverviewSection, ProjectsSection
 - Commit #24 (`51e8022`): design-system page.tsx — all inline styles use `var(${token})` interpolation (correct); ds.css — `height:56px`→`var(--spacing-56)`, `height:16px`→`var(--spacing-md)`; remaining values (`max-width:1100px`, grid `minmax`, `64px`×2, `200px`×2) are display-only layout constraints with no matching tokens

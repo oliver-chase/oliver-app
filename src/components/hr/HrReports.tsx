@@ -148,7 +148,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       {depts.length > 0 && (
         <div className="card" style={{ marginTop: 'var(--spacing-md)' }}>
           <div className="card-section-hdr">By Department</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-10)' }}>
             {depts.map(sp => (
               <div key={sp} className="report-spec-card">
                 <div className="report-spec-count">{db.candidates.filter(c => c.dept === sp).length}</div>
