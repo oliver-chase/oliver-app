@@ -70,6 +70,15 @@ export default function AccountView({
             placeholder="Account name"
             onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
           />
+          <ContentEditable
+            id="account-client-company"
+            className="account-client-company"
+            title="Click to edit full client name"
+            value={acct.client_company || ''}
+            ariaLabel="Full client name"
+            placeholder="Full client name"
+            onSave={v => onUpdateAccount({ ...acct, client_company: v, last_updated: today() })}
+          />
           <div className="page-last-updated" id="page-last-updated">
             {acct.last_updated ? 'Last updated ' + fmtDate(acct.last_updated) : ''}
           </div>

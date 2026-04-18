@@ -5,6 +5,9 @@ interface ModalOpts {
   title: string
   message?: string
   inputPlaceholder?: string
+  inputLabel?: string
+  secondInputPlaceholder?: string
+  secondInputLabel?: string
   confirmLabel?: string
   cancelLabel?: string
   dangerConfirm?: boolean
@@ -13,6 +16,7 @@ interface ModalOpts {
 interface ModalResult {
   buttonValue: 'confirm' | 'cancel'
   inputValue: string
+  secondInputValue: string
 }
 
 interface ActiveModal extends ModalOpts {
@@ -20,13 +24,16 @@ interface ActiveModal extends ModalOpts {
 }
 
 function AppModalUI({
-  title, message, inputPlaceholder,
+  title, message, inputPlaceholder, inputLabel, secondInputPlaceholder, secondInputLabel,
   confirmLabel = 'OK', cancelLabel = 'Cancel', dangerConfirm = false,
   onConfirm, onCancel,
-}: ModalOpts & { onConfirm: (inputValue: string) => void; onCancel: () => void }) {
+}: ModalOpts & { onConfirm: (inputValue: string, secondInputValue: string) => void; onCancel: () => void }) {
   const titleId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
+  const secondInputRef = useRef<HTMLInputElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
+  const hasTwoInputs = inputPlaceholder !== undefined && secondInputPlaceholder !== undefined
+  const [confirmEnabled, setConfirmEnabled] = useState(!hasTwoInputs)
 
   useEffect(() => {
     ;(inputRef.current ?? confirmRef.current)?.focus()
@@ -38,7 +45,17 @@ function AppModalUI({
     return () => document.removeEventListener('keydown', onKey)
   }, [onCancel])
 
-  const submit = () => onConfirm(inputRef.current?.value ?? '')
+  const checkEnabled = () => {
+    if (!hasTwoInputs) return
+    const v1 = inputRef.current?.value.trim() || ''
+    const v2 = secondInputRef.current?.value.trim() || ''
+    setConfirmEnabled(v1.length > 0 && v2.length > 0)
+  }
+
+  const submit = () => {
+    if (hasTwoInputs && !confirmEnabled) return
+    onConfirm(inputRef.current?.value ?? '', secondInputRef.current?.value ?? '')
+  }
 
   return (
     <div
@@ -50,14 +67,32 @@ function AppModalUI({
         <div className="app-modal-body">
           {message && <p>{message}</p>}
           {inputPlaceholder !== undefined && (
-            <input
-              ref={inputRef}
-              className="app-modal-input"
-              type="text"
-              placeholder={inputPlaceholder}
-              aria-label={title}
-              onKeyDown={e => { if (e.key === 'Enter') submit() }}
-            />
+            <>
+              {inputLabel && <label style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-xs)' }}>{inputLabel}</label>}
+              <input
+                ref={inputRef}
+                className="app-modal-input"
+                type="text"
+                placeholder={inputPlaceholder}
+                aria-label={inputLabel ?? title}
+                onChange={checkEnabled}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); secondInputRef.current ? secondInputRef.current.focus() : submit() } }}
+              />
+            </>
+          )}
+          {secondInputPlaceholder !== undefined && (
+            <>
+              {secondInputLabel && <label style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-md)', marginBottom: 'var(--spacing-xs)' }}>{secondInputLabel}</label>}
+              <input
+                ref={secondInputRef}
+                className="app-modal-input"
+                type="text"
+                placeholder={secondInputPlaceholder}
+                aria-label={secondInputLabel ?? 'Second input'}
+                onChange={checkEnabled}
+                onKeyDown={e => { if (e.key === 'Enter') submit() }}
+              />
+            </>
           )}
         </div>
         <div className="app-modal-actions">
@@ -66,6 +101,7 @@ function AppModalUI({
             ref={confirmRef}
             className={'btn ' + (dangerConfirm ? 'btn-danger' : 'btn-primary')}
             type="button"
+            disabled={hasTwoInputs ? !confirmEnabled : false}
             onClick={submit}
           >
             {confirmLabel}
@@ -83,13 +119,13 @@ export function useAppModal() {
     return new Promise(resolve => setActive({ ...opts, resolve }))
   }, [])
 
-  const handleConfirm = (inputValue: string) => {
-    active?.resolve({ buttonValue: 'confirm', inputValue })
+  const handleConfirm = (inputValue: string, secondInputValue: string) => {
+    active?.resolve({ buttonValue: 'confirm', inputValue, secondInputValue })
     setActive(null)
   }
 
   const handleCancel = () => {
-    active?.resolve({ buttonValue: 'cancel', inputValue: '' })
+    active?.resolve({ buttonValue: 'cancel', inputValue: '', secondInputValue: '' })
     setActive(null)
   }
 

@@ -53,13 +53,16 @@ export default function AccountsApp() {
   }, [])
 
   const handleAddAccount = useCallback(async () => {
-    const { buttonValue, inputValue } = await showModal({
+    const { buttonValue, inputValue, secondInputValue } = await showModal({
       title: 'New account',
-      inputPlaceholder: 'Account name',
+      inputLabel: 'Short name',
+      inputPlaceholder: 'e.g. NCL',
+      secondInputLabel: 'Full client name',
+      secondInputPlaceholder: 'e.g. Norwegian Cruise Line',
       confirmLabel: 'Create',
     })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
-    const rec = await addAccount(inputValue.trim())
+    const rec = await addAccount(inputValue.trim(), secondInputValue.trim())
     setCurrentAccountId(rec.account_id)
   }, [addAccount, showModal])
 

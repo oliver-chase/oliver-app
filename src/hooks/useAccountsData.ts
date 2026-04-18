@@ -44,11 +44,11 @@ export function useAccountsData() {
     }
   }, [])
 
-  const addAccount = useCallback(async (name: string) => {
+  const addAccount = useCallback(async (name: string, clientCompany = '') => {
     const rec: Account = {
       account_id: 'ACCT-' + Date.now().toString(36),
       account_name: name,
-      client_company: '',
+      client_company: clientCompany,
       status: 'Active',
       created_date: today(),
       last_updated: today(),
