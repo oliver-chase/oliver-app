@@ -43,6 +43,17 @@ Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) h
 - `hr/hr.css`: sidebar backdrop `rgba(0,0,0,.4)` → `var(--color-modal-overlay)`
 - `design-system/page.tsx`: nav-accent value corrected `#E60075` → `#dc0170`; dead `--color-nav-accent-hover` entry removed; undefined `--color-brand-purple-light/dark` → valid tokens
 
+**Fixed (Apr 18) — commits #5/#6:**
+- `NotesSection.tsx` line 341: note date editor `borderRadius: 3` → `var(--editable-radius)`; `padding: '1px 3px'` → `var(--editable-padding)`
+- `layout/Topbar.tsx` (commit #6): nav order already correct (Overview → People → Actions → Opp → Projects → Notes). No change needed.
+- `ActionsSection.tsx`, `PeopleSection.tsx`, `ProjectsSection.tsx`, `OverviewSection.tsx`: all clean after commit #5. Legacy aliases (`--font`, `--text`, `--gray`, `--pink` etc.) valid via tokens.css. `1.5px dashed var(--pink)` on new-card border intentional — no token for 1.5px.
+
+**Fixed (Apr 18) — user design feedback:**
+- `tokens.css`: `--color-brand-purple` updated `#562aa7` → `#171433`
+- `design-system/page.tsx`: display value updated to match
+- `components-base.css`: `.btn-link` — added `text-decoration: none` (+ Add / + Add attendee / + Add project underline removed)
+- `layout/Topbar.tsx` + `AccountsApp.tsx`: topbar account name now contentEditable with blur-save via `onAccountNameChange` prop
+
 ### P2 — UserProvider not mounted (intentional deferral)
 `UserContext.tsx` exports `UserProvider` but it is never imported or mounted in `layout.tsx`.
 `useUser()` in hub page, admin page, and PageGuard returns default context (null user, no permissions).

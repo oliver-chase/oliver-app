@@ -338,7 +338,7 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
           role="textbox"
           aria-label="Date (MM/DD/YYYY)"
           title="Click to edit date"
-          style={{ outline: 'none', borderRadius: 3, cursor: 'text', padding: '1px 3px' }}
+          style={{ outline: 'none', borderRadius: 'var(--editable-radius)', cursor: 'text', padding: 'var(--editable-padding)' }}
           onClick={e => e.stopPropagation()}
           onBlur={() => {
             const v = dateRef.current?.textContent?.trim() || ''
