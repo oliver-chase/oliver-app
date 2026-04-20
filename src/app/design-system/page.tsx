@@ -943,6 +943,23 @@ export default function DesignSystemPage() {
             <button className="btn-dashed btn--compact">btn-dashed</button>
           </div>
         </div>
+        <div className="componentRow">
+          <div className="componentLabel">Disabled state</div>
+          <div className="componentDemo">
+            <button className="btn btn-primary" disabled>Primary</button>
+            <button className="btn btn-secondary" disabled>Secondary</button>
+            <button className="btn btn-ghost" disabled>Ghost</button>
+            <button className="btn btn-danger" disabled>Danger</button>
+          </div>
+        </div>
+        <div className="componentRow">
+          <div className="componentLabel">Hover &amp; focus</div>
+          <div className="componentDemo componentStatesNote">
+            Hover and focus-visible are CSS pseudo-states — trigger them live by
+            mousing over or tabbing to the default buttons above. Focus ring =
+            2px outline in <code>--color-border-focus</code>, offset 1px.
+          </div>
+        </div>
       </div>
 
       {/* ── SECTION 6 — LAYOUT TOKENS ── */}

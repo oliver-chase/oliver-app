@@ -260,6 +260,21 @@
   padding: var(--spacing-2xs) 0;
 }
 
+.componentStatesNote {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.componentStatesNote code {
+  font-family: var(--font-family-mono);
+  font-size: inherit;
+  background: var(--color-bg-hover);
+  padding: 1px var(--spacing-xs);
+  border-radius: var(--radius-sm);
+}
+
 .swatchMeta {
   padding: var(--spacing-xs) var(--spacing-sm);
 }
