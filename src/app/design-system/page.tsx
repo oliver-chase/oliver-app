@@ -150,19 +150,95 @@ const COLOR_GROUPS = [
 
 // ── Typography ──────────────────────────────────────────────────────────────
 
-const FONT_SIZES = [
-  { token: '--font-size-3xs',     value: '9px',  label: '3XS' },
-  { token: '--font-size-2xs',     value: '11px', label: '2XS' },
-  { token: '--font-size-xs',      value: '13px', label: 'XS' },
-  { token: '--font-size-sm',      value: '14px', label: 'SM' },
-  { token: '--font-size-md',      value: '16px', label: 'MD' },
-  { token: '--font-size-base',    value: '15px', label: 'Base' },
-  { token: '--font-size-lg',      value: '17px', label: 'LG' },
-  { token: '--font-size-xl',      value: '20px', label: 'XL' },
-  { token: '--font-size-2xl',     value: '24px', label: '2XL' },
-  { token: '--font-size-display', value: '26px', label: 'Display' },
-  { token: '--font-size-hero',    value: '48px', label: 'Hero' },
-  { token: '--font-size-hero-sm', value: '36px', label: 'Hero SM' },
+interface FontSize {
+  token: string
+  value: string
+  label: string
+  specimen: string
+  usages: Array<{ surface: string; example: string }>
+}
+
+const FONT_SIZES: FontSize[] = [
+  { token: '--font-size-3xs',     value: '9px',  label: '3XS',
+    specimen: 'META · APR 2026',
+    usages: [
+      { surface: 'Accounts', example: 'Dash-row-sub caption under person name' },
+    ],
+  },
+  { token: '--font-size-2xs',     value: '11px', label: '2XS',
+    specimen: 'PENDING · QUEUED',
+    usages: [
+      { surface: 'SDR', example: 'sdr-status-badge, sdr-batch-stat pills' },
+      { surface: 'Design-system', example: 'typeUsagesLabel small uppercase caption' },
+    ],
+  },
+  { token: '--font-size-xs',      value: '13px', label: 'XS',
+    specimen: 'The bulk of dense HR + Accounts text',
+    usages: [
+      { surface: 'HR', example: 'Table td, pill, kanban-name, .btn, form-label, form-input' },
+      { surface: 'Accounts', example: 'portfolio stat, notes meta, btn-acct-action' },
+      { surface: 'SDR', example: 'prospect meta, pagination page-info, draft-gen' },
+    ],
+  },
+  { token: '--font-size-sm',      value: '14px', label: 'SM',
+    specimen: 'Section body and draft bodies',
+    usages: [
+      { surface: 'SDR', example: 'sdr-search-input, sdr-draft-body, sdr-draft-subject' },
+      { surface: 'HR', example: 'page-subtitle, sync-status spans' },
+      { surface: 'Accounts', example: 'notes-search, account-client-company' },
+    ],
+  },
+  { token: '--font-size-md',      value: '16px', label: 'MD',
+    specimen: 'Occasional emphasis',
+    usages: [
+      { surface: 'Accounts', example: 'account-client-company (base size for edit field)' },
+    ],
+  },
+  { token: '--font-size-base',    value: '15px', label: 'Base',
+    specimen: 'Default body (rare — UI prefers XS/SM)',
+    usages: [
+      { surface: 'HR', example: 'app-modal-title, empty-title' },
+    ],
+  },
+  { token: '--font-size-lg',      value: '17px', label: 'LG',
+    specimen: 'Detail panel titles',
+    usages: [
+      { surface: 'SDR', example: 'sdr-detail-name (prospect title in side panel)' },
+    ],
+  },
+  { token: '--font-size-xl',      value: '20px', label: 'XL',
+    specimen: 'Page Title',
+    usages: [
+      { surface: 'HR', example: '.page-title on all HR routes' },
+      { surface: 'Accounts', example: 'Reports spec count' },
+      { surface: 'SDR', example: 'sdr-section-header h2' },
+    ],
+  },
+  { token: '--font-size-2xl',     value: '24px', label: '2XL',
+    specimen: 'Account Hero',
+    usages: [
+      { surface: 'Accounts', example: 'account-name-heading on AccountView' },
+      { surface: 'Design-system', example: 'pageTitle on this page' },
+    ],
+  },
+  { token: '--font-size-display', value: '26px', label: 'Display',
+    specimen: '123',
+    usages: [
+      { surface: 'HR', example: 'stat-value on Dashboard + Reports stat cards' },
+    ],
+  },
+  { token: '--font-size-hero-sm', value: '36px', label: 'Hero SM',
+    specimen: 'V.Two Ops',
+    usages: [
+      { surface: 'Hub', example: 'Brand wordmark on hub index (mobile)' },
+    ],
+  },
+  { token: '--font-size-hero',    value: '48px', label: 'Hero',
+    specimen: 'V.Two Ops',
+    usages: [
+      { surface: 'Hub', example: 'Brand wordmark on hub index (desktop)' },
+    ],
+  },
 ]
 
 const FONT_WEIGHTS = [
@@ -297,11 +373,21 @@ const COMPONENT_TOKENS = [
 
 // ────────────────────────────────────────────────────────────────────────────
 
+const DESIGN_SECTIONS = [
+  { id: 'sec-colors',     label: 'Colors' },
+  { id: 'sec-typography', label: 'Typography' },
+  { id: 'sec-spacing',    label: 'Spacing' },
+  { id: 'sec-effects',    label: 'Radius / Shadows / Z / Transitions' },
+  { id: 'sec-components', label: 'Components' },
+  { id: 'sec-layout',     label: 'Layout Tokens' },
+]
+
 export default function DesignSystemPage() {
   const { modal, showModal } = useAppModal()
   const [pickerVal, setPickerVal] = useState('')
   const [multiVal, setMultiVal] = useState<string[]>([])
   const [showConfirm, setShowConfirm] = useState(false)
+  const [expandedType, setExpandedType] = useState<string | null>(null)
 
   return (
     <div className="page">
@@ -322,8 +408,14 @@ export default function DesignSystemPage() {
         <div className="pageTitle">Design System</div>
       </div>
 
+      <nav className="anchorNav" aria-label="Design system sections">
+        {DESIGN_SECTIONS.map(s => (
+          <a key={s.id} href={'#' + s.id} className="anchorLink">{s.label}</a>
+        ))}
+      </nav>
+
       {/* ── SECTION 1 — COLOR TOKENS ── */}
-      <div className="section">
+      <div className="section" id="sec-colors">
         <div className="sectionTitle">1 — Color Tokens</div>
         <p className="sectionNote">Click a token name to copy it to clipboard.</p>
         {COLOR_GROUPS.map(({ group, tokens }) => (
@@ -353,21 +445,45 @@ export default function DesignSystemPage() {
       </div>
 
       {/* ── SECTION 2 — TYPOGRAPHY ── */}
-      <div className="section">
+      <div className="section" id="sec-typography">
         <div className="sectionTitle">2 — Typography</div>
 
-        <div className="groupTitle">Font Sizes</div>
-        {FONT_SIZES.map(({ token, value, label }) => (
-          <div key={token} className="typeRow">
-            <div className="typeMeta">
-              <div className="typeToken">{token}</div>
-              <div className="typeValue">{value}</div>
+        <div className="groupTitle">Font Sizes · click a row to see where it&rsquo;s used</div>
+        {FONT_SIZES.map(({ token, value, label, specimen, usages }) => {
+          const isOpen = expandedType === token
+          return (
+            <div key={token}>
+              <div
+                className="typeRow typeRowExpandable"
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                onClick={() => setExpandedType(isOpen ? null : token)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedType(isOpen ? null : token) } }}
+              >
+                <div className="typeMeta">
+                  <div className="typeToken">{token}</div>
+                  <div className="typeValue">{value} · {label}</div>
+                </div>
+                <div className="typeSample" style={{ fontSize: `var(${token})` }}>
+                  {specimen}
+                </div>
+                <span className="typeExpandIcon" aria-hidden="true">{isOpen ? '−' : '+'}</span>
+              </div>
+              {isOpen && (
+                <div className="typeUsages">
+                  <div className="typeUsagesLabel">Used by ({usages.length})</div>
+                  {usages.map((u, i) => (
+                    <div key={i} className="typeUsageItem">
+                      <span className="typeUsageSurface">{u.surface}</span>
+                      <span className="typeUsageExample">{u.example}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="typeSample" style={{ fontSize: `var(${token})` }}>
-              {label} — The quick brown fox
-            </div>
-          </div>
-        ))}
+          )
+        })}
 
         <div className="groupTitle" style={{ marginTop: 'var(--spacing-xl)' }}>Font Weights</div>
         {FONT_WEIGHTS.map(({ token, value, label }) => (
@@ -431,7 +547,7 @@ export default function DesignSystemPage() {
       </div>
 
       {/* ── SECTION 3 — SPACING ── */}
-      <div className="section">
+      <div className="section" id="sec-spacing">
         <div className="sectionTitle">3 — Spacing</div>
         {SPACING.map(({ token, value }) => (
           <div key={token} className="spacingRow">
@@ -445,7 +561,7 @@ export default function DesignSystemPage() {
       </div>
 
       {/* ── SECTION 4 — RADIUS, SHADOWS, Z-INDEX, TRANSITIONS ── */}
-      <div className="section">
+      <div className="section" id="sec-effects">
         <div className="sectionTitle">4 — Radius, Shadows, Z-Index, Transitions</div>
 
         <div className="groupTitle">Border Radius</div>
@@ -523,7 +639,7 @@ export default function DesignSystemPage() {
       </div>
 
       {/* ── SECTION 5 — COMPONENTS ── */}
-      <div className="section">
+      <div className="section" id="sec-components">
         <div className="sectionTitle">5 — Components</div>
 
         <div className="groupTitle">AppChip</div>
@@ -677,7 +793,7 @@ export default function DesignSystemPage() {
       </div>
 
       {/* ── SECTION 6 — LAYOUT TOKENS ── */}
-      <div className="section">
+      <div className="section" id="sec-layout">
         <div className="sectionTitle">6 — Layout Tokens</div>
         <p className="sectionNote">Dimension diagrams use actual token values. Horizontal bars = widths, vertical bars = heights, squares = square dimensions.</p>
 
