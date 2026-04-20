@@ -50,7 +50,10 @@ const EMPTY_DB: HrDB = {
 
 async function fetchTable<T>(table: string): Promise<T[]> {
   const { data, error } = await supabase.from(table).select('*')
-  if (error) { console.error('[HR]', table, error.message); return [] }
+  if (error) {
+    console.error('[HR]', table, error.message)
+    throw new Error('[HR] ' + table + ': ' + error.message)
+  }
   return (data ?? []) as T[]
 }
 

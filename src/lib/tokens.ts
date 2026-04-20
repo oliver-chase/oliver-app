@@ -8,17 +8,19 @@ export interface DesignToken {
 }
 
 export async function listTokenOverrides(): Promise<DesignToken[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('design_tokens')
     .select('*')
     .order('category')
+  if (error) throw new Error('listTokenOverrides: ' + error.message)
   return data ?? []
 }
 
 export async function upsertToken(token_name: string, token_value: string, category: string): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('design_tokens')
     .upsert({ token_name, token_value, category })
+  if (error) throw new Error('upsertToken ' + token_name + ': ' + error.message)
 }
 
 export async function applyTokenOverrides(): Promise<void> {

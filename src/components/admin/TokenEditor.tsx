@@ -40,30 +40,43 @@ export function TokenEditor() {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    listTokenOverrides().then(tokens => {
-      const map: Record<string, string> = {}
-      for (const t of tokens) map[t.token_name] = t.token_value
-      setOverrides(map)
-    })
+    listTokenOverrides()
+      .then(tokens => {
+        const map: Record<string, string> = {}
+        for (const t of tokens) {
+          map[t.token_name] = t.token_value
+          document.documentElement.style.setProperty(t.token_name, t.token_value)
+        }
+        setOverrides(map)
+      })
+      .catch(err => setError(err instanceof Error ? err.message : String(err)))
   }, [])
 
   async function save(tokenName: string) {
     if (!draft.trim()) return
     setSaving(true)
+    setError(null)
     const token = BASE_TOKENS.find(t => t.name === tokenName)
-    await upsertToken(tokenName, draft.trim(), token?.category ?? 'other')
-    document.documentElement.style.setProperty(tokenName, draft.trim())
-    setOverrides(prev => ({ ...prev, [tokenName]: draft.trim() }))
-    setEditing(null)
-    setSaving(false)
+    try {
+      await upsertToken(tokenName, draft.trim(), token?.category ?? 'other')
+      document.documentElement.style.setProperty(tokenName, draft.trim())
+      setOverrides(prev => ({ ...prev, [tokenName]: draft.trim() }))
+      setEditing(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const categories = [...new Set(BASE_TOKENS.map(t => t.category))]
 
   return (
     <div className={styles.tokenEditor}>
+      {error && <div className={styles.errorBanner} role="alert">Token save failed: {error}</div>}
       {categories.map(cat => (
         <div key={cat} className={styles.tokenGroup}>
           <div className={styles.tokenGroupLabel}>{cat}</div>
