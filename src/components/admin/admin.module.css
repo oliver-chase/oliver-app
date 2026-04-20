@@ -105,7 +105,7 @@
 
 .tokenGroupLabel {
   font-family: var(--font-family-mono);
-  font-size: 10px;
+  font-size: var(--font-size-3xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
