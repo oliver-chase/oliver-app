@@ -21,6 +21,65 @@ function ResolvedValue({ token, fallback }: { token: string; fallback: string })
   return <>{v}</>
 }
 
+function DeadTokenAudit() {
+  const colorTokens = COLOR_GROUPS.flatMap(g => g.tokens.map(t => t.name))
+  const deadColors = colorTokens.filter(n => !(n in COLOR_USAGES) || COLOR_USAGES[n].length === 0)
+  const deadSpacing = SPACING.filter(s => s.usages.length === 0).map(s => s.token)
+  const deadLayout = LAYOUT_BARS.filter(l => l.usages.length === 0).map(l => l.token)
+  const total = deadColors.length + deadSpacing.length + deadLayout.length
+  const [open, setOpen] = useState(false)
+
+  if (total === 0) {
+    return (
+      <div className="deadAudit deadAudit--clean">
+        <span className="deadAuditCount">✓</span>
+        <span>Dead-token audit clean — every tracked token has at least one recorded consumer.</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={'deadAudit' + (open ? ' deadAudit--open' : '')}>
+      <button
+        type="button"
+        className="deadAuditToggle"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="deadAuditCount">{total}</span>
+        <span>tokens with no tracked usage</span>
+        <span className="deadAuditChevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="deadAuditBody">
+          <p className="sectionNote">
+            Missing usage data usually means the token is unused — or that this page
+            hasn&rsquo;t catalogued it yet. Grep the codebase before deleting.
+          </p>
+          {deadColors.length > 0 && (
+            <div className="deadAuditGroup">
+              <div className="typeUsagesLabel">Colors ({deadColors.length})</div>
+              {deadColors.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+            </div>
+          )}
+          {deadSpacing.length > 0 && (
+            <div className="deadAuditGroup">
+              <div className="typeUsagesLabel">Spacing ({deadSpacing.length})</div>
+              {deadSpacing.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+            </div>
+          )}
+          {deadLayout.length > 0 && (
+            <div className="deadAuditGroup">
+              <div className="typeUsagesLabel">Layout ({deadLayout.length})</div>
+              {deadLayout.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CopyToken({ name }: { name: string }) {
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
@@ -461,6 +520,8 @@ export default function DesignSystemPage() {
           <a key={s.id} href={'#' + s.id} className="anchorLink">{s.label}</a>
         ))}
       </nav>
+
+      <DeadTokenAudit />
 
       {/* ── SECTION 1 — COLOR TOKENS ── */}
       <div className="section" id="sec-colors">
