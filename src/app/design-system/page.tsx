@@ -361,7 +361,7 @@ interface SpacingToken {
 
 const SPACING: SpacingToken[] = [
   { token: '--spacing-2xs', value: '2px',  usages: ['Meta lines, dash-row-sub gap, detail-row padding, badge-overdue pill'] },
-  { token: '--spacing-3',   value: '3px',  usages: [] },
+  { token: '--spacing-3',   value: '3px',  usages: ['Accounts: tier-pill/exec-pill/eng-tag/bullet-heading/form-label/org-zoom/org-node-owner/proj-meta padding-y', 'components-layout: app-sidebar-item-label border-radius'] },
   { token: '--spacing-xs',  value: '4px',  usages: ['Inline captions, pill padding-y, gs-item-sub, stat-sub'] },
   { token: '--spacing-6',   value: '6px',  usages: ['Filter-bar gap, btn-ghost padding-x, .sync-dot height'] },
   { token: '--spacing-7',   value: '7px',  usages: ['sdr-search-input padding-y'] },
