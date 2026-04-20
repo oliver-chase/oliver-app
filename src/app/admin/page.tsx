@@ -47,7 +47,7 @@ export default function AdminPage() {
 
   useRegisterOliver(oliverConfig)
 
-  if (!appUser || !isAdmin) return null
+  if (appUser !== null && !isAdmin) return null
 
   return (
     <div className={styles.page}>

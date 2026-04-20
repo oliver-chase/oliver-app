@@ -4,7 +4,7 @@
    :root override adjusts --bg and secondary text colors for HR's lighter content area.
 
    TOP-MARGIN SCALE (canonical, see src/tech-debt/margin-scale.md):
-     page-top padding  = var(--spacing-20)  20px
+     page-top total    = calc(spacing-md + spacing-20) 36px  (matches Accounts: .main spacing-md + .account-header-row spacing-20)
      section gap       = var(--spacing-xl)  32px  (.section margin-bottom)
      card group gap    = var(--spacing-lg)  24px  (.hr-card-group margin-top)
      sub-header gap    = var(--spacing-md)  16px  (.hr-sub margin-top)
@@ -18,7 +18,7 @@ html,body{background:var(--bg);color:var(--text)}
 /* .app-sidebar provided by components.css — purple, fixed, 220px */
 .main{margin-left:var(--sidebar-w);display:flex;flex-direction:column;min-height:100vh}
 .topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 var(--spacing-20);gap:var(--spacing-10);z-index:40}
-.page{padding:calc(var(--topbar-h) + var(--spacing-md)) var(--spacing-lg) 40px}
+.page{padding:calc(var(--topbar-h) + var(--spacing-md) + var(--spacing-20)) var(--spacing-lg) 40px}
 .topbar-hamburger{display:none;width:32px;height:32px;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);background:none;border:none;border-radius:var(--radius)}
 .topbar-hamburger:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 /* nav icon sizing — HR-specific, used inside .app-sidebar-item */
@@ -46,7 +46,7 @@ html,body{background:var(--bg);color:var(--text)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--spacing-md)}.card:hover{box-shadow:var(--shadow-card)}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--spacing-20);flex-wrap:wrap;gap:var(--spacing-sm)}
 .page--split{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;bottom:0;overflow:hidden!important;padding:0!important;display:flex;flex-direction:column}
-.section-header{padding:var(--spacing-md) var(--spacing-lg) 0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.section-header{padding:calc(var(--spacing-md) + var(--spacing-20)) var(--spacing-lg) 0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
 .section-header .page-header{margin-bottom:var(--spacing-md)}
 .section-header .filter-bar{border-bottom:none;padding:0 0 var(--spacing-md);margin-bottom:0}
 .page-title{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold);letter-spacing:-.4px}

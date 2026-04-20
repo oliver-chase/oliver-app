@@ -5,7 +5,7 @@ Applies to: Accounts, HR (Dashboard, Hiring, Reports, Directory, Onboarding, Inv
 
 | Role | Token | Value | Use |
 |---|---|---|---|
-| Page top padding | `--spacing-20` | 20px | First header row `padding-top` (e.g. `.account-header-row`) |
+| Page top total | `calc(spacing-md + spacing-20)` | 36px | Total gap topbar-bottom → first content. Accounts: `.main` `spacing-md` + `.account-header-row` `spacing-20`. HR: baked into `.page` and `.section-header` padding-top. |
 | Page section gap | `--spacing-xl` | 32px | `margin-bottom` between top-level `.section` blocks |
 | Card group gap | `--spacing-lg` | 24px | Vertical gap between card clusters / grouped cards |
 | Sub-header gap | `--spacing-md` | 16px | Heading → content; action button after form |
