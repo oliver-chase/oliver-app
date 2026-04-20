@@ -13,6 +13,7 @@ import { SyncContext } from '@/lib/sync-context'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import type { Account } from '@/types'
+import { parseTranscript } from '@/lib/parsers/transcript-parser'
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -55,6 +56,10 @@ function buildSummaryText(result: unknown, docType: 'image' | 'document'): strin
   if (decisions?.length) {
     lines.push(''); lines.push('Decisions (' + decisions.length + '):')
     decisions.forEach(d => lines.push('  - ' + d.decision))
+  }
+  const gaps = r.gaps as string[] | undefined
+  if (gaps?.length) {
+    lines.push(''); lines.push('Missing (ask Oliver to fill in): ' + gaps.join(', '))
   }
   return lines.join('\n') || JSON.stringify(result, null, 2).slice(0, 500)
 }
@@ -205,7 +210,7 @@ export default function AccountsApp() {
       : "Hi, I'm Oliver. Pick an account in the sidebar, or add a new one."
     const upload = currentAccountId ? {
       accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',
-      hint: '.docx .txt .pdf or image',
+      hint: 'Transcripts (.txt): parsed instantly, no AI call. Org charts (image): extracts people + titles. Docs (.docx/.pdf): AI-parsed.',
       parse: async (file: File) => {
         const isImage = file.type.startsWith('image/')
         if (isImage) {
@@ -220,6 +225,22 @@ export default function AccountsApp() {
           return { title: 'Extracted People', summary: buildSummaryText(d.result, 'image'), model: d.model, payload: d.result }
         }
         const text = await readAsText(file)
+        // For plain text files, parse client-side first — no API call needed.
+        // Docx/PDF still go to the API since readAsText gives garbled binary.
+        const isPlainText = file.name.endsWith('.txt') || file.type === 'text/plain'
+        if (isPlainText) {
+          const parsed = parseTranscript(text)
+          const summary = buildSummaryText(parsed, 'document')
+          const hint = parsed.gaps.length
+            ? '\n\nAsk Oliver to fill in: ' + parsed.gaps.join(', ')
+            : '\n\nParsed locally — no API call. Confirm to save.'
+          return {
+            title: 'Transcript (client-parsed)',
+            summary: summary + hint,
+            model: 'client-side',
+            payload: parsed,
+          }
+        }
         const res = await fetch('/api/parse-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
