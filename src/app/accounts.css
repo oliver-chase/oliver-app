@@ -229,6 +229,13 @@ th.sorted .sort-arrow{opacity:1;color:var(--pink)}
 .app-view-toggle-btn.active{background:var(--purple);color:var(--white);border-color:var(--purple);font-weight:normal}
 .app-view-toggle-btn:hover:not(.active){background:var(--surface2)}
 #notes-sort-btn{color:var(--text)}
+@media (max-width: 1024px) {
+  /* Tablet: stack 2-col overview grids, narrow person detail panel */
+  .overview-grid{grid-template-columns:1fr}
+  .overview-row{grid-template-columns:1fr}
+  .person-detail-panel{width:320px}
+}
+
 @media(max-width:500px){
   .topbar,.filterbar{left:0}.main{margin-left:0;padding-left:var(--spacing-md);padding-right:var(--spacing-md)}
   .topbar-account{white-space:normal;overflow:visible;text-overflow:clip;flex:1}

@@ -212,6 +212,14 @@ tr.selected td{background:var(--accent-light)}
 /* Bottom nav — hidden on desktop, shown on mobile */
 .bottom-nav{display:none}
 /* ── MOBILE ─────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  /* Tablet: collapse dense grids, narrow split panels */
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .reports-grid{grid-template-columns:1fr 1fr}
+  .split-detail{width:340px;min-width:340px}
+  .track-sidebar{width:200px}
+}
+
 @media (max-width: 500px) {
   /* App layout — make room for bottom nav */
   .main{margin-left:0;width:100%;padding-bottom:60px}
