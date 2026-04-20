@@ -24,5 +24,5 @@ Applies to: Accounts, HR (Dashboard, Hiring, Reports, Directory, Onboarding, Inv
 
 ## Anchors
 
-- Accounts: `.section`, `.account-header-row`, `.app-section-header`, `.overview-stat-sublabel`, `.pagination-row`
-- HR: `.page-header`, `.page-subtitle`, `.stat-sub`, `.dash-card-sub`, `.section-sublabel`, `.completed-section`
+- Accounts: `.section`, `.account-header-row`, `.pagination-row`, `.account-name-heading`, `.account-client-company`
+- HR: `.page-header`, `.page-subtitle`, `.stat-sub`, `.dash-card-sub`, `.section-sublabel`, `.completed-section`, `.hr-section`, `.hr-card-group`, `.hr-sub`

@@ -234,7 +234,7 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
           <button onClick={() => setZoom(z => parseFloat(Math.min(1.5, z + 0.1).toFixed(1)))}>+</button>
         </div>
 
-        <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-10)' }}>REPORTING STRUCTURE</div>
+        <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-sm)' }}>REPORTING STRUCTURE</div>
 
         <div
           ref={treeRef}
@@ -295,7 +295,7 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
               if (did) await doRemoveFromTree(did)
             }}
           >
-            <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-10)' }}>NOT YET PLACED &#8212; drag to assign reporting</div>
+            <div className="overview-stat-label" style={{ marginBottom: 'var(--spacing-sm)' }}>NOT YET PLACED &#8212; drag to assign reporting</div>
 
             {Object.entries(deptGrouped).map(([dept, people]) => (
               <div key={dept}>
@@ -689,7 +689,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSa
                 </div>
               ))}
             </div>
-            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
+            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-md)' }}>
               <span className="card-meta-label">Reports To:</span>
               <Picker
                 value={otherPeople.find(p => p.stakeholder_id === stk.reports_to)?.name || ''}
@@ -711,7 +711,7 @@ function PersonDetailPanel({ stk, owners, otherPeople, acctProjs, acctOpps, onSa
                 Cannot create circular reporting relationship
               </div>
             )}
-            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
+            <div className="card-meta-row" style={{ marginTop: 'var(--spacing-md)' }}>
               <OrgEngPicker
                 ids={curEngIds}
                 items={engItems}

@@ -49,7 +49,7 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
         <div className="sdr-detail-header">
           <div>
             <div className="sdr-detail-name">{p.nm || p.fn || 'Unknown'}</div>
-            <div style={{ marginTop: 'var(--spacing-6)' }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
+            <div style={{ marginTop: 'var(--spacing-xs)' }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
           </div>
           <button ref={closeRef} className="sdr-detail-close" aria-label="Close" onClick={onClose}>×</button>
         </div>

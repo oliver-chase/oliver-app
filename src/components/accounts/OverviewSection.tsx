@@ -155,7 +155,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
   return (
     <div>
       {modal}
-      <div className="overview-row" style={{ marginBottom: 'var(--spacing-12)' }}>
+      <div className="overview-row" style={{ marginBottom: 'var(--spacing-md)' }}>
         <div className="app-card overview-card-col">
           <div className="app-card-label">Account Director</div>
           <PersonPill
@@ -163,13 +163,13 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             teamNames={teamNames}
             onChange={async nm => await saveBg({ ...b, account_director: nm })}
           />
-          <div className="app-card-label" style={{ marginTop: 'var(--spacing-10)' }}>Account Manager</div>
+          <div className="app-card-label" style={{ marginTop: 'var(--spacing-sm)' }}>Account Manager</div>
           <PersonPill
             value={b.account_manager || ''}
             teamNames={teamNames}
             onChange={async nm => await saveBg({ ...b, account_manager: nm })}
           />
-          <div className="app-card-label" style={{ marginTop: 'var(--spacing-10)' }}>Account Team (V.Two)</div>
+          <div className="app-card-label" style={{ marginTop: 'var(--spacing-sm)' }}>Account Team (V.Two)</div>
           <TeamPills
             members={teamMembers}
             teamNames={teamNames}
@@ -200,7 +200,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
             </span>
           </div>
           {cadenceOpen && (
-            <div style={{ paddingTop: 'var(--spacing-sm)', borderTop: '1px solid var(--border)', marginTop: 'var(--spacing-6)' }}>
+            <div style={{ paddingTop: 'var(--spacing-sm)', borderTop: '1px solid var(--border)', marginTop: 'var(--spacing-xs)' }}>
               <Picker
                 value={getFreqLabel(b.meeting_frequency || '')}
                 options={FREQ_OPTS.map(([, label]) => label)}
@@ -213,7 +213,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 }}
               />
               {b.meeting_frequency && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-6)', marginTop: 'var(--spacing-6)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-6)', marginTop: 'var(--spacing-xs)' }}>
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text)', fontFamily: 'var(--font)' }}>Every</span>
                   <IntervalInput value={b.meeting_interval || '1'} onChange={v => saveBg({ ...b, meeting_interval: v })} />
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text)', fontFamily: 'var(--font)' }}>
@@ -222,7 +222,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
                 </div>
               )}
               {(b.meeting_frequency === 'weekly' || b.meeting_frequency === 'biweekly') && (
-                <div className="overview-chip-row" style={{ marginTop: 'var(--spacing-6)' }}>
+                <div className="overview-chip-row" style={{ marginTop: 'var(--spacing-xs)' }}>
                   <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--gray)', fontFamily: 'var(--font)', marginRight: 'var(--spacing-2xs)' }}>On</span>
                   {DAY_LABELS.map(([val, label]) => (
                     <button key={val} type="button" title={val}
@@ -313,7 +313,7 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
         </div>
       </div>
 
-      <div className="overview-row" style={{ marginTop: 'var(--spacing-12)' }}>
+      <div className="overview-row" style={{ marginTop: 'var(--spacing-md)' }}>
         <div className="overview-chart-card">
           <div className="app-card-label" style={{ marginBottom: 'var(--spacing-xs)' }}>Revenue History</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-sm)' }}>
@@ -583,7 +583,7 @@ function HistoricalYearForm({ bg, onSave, onCancel }: {
   const existing = bg.revenue[year] || {}
   const yearOptions = Array.from({ length: curYear - 2017 }, (_, i) => String(curYear - 1 - i))
   return (
-    <div style={{ marginTop: 'var(--spacing-6)', padding: 'var(--spacing-sm) var(--spacing-10)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface2)' }}>
+    <div style={{ marginTop: 'var(--spacing-xs)', padding: 'var(--spacing-sm) var(--spacing-10)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface2)' }}>
       <div style={{ display: 'flex', gap: 'var(--spacing-6)', alignItems: 'center', flexWrap: 'wrap' }}>
         <Picker
           value={String(year)}

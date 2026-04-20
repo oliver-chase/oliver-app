@@ -25,7 +25,7 @@ html,body { background: var(--surface2); color: var(--text); }
 
 .sdr-section-header { display: flex; align-items: baseline; gap: var(--spacing-10); margin-bottom: var(--spacing-20); }
 .sdr-section-header h2 { margin: 0; font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--text); }
-.sdr-section-header h3 { margin: var(--spacing-md) 0 var(--spacing-10); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--text); }
+.sdr-section-header h3 { margin: var(--spacing-md) 0 var(--spacing-sm); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--text); }
 .sdr-section-count { font-size: var(--font-size-xs); color: var(--gray); }
 .sdr-section-count.pending { color: var(--pink); font-weight: var(--font-weight-semibold); }
 .sdr-empty { color: var(--gray); font-size: var(--font-size-sm); padding: var(--spacing-xl) 0; }
@@ -70,7 +70,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-status--bounced           { background: var(--red-light); color: var(--red); }
 
 /* Filter bar */
-.sdr-filter-bar { display: flex; gap: var(--spacing-6); flex-wrap: wrap; margin-bottom: var(--spacing-12); }
+.sdr-filter-bar { display: flex; gap: var(--spacing-6); flex-wrap: wrap; margin-bottom: var(--spacing-md); }
 .sdr-pill { display: inline-flex; align-items: center; gap: var(--spacing-xs); padding: var(--spacing-xs) var(--spacing-10); border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface); font-size: var(--font-size-xs); cursor: pointer; color: var(--text); }
 .sdr-pill:hover { border-color: var(--pink); color: var(--pink); }
 .sdr-pill.active { background: var(--pink); color: var(--white); border-color: var(--pink); }

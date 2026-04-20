@@ -164,7 +164,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                     <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { onFilterIncompleteChange(e.target.checked); setPage(0) }} /> Incomplete</label>
                   </div>
                   {owners.length > 0 && (
-                    <div className="filter-radio-group" style={{ marginTop: 'var(--spacing-10)' }}>
+                    <div className="filter-radio-group" style={{ marginTop: 'var(--spacing-sm)' }}>
                       <div className="filter-radio-divider">V.Two Owner</div>
                       <label><input type="radio" name="vtwo-owner" value="" checked={filterVTwoOwner === ''} onChange={() => { onFilterVTwoOwnerChange(''); setPage(0) }} /> All</label>
                       {owners.map(name => (
@@ -369,7 +369,7 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           ))}
         </div>
 
-        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
+        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-md)' }}>
           <span className="card-meta-label">Reports To:</span>
           <Picker
             value={otherPeople.find(p => p.stakeholder_id === person.reports_to)?.name || ''}
@@ -392,7 +392,7 @@ function PersonCard({ person, owners, otherPeople, allStakeholders, acctProjs, a
           </div>
         )}
 
-        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-14)' }}>
+        <div className="card-meta-row" style={{ marginTop: 'var(--spacing-md)' }}>
           <EngPicker
             ids={curEngIds}
             items={engItems}

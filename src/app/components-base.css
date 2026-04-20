@@ -76,6 +76,7 @@
   border: 1px dashed var(--color-border-dashed);
 }
 .btn-dashed:hover:not(:disabled) { background: var(--color-brand-pink-light); }
+.btn-link:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 /* Compact variant — matches accounts dense UI sizing (overrides base .btn defaults) */
 .btn--compact { min-height: 0; padding: 7px 14px; font-size: var(--font-size-sm); }

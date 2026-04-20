@@ -30,7 +30,7 @@
   letter-spacing: var(--letter-spacing-xwide);
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
-  margin-top: var(--spacing-12);
+  margin-top: var(--spacing-md);
 }
 
 .cards {

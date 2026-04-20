@@ -51,11 +51,14 @@ Run against: staging.oliver-app.pages.dev/accounts
 | Property | Expected value | Check |
 |---|---|---|
 | Font size | `var(--font-size-sm)` = `14px` | |
-| Font weight | `700` | Bold |
-| Color | `var(--text)` = `#1a1a1a` | Dark |
+| Font weight | `var(--font-weight-bold)` | Bold |
+| Color | `var(--text)` | Dark |
 | White space | `nowrap` | Never wraps |
-| Content (portfolio view) | `"Account Strategy"` | Default when no account selected |
-| Content (account view) | Account name from data | Name of selected account |
+| Overflow | `hidden` + `text-overflow:ellipsis` | Truncates past max-width |
+| Min width | `0` | Allows flex shrink |
+| Max width | `260px` | Bounds width so nav labels stay left-aligned |
+| Content (portfolio view) | `"All Accounts"` | Default when no account selected |
+| Content (account view) | Account name from data, or `"Account"` fallback | Name of selected account |
 
 ---
 

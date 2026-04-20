@@ -9,8 +9,9 @@
      card group gap    = var(--spacing-lg)  24px  (.hr-card-group margin-top)
      sub-header gap    = var(--spacing-md)  16px  (.hr-sub margin-top)
      tight micro gap   = var(--spacing-sm)   8px
+     inline caption    = var(--spacing-xs)   4px  (label-to-content, stat sub)
      meta/caption gap  = var(--spacing-2xs)  2px
-   Never use literal pixels or off-scale tokens (spacing-10, spacing-12, spacing-18) for vertical gaps. */
+   Never use literal pixels or off-scale tokens (spacing-6, spacing-10, spacing-12, spacing-14, spacing-18) for vertical gaps. */
 
 :root{--bg:var(--surface2);--text2:#6b6a65;--text3:var(--color-text-placeholder)}
 html,body{background:var(--bg);color:var(--text)}
@@ -100,7 +101,7 @@ tr.selected td{background:var(--accent-light)}
 .detail-body{padding:var(--spacing-20);overflow-y:auto;flex:1}
 .detail-section{margin-bottom:var(--spacing-20)}
 .detail-section-title{font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:var(--spacing-sm);display:flex;align-items:center;justify-content:space-between}
-.detail-row{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)}
+.detail-row{display:flex;justify-content:space-between;align-items:flex-start;padding:var(--spacing-sm) 0;border-bottom:1px solid var(--border)}
 .detail-row:last-child{border-bottom:none}
 .detail-key{font-size:var(--font-size-xs);color:var(--text2)}
 .detail-val{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);text-align:right;max-width:60%}
@@ -514,7 +515,7 @@ tr.selected td{background:var(--accent-light)}
 .report-stage-count{color:var(--text2)}
 .report-bar-bg{background:var(--bg);border-radius:100px;height:var(--spacing-6);overflow:hidden}
 .report-bar-fill{height:100%;background:var(--accent);border-radius:100px}
-.report-list-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.report-list-row{display:flex;justify-content:space-between;align-items:center;padding:var(--spacing-sm) 0;border-bottom:1px solid var(--border)}
 .report-list-count{font-weight:var(--font-weight-semibold)}
 .report-source-label{font-size:var(--font-size-xs)}
 .report-spec-card{background:var(--bg);border-radius:var(--radius);padding:var(--spacing-10) var(--spacing-md);text-align:center}
