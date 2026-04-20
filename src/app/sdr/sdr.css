@@ -37,7 +37,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-stat-label { display: block; font-size: var(--font-size-xs); color: var(--gray); margin-top: var(--spacing-xs); }
 
 /* Alert banner */
-.sdr-alert { display: flex; align-items: center; justify-content: space-between; background: var(--accent-light); border: 1px solid rgba(230,0,117,.3); border-radius: var(--radius); padding: var(--spacing-12) var(--spacing-md); margin-bottom: var(--spacing-20); gap: var(--spacing-12); }
+.sdr-alert { display: flex; align-items: center; justify-content: space-between; background: var(--accent-light); border: 1px solid var(--color-pink-overlay-30); border-radius: var(--radius); padding: var(--spacing-12) var(--spacing-md); margin-bottom: var(--spacing-20); gap: var(--spacing-12); }
 .sdr-alert-text { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--pink); }
 
 /* Pipeline breakdown */
@@ -54,7 +54,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-status--email-discovered  { background: var(--blue-light); color: var(--blue); }
 .sdr-status--draft-generated   { background: var(--green-light); color: var(--green); }
 .sdr-status--awaiting-approval { background: var(--amber-light); color: var(--amber); }
-.sdr-status--email-sent        { background: rgba(83,41,118,.09); color: var(--accent-text); }
+.sdr-status--email-sent        { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
 .sdr-status--followup-due      { background: var(--amber-light); color: var(--amber); }
 .sdr-status--ooo-pending       { background: var(--surface2); color: var(--gray); }
 .sdr-status--closed-positive   { background: var(--green-light); color: var(--green); }
@@ -65,7 +65,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-status--pending           { background: var(--amber-light); color: var(--amber); }
 .sdr-status--approved          { background: var(--green-light); color: var(--green); }
 .sdr-status--rejected          { background: var(--red-light); color: var(--red); }
-.sdr-status--sent              { background: rgba(83,41,118,.09); color: var(--accent-text); }
+.sdr-status--sent              { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
 .sdr-status--replied           { background: var(--green-light); color: var(--green); }
 .sdr-status--bounced           { background: var(--red-light); color: var(--red); }
 
@@ -83,7 +83,7 @@ html,body { background: var(--surface2); color: var(--text); }
 
 /* Chips */
 .sdr-track-chip, .sdr-touch-chip, .sdr-date-chip { display: inline-block; font-size: var(--font-size-2xs); padding: 2px 7px; border-radius: 10px; background: var(--surface2); color: var(--gray); }
-.sdr-track-chip { background: rgba(83,41,118,.09); color: var(--accent-text); }
+.sdr-track-chip { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
 .sdr-touch-chip { background: var(--blue-light); color: var(--blue); }
 
 /* Prospect grid */
@@ -103,7 +103,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-batch-stat { font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); padding: 2px var(--spacing-sm); border-radius: 10px; }
 .sdr-batch-stat.pending  { background: var(--amber-light); color: var(--amber); }
 .sdr-batch-stat.approved { background: var(--green-light); color: var(--green); }
-.sdr-batch-stat.sent     { background: rgba(83,41,118,.09); color: var(--accent-text); }
+.sdr-batch-stat.sent     { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
 .sdr-batch-stat.rejected { background: var(--red-light); color: var(--red); }
 
 /* Draft cards */

@@ -17,6 +17,7 @@
   --color-text-secondary:   #4a4a4e;
   --color-text-placeholder: #4a4a4e;
   --color-text-inverse:     var(--color-white);
+  --color-text-soft:        #6b6a65;
 
   /* ── Backgrounds ─────────────────────────────────────────────────────── */
   --color-bg-page:     #f5f5f6;
@@ -95,6 +96,17 @@
   --color-chart-bar:        rgba(86,42,167,.25);
   --color-bg-sidebar-focus: rgba(255,255,255,.15);
 
+  /* ── Nav overlays (dark-sidebar text/borders — extension of the nav set) ── */
+  --color-nav-text-soft:    rgba(254,255,255,.75);
+  --color-nav-text-strong:  rgba(254,255,255,.8);
+  --color-nav-active-bg:    rgba(255,255,255,.11);
+  --color-nav-divider:      rgba(255,255,255,.08);
+
+  /* ── Overlays (pink/purple extras) ───────────────────────────────────── */
+  --color-pink-overlay-30:       rgba(230,0,117,.3);
+  --color-purple-overlay-legacy: rgba(83,41,118,.09);
+  --color-cp-overlay:            rgba(0,0,0,.45);
+
   /* ── Status colors (non-badge) ───────────────────────────────────────── */
   --color-green:       #1a9c6e;
   --color-green-light: #e6f7f1;
@@ -166,11 +178,17 @@
   --radius-full:   9999px;
 
   /* ── Elevation ───────────────────────────────────────────────────────── */
-  --shadow-card:       0 2px 8px rgba(0,0,0,.06);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,.10);
-  --shadow-popover:    0 4px 12px rgba(0,0,0,.12);
-  --shadow-modal:      0 4px 20px rgba(0,0,0,.15);
-  --shadow-btt:        0 1px 4px rgba(0,0,0,.10);
+  --shadow-xs:            0 1px 2px rgba(0,0,0,.06);
+  --shadow-card:          0 2px 8px rgba(0,0,0,.06);
+  --shadow-card-hover:    0 4px 16px rgba(0,0,0,.10);
+  --shadow-popover:       0 4px 12px rgba(0,0,0,.12);
+  --shadow-dropdown:      0 8px 24px rgba(0,0,0,.12);
+  --shadow-drawer:        0 8px 32px rgba(0,0,0,.16);
+  --shadow-modal:         0 4px 20px rgba(0,0,0,.15);
+  --shadow-btt:           0 1px 4px rgba(0,0,0,.10);
+  --shadow-sidebar-panel: 4px 0 20px rgba(0,0,0,.15);
+  --shadow-cp-content:    0 8px 40px rgba(0,0,0,.18);
+  --shadow-chatbot-pink:  0 4px 12px rgba(230,0,117,.35);
 
   /* ── Z-index ─────────────────────────────────────────────────────────── */
   --z-base:    1;

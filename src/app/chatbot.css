@@ -29,7 +29,7 @@
   letter-spacing: .03em;
   line-height: 1;
   z-index: calc(var(--z-modal) - 10);
-  box-shadow: 0 4px 12px rgba(230,0,117,.35);
+  box-shadow: var(--shadow-chatbot-pink);
   transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -63,7 +63,7 @@
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0,0,0,.16);
+  box-shadow: var(--shadow-drawer);
   display: flex;
   flex-direction: column;
   z-index: calc(var(--z-modal) - 10);
@@ -476,12 +476,6 @@
 
 .chatbot-tooltip-wrap[data-tooltip]:hover::after {
   opacity: 1;
-}
-
-/* ── HR page trigger — position above cp-fab ─────────────────────────────── */
-
-.chatbot-trigger--hr {
-  bottom: 80px;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

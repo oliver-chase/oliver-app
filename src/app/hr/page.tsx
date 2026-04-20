@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import HrDashboard from '@/components/hr/HrDashboard'
@@ -13,11 +13,14 @@ import HrReports from '@/components/hr/HrReports'
 import HrSettings from '@/components/hr/HrSettings'
 import GlobalSearchButton from '@/components/hr/GlobalSearchButton'
 import GlobalSearch from '@/components/hr/GlobalSearch'
-import CommandPalette from '@/components/hr/CommandPalette'
 import StepFlowRunner from '@/components/hr/StepFlowRunner'
-import HrAgentPanel from '@/components/hr/HrAgentPanel'
 import AIIntakeModal from '@/components/hr/AIIntakeModal'
 import { useAppModal } from '@/components/shared/AppModal'
+import { useRegisterOliver } from '@/components/shared/OliverContext'
+import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
+import { editCandidateFlow, deleteCandidateFlow, setCandStatusFlow, setCandStageFlow, logInterviewFlow } from '@/components/hr/flows/cand-flows'
+import { editEmployeeFlow, deleteEmployeeFlow, startOffboardingFlow } from '@/components/hr/flows/emp-flows'
+import { editDeviceFlow, deleteDeviceFlow, assignDeviceFlow, returnDeviceFlow } from '@/components/hr/flows/device-flows'
 import type { Flow, EditTarget } from '@/components/hr/step-flow-types'
 import type { HrDB, HrPage, Candidate, Employee, Device } from '@/components/hr/types'
 
@@ -57,11 +60,13 @@ export default function HrPage() {
   const [loading, setLoading]         = useState(true)
   const [syncState, setSyncState]     = useState<'ok' | 'syncing' | 'error'>('syncing')
   const [searchOpen, setSearchOpen]   = useState(false)
-  const [cpOpen, setCpOpen]           = useState(false)
   const [activeFlow, setActiveFlow]   = useState<Flow<unknown> | null>(null)
   const [pendingEdit, setPendingEdit] = useState<{ target: EditTarget; id: string } | null>(null)
   const [intakeOpen, setIntakeOpen]   = useState(false)
   const { modal, showModal }          = useAppModal()
+
+  const dbRef = useRef(db);   dbRef.current = db
+  const pageRef = useRef(page); pageRef.current = page
 
   const requestEdit = useCallback((target: EditTarget, id: string) => {
     setPage(PAGE_FOR_TARGET[target])
@@ -70,7 +75,7 @@ export default function HrPage() {
 
   const clearPendingEdit = useCallback(() => setPendingEdit(null), [])
 
-  async function quickAddCandidate() {
+  const quickAddCandidate = useCallback(async () => {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputLabel: 'Full name', inputPlaceholder: 'e.g. Jane Doe', confirmLabel: 'Add' })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
@@ -86,9 +91,9 @@ export default function HrPage() {
     setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
     try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
     setPage('hiring')
-  }
+  }, [showModal])
 
-  async function quickAddEmployee() {
+  const quickAddEmployee = useCallback(async () => {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Employee', inputLabel: 'Full name', inputPlaceholder: 'e.g. Jane Doe', confirmLabel: 'Add' })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
@@ -101,9 +106,9 @@ export default function HrPage() {
     setDb(prev => ({ ...prev, employees: [rec, ...prev.employees] }))
     try { await supabase.from('employees').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
     setPage('directory')
-  }
+  }, [showModal])
 
-  async function quickAddDevice() {
+  const quickAddDevice = useCallback(async () => {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Device', inputLabel: 'Device name', inputPlaceholder: 'e.g. MacBook Pro 14"', confirmLabel: 'Add' })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
@@ -117,25 +122,7 @@ export default function HrPage() {
     setDb(prev => ({ ...prev, devices: [rec, ...prev.devices] }))
     try { await supabase.from('devices').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
     setPage('inventory')
-  }
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (document.activeElement?.tagName || '').toUpperCase()
-      const editing = tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setCpOpen(o => !o)
-        return
-      }
-      if (e.key === '/' && !editing && !cpOpen) {
-        e.preventDefault()
-        setSearchOpen(true)
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [cpOpen])
+  }, [showModal])
 
   const loadData = useCallback(async () => {
     setSyncState('syncing')
@@ -164,10 +151,80 @@ export default function HrPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  function navTo(p: string) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      const editing = tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable
+      if (e.key === '/' && !editing) {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  const navTo = useCallback((p: string) => {
     setPage(p as HrPage)
     setSidebarOpen(false)
-  }
+  }, [])
+
+  const runFlow = useCallback(<D,>(f: Flow<D>) => setActiveFlow(f as Flow<unknown>), [])
+
+  const oliverConfig = useMemo<OliverConfig>(() => {
+    const actions: OliverAction[] = [
+      { id: 'search',          label: 'Search candidates, employees, devices\u2026', group: 'Search',   hint: 'Press / to open',               run: () => setSearchOpen(true) },
+      { id: 'ai-intake',       label: 'AI Intake candidates\u2026',                  group: 'Create',   hint: 'Import from file or text',      run: () => setIntakeOpen(true) },
+      { id: 'add-cand',        label: 'Add candidate',                               group: 'Create',   hint: 'Quick-add to hiring pipeline',  run: quickAddCandidate },
+      { id: 'add-emp',         label: 'Add employee',                                group: 'Create',   hint: 'Quick-add to directory',        run: quickAddEmployee },
+      { id: 'add-device',      label: 'Add device',                                  group: 'Create',   hint: 'Quick-add to inventory',        run: quickAddDevice },
+      { id: 'edit-cand',       label: 'Edit candidate\u2026',                        group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editCandidateFlow) },
+      { id: 'delete-cand',     label: 'Delete candidate\u2026',                      group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteCandidateFlow) },
+      { id: 'set-cand-stage',  label: 'Move candidate stage\u2026',                  group: 'Quick',    hint: 'Pick \u2192 choose stage',      run: () => runFlow(setCandStageFlow) },
+      { id: 'set-cand-status', label: 'Set candidate status\u2026',                  group: 'Quick',    hint: 'Pick \u2192 choose status',     run: () => runFlow(setCandStatusFlow) },
+      { id: 'log-iv',          label: 'Log interview\u2026',                         group: 'Quick',    hint: 'Pick \u2192 details',           run: () => runFlow(logInterviewFlow) },
+      { id: 'edit-emp',        label: 'Edit employee\u2026',                         group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editEmployeeFlow) },
+      { id: 'delete-emp',      label: 'Delete employee\u2026',                       group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteEmployeeFlow) },
+      { id: 'start-offboard',  label: 'Start offboarding\u2026',                     group: 'Quick',    hint: 'Pick \u2192 track + last day',  run: () => runFlow(startOffboardingFlow) },
+      { id: 'edit-device',     label: 'Edit device\u2026',                           group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editDeviceFlow) },
+      { id: 'delete-device',   label: 'Delete device\u2026',                         group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteDeviceFlow) },
+      { id: 'assign-device',   label: 'Assign device\u2026',                         group: 'Quick',    hint: 'Pick device \u2192 employee',   run: () => runFlow(assignDeviceFlow) },
+      { id: 'return-device',   label: 'Return device\u2026',                         group: 'Quick',    hint: 'Pick \u2192 set new status',    run: () => runFlow(returnDeviceFlow) },
+      ...NAV.map<OliverAction>(n => ({
+        id: 'nav-' + n.id,
+        label: 'Go to ' + n.label,
+        group: 'Navigate',
+        hint: n.section || undefined,
+        run: () => navTo(n.id),
+      })),
+    ]
+    return {
+      pageLabel: 'HR & People Ops',
+      placeholder: 'What do you want to do?',
+      greeting: "Hi, I'm Oliver. Ask about HR data — candidates, employees, onboarding, devices — or pick a command.",
+      actions,
+      quickConvos: [
+        'How many active candidates are in final stages?',
+        'Which employees have no device assigned?',
+        'Summarise open offboarding runs.',
+      ],
+      contextPayload: () => ({
+        currentPage: pageRef.current,
+        summary: {
+          candidates: dbRef.current.candidates.length,
+          active_candidates: dbRef.current.candidates.filter(c => c.candStatus === 'Active').length,
+          employees: dbRef.current.employees.length,
+          devices: dbRef.current.devices.length,
+          open_onboarding: dbRef.current.onboardingRuns.filter(r => r.status === 'active' && r.type === 'onboarding').length,
+          open_offboarding: dbRef.current.onboardingRuns.filter(r => r.status === 'active' && r.type === 'offboarding').length,
+          tracks: dbRef.current.tracks.length,
+        },
+      }),
+      onChatRefresh: () => loadData(),
+    }
+  }, [quickAddCandidate, quickAddEmployee, quickAddDevice, runFlow, navTo, loadData])
+
+  useRegisterOliver(oliverConfig)
 
   if (loading) {
     return (
@@ -216,33 +273,11 @@ export default function HrPage() {
           onClose={() => setActiveFlow(null)}
         />
       )}
-      {cpOpen && (
-        <CommandPalette
-          ctx={{
-            setPage: p => setPage(p),
-            openSearch: () => setSearchOpen(true),
-            addCandidate: quickAddCandidate,
-            addEmployee: quickAddEmployee,
-            addDevice: quickAddDevice,
-            runFlow: <D,>(f: Flow<D>) => setActiveFlow(f as Flow<unknown>),
-          }}
-          onClose={() => setCpOpen(false)}
-        />
-      )}
-      <button
-        id="cp-fab"
-        type="button"
-        aria-label="Open command palette"
-        title={'Commands (\u2318K)'}
-        onClick={() => setCpOpen(true)}
-      >
-        +
-      </button>
       {searchOpen && (
         <GlobalSearch
           db={db}
           onClose={() => setSearchOpen(false)}
-          onNavigate={p => navTo(p)}
+          onNavigate={p => navTo(p as HrPage)}
         />
       )}
       <div
@@ -298,8 +333,6 @@ export default function HrPage() {
         <main id="main-content">
           {renderPage()}
         </main>
-
-        <HrAgentPanel db={db} currentPage={page} onOpenIntake={() => setIntakeOpen(true)} />
 
         <nav className="bottom-nav" id="bottom-nav" aria-label="Bottom navigation">
           {([

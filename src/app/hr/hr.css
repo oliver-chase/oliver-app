@@ -13,7 +13,7 @@
      meta/caption gap  = var(--spacing-2xs)  2px
    Never use literal pixels or off-scale tokens (spacing-6, spacing-10, spacing-12, spacing-14, spacing-18) for vertical gaps. */
 
-:root{--bg:var(--surface2);--text2:#6b6a65;--text3:var(--color-text-placeholder)}
+:root{--bg:var(--surface2);--text2:var(--color-text-soft);--text3:var(--color-text-placeholder)}
 html,body{background:var(--bg);color:var(--text)}
 /* .app-sidebar provided by components.css — purple, fixed, 220px */
 .main{margin-left:var(--sidebar-w);display:flex;flex-direction:column;min-height:100vh}
@@ -234,7 +234,7 @@ tr.selected td{background:var(--accent-light)}
   .main{margin-left:0;width:100%;padding-bottom:60px}
 
   /* Sidebar — components.css handles transform slide; add shadow here */
-  .app-sidebar{box-shadow:4px 0 20px rgba(0,0,0,.15)}
+  .app-sidebar{box-shadow:var(--shadow-sidebar-panel)}
 
   /* Topbar */
   .topbar{left:0;padding:0 var(--spacing-12);height:var(--topbar-h)}
@@ -245,10 +245,6 @@ tr.selected td{background:var(--accent-light)}
   /* Track sidebar stacks above content on mobile */
   .track-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:200px;overflow-y:auto}
 
-  /* FAB clears bottom nav */
-  #cp-fab{bottom:76px}
-  /* Overlay resets to full screen on mobile (no sidebar) */
-  #cp-overlay{left:0}
   /* Bottom nav */
   .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--surface);border-top:1px solid var(--border);z-index:var(--z-popover);flex:1}
   .bottom-nav-item{flex:1;display:flex;align-items:center;justify-content:center;font-size:var(--font-size-xs);color:var(--text3);font-weight:var(--font-weight-medium);cursor:pointer;border-top:3px solid transparent;position:relative}
@@ -368,7 +364,7 @@ tr.selected td{background:var(--accent-light)}
 .gs-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--spacing-5) var(--spacing-10);font-size:var(--font-size-xs);font-family:var(--font);color:var(--text);outline:none;width:0;transition:width .2s,opacity .2s;opacity:0;pointer-events:none}
 .gs-input.open{width:220px;opacity:1;pointer-events:auto}
 .gs-input:focus{border-color:var(--accent)}
-.gs-dropdown{position:absolute;top:calc(100% + var(--spacing-6));right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);width:340px;z-index:500;overflow:hidden;display:none}
+.gs-dropdown{position:absolute;top:calc(100% + var(--spacing-6));right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-dropdown);width:340px;z-index:500;overflow:hidden;display:none}
 .gs-dropdown.open{display:block}
 .gs-group{padding:var(--spacing-6) 0}
 .gs-group-label{font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);color:var(--text3);letter-spacing:.8px;text-transform:uppercase;padding:var(--spacing-xs) var(--spacing-14)}
@@ -376,50 +372,6 @@ tr.selected td{background:var(--accent-light)}
 .gs-item:hover{background:var(--bg)}
 .gs-item-name{font-weight:var(--font-weight-medium);color:var(--text)}
 .gs-item-sub{font-size:var(--font-size-xs);color:var(--text3)}
-/* ── COMMAND PALETTE ──────────────────────────────────────────────────────── */
-#cp-fab{position:fixed;bottom:24px;right:24px;width:var(--touch-target);height:var(--touch-target);border-radius:50%;background:var(--text);color:var(--white);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-modal);z-index:var(--z-toast);cursor:pointer;transition:opacity .12s;border:none;font-family:var(--font)}
-#cp-fab:hover{opacity:.85}
-#cp-overlay{position:fixed;top:0;bottom:0;left:var(--sidebar-w);right:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:flex-start;justify-content:center;padding-top:80px}
-#cp-content{width:560px;max-width:calc(100vw - 32px);background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 40px rgba(0,0,0,.18);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 160px)}
-.cp-search-wrap{padding:var(--spacing-14) var(--spacing-md);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:var(--spacing-sm)}
-.cp-input{width:100%;border:none;outline:none;font-size:var(--font-size-base);color:var(--text);background:transparent;font-family:var(--font)}
-.cp-input::placeholder{color:var(--text3)}
-.cp-body{overflow-y:auto;padding:var(--spacing-sm) 0;max-height:360px}
-.cp-group-label{padding:var(--spacing-6) var(--spacing-md) var(--spacing-2xs);font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);color:var(--text3);letter-spacing:.8px;text-transform:uppercase}
-.cp-item{display:flex;align-items:center;gap:var(--spacing-10);padding:var(--spacing-sm) var(--spacing-md);cursor:pointer;transition:background .08s}
-.cp-item:hover,.cp-item.selected{background:var(--bg)}
-.cp-item-icon{width:28px;height:28px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.ic-blue,.ic-teal,.ic-green{background:var(--accent-light);color:var(--accent-text)}
-.ic-amber{background:var(--amber-light);color:var(--amber)}
-.ic-purple{background:var(--accent-light);color:var(--accent-text)}
-.ic-red{background:var(--red-light);color:var(--red)}
-.ic-gray{background:var(--surface2);color:var(--text2)}
-.cp-item-text{flex:1;min-width:0}
-.cp-item-title{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text)}
-.cp-item-sub{font-size:var(--font-size-xs);color:var(--text3);margin-top:1px}
-.cp-no-results{padding:var(--spacing-md);font-size:var(--font-size-sm);color:var(--text3);text-align:center}
-.cp-step-header{padding:var(--spacing-14) var(--spacing-md);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:var(--spacing-sm)}
-.cp-step-back{width:28px;height:28px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;color:var(--text2)}
-.cp-step-back:hover{background:var(--border)}
-.cp-step-title{font-weight:var(--font-weight-semibold);font-size:var(--font-size-sm);flex:1}
-.cp-step-progress{font-size:var(--font-size-xs);color:var(--text3)}
-.cp-step-body{padding:var(--spacing-20) var(--spacing-md);overflow-y:auto;flex:1}
-.cp-step-footer{padding:var(--spacing-12) var(--spacing-md);border-top:1px solid var(--border);display:flex;align-items:center;gap:var(--spacing-sm)}
-.cp-form-row{margin-bottom:var(--spacing-md)}
-.cp-form-row label{display:block;font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text2);margin-bottom:var(--spacing-xs)}
-.cp-form-2col{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-12);margin-bottom:var(--spacing-md)}
-.cp-form-2col .cp-form-row{margin-bottom:0}
-.cp-qbtn-row{display:flex;flex-wrap:wrap;gap:var(--spacing-6);margin-top:var(--spacing-xs)}
-.cp-qbtn{padding:var(--spacing-xs) var(--spacing-10);border-radius:var(--radius-full);border:1px solid var(--border);font-size:var(--font-size-xs);background:var(--surface);color:var(--text2);cursor:pointer;transition:all .1s;font-family:var(--font)}
-.cp-qbtn.active{background:var(--accent-light);color:var(--accent-text);border-color:var(--accent)}
-.cp-summary-table{width:100%;border-collapse:collapse}
-.cp-summary-table td{padding:var(--spacing-6) 0;font-size:var(--font-size-xs);vertical-align:top}
-.cp-summary-table td:first-child{color:var(--text2);width:120px;padding-right:var(--spacing-12)}
-.cp-empty{padding:var(--spacing-xl) var(--spacing-md);text-align:center;color:var(--text3);font-size:var(--font-size-xs)}
-.cp-spacer{flex:1}
-.cp-step-label{font-size:var(--font-size-xs);color:var(--text3);margin-bottom:var(--spacing-md)}
-.cp-step-sublabel{font-size:var(--font-size-xs);color:var(--text3);margin-bottom:var(--spacing-md)}
-.cp-step-intro{font-size:var(--font-size-xs);color:var(--text2)}
 .page--loading{display:flex;align-items:center;justify-content:center;color:var(--text2)}
 .dir-table-flush{border-radius:0;border-left:0;border-right:0}
 /* ── Design system classes (session 24) ───────────────────────────────────── */

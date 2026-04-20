@@ -46,7 +46,7 @@
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
-  color: rgba(254, 255, 255, 0.75);
+  color: var(--color-nav-text-soft);
 }
 .app-sidebar-item {
   display: flex;
@@ -57,7 +57,7 @@
   font-family: var(--font-family-base);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: rgba(254, 255, 255, 0.8);
+  color: var(--color-nav-text-strong);
   border-left: 2px solid transparent;
   cursor: pointer;
   user-select: none;
@@ -71,7 +71,7 @@
 }
 .app-sidebar-item:hover { background: var(--color-nav-hover-bg); color: var(--color-text-inverse); }
 .app-sidebar-item.active {
-  background: rgba(255, 255, 255, 0.11);
+  background: var(--color-nav-active-bg);
   border-left-color: var(--color-brand-pink);
   color: var(--color-text-inverse);
   font-weight: var(--font-weight-bold);
@@ -81,9 +81,9 @@
 .sidebar-back {
   display: block;
   padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-nav-divider);
   font-size: var(--font-size-xs);
-  color: rgba(254, 255, 255, 0.75);
+  color: var(--color-nav-text-soft);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
