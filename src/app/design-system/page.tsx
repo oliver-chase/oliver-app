@@ -148,6 +148,35 @@ const COLOR_GROUPS = [
   },
 ]
 
+// ── Color token usages (hand-curated; missing entries render "No tracked usage")
+// Keep expanded as new modules adopt tokens.
+
+const COLOR_USAGES: Record<string, string[]> = {
+  '--color-brand-pink':        ['Hub/HR/SDR focus rings', 'OliverDock chatbot trigger', 'Accounts pink accent', 'btn-primary background'],
+  '--color-brand-pink-light':  ['accent-light pills', 'status-pursuing-bg', 'sentiment-supporter-bg'],
+  '--color-brand-purple':      ['app-sidebar background', 'tier-growth / status-active / sentiment-champion'],
+  '--color-white':             ['btn-primary label', 'nav-text', 'status-won foreground'],
+  '--color-text-primary':      ['Body copy, page titles, table cells'],
+  '--color-text-secondary':    ['Subtitles, meta text, form labels'],
+  '--color-text-placeholder':  ['Empty state text, placeholder input, sort arrows'],
+  '--color-border':            ['card + input + table borders across all modules'],
+  '--color-border-focus':      ['Input focus outline (Accounts + HR + SDR)'],
+  '--color-border-dashed':     ['btn-dashed border (Accounts actions, HR intake buttons)'],
+  '--color-bg-page':           ['html/body surface when page chrome is light'],
+  '--color-bg-card':           ['Card background across modules'],
+  '--color-bg-hover':          ['Row hover (tables, dash-row), design-system expandable rows'],
+  '--color-tier-strategic':    ['AccountCard tier-strategic left border'],
+  '--color-tier-growth':       ['AccountCard tier-growth left border'],
+  '--color-tier-maintenance':  ['AccountCard tier-maintenance left border'],
+  '--color-tier-at-risk':      ['AccountCard tier-at-risk left border'],
+  '--color-green':             ['sync-dot (ok), stat-value-green, status-success'],
+  '--color-amber':             ['sync-dot (syncing), overdue-badge, pill-amber'],
+  '--color-red':               ['sync-dot (error), delete danger, badge-overdue'],
+  '--color-blue':              ['pill-blue, dash-row-date--blue, iv-date-upcoming'],
+  '--color-modal-overlay':     ['App modal overlays (HR + Accounts + SDR)'],
+  '--color-backdrop-overlay':  ['SDR detail panel backdrop'],
+}
+
 // ── Typography ──────────────────────────────────────────────────────────────
 
 interface FontSize {
@@ -388,6 +417,7 @@ export default function DesignSystemPage() {
   const [multiVal, setMultiVal] = useState<string[]>([])
   const [showConfirm, setShowConfirm] = useState(false)
   const [expandedType, setExpandedType] = useState<string | null>(null)
+  const [expandedColor, setExpandedColor] = useState<string | null>(null)
 
   return (
     <div className="page">
@@ -417,28 +447,46 @@ export default function DesignSystemPage() {
       {/* ── SECTION 1 — COLOR TOKENS ── */}
       <div className="section" id="sec-colors">
         <div className="sectionTitle">1 — Color Tokens</div>
-        <p className="sectionNote">Click a token name to copy it to clipboard.</p>
+        <p className="sectionNote">Click the swatch to see where the token is used. Click the token name to copy.</p>
         {COLOR_GROUPS.map(({ group, tokens }) => (
           <div key={group}>
             <div className="groupTitle">{group}</div>
             <div className="swatchGrid">
-              {tokens.map(({ name, value }) => (
-                <div key={name} className="swatchCard">
-                  <div
-                    className="swatchBlock"
-                    style={{
-                      background: `var(${name})`,
-                      border: (name.includes('inverse') || name.includes('won') && !name.includes('bg') || name.includes('nav-text') || value === '#FEFFFF')
-                        ? '1px solid var(--color-border)'
-                        : undefined,
-                    }}
-                  />
-                  <div className="swatchMeta">
-                    <CopyToken name={name} />
-                    <div className="swatchValue"><ResolvedValue token={name} fallback={value} /></div>
+              {tokens.map(({ name, value }) => {
+                const isOpen = expandedColor === name
+                const usages = COLOR_USAGES[name] ?? []
+                return (
+                  <div key={name} className={'swatchCard' + (isOpen ? ' swatchCard--open' : '')}>
+                    <button
+                      type="button"
+                      className="swatchBlock"
+                      aria-expanded={isOpen}
+                      aria-label={'Show usages for ' + name}
+                      onClick={() => setExpandedColor(isOpen ? null : name)}
+                      style={{
+                        background: `var(${name})`,
+                        border: (name.includes('inverse') || name.includes('won') && !name.includes('bg') || name.includes('nav-text') || value === '#FEFFFF')
+                          ? '1px solid var(--color-border)'
+                          : undefined,
+                      }}
+                    />
+                    <div className="swatchMeta">
+                      <CopyToken name={name} />
+                      <div className="swatchValue"><ResolvedValue token={name} fallback={value} /></div>
+                    </div>
+                    {isOpen && (
+                      <div className="swatchUsages">
+                        <div className="typeUsagesLabel">
+                          {usages.length > 0 ? 'Used by (' + usages.length + ')' : 'No tracked usage'}
+                        </div>
+                        {usages.map((u, i) => (
+                          <div key={i} className="swatchUsageItem">{u}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))}
