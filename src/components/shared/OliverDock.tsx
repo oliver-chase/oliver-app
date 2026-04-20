@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction } from './OliverContext'
+import { fuzzyFilter } from '@/lib/fuzzy'
 
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -65,21 +66,20 @@ export default function OliverDock() {
 
   const filtered = useMemo(() => {
     if (!config) return []
-    const lq = q.toLowerCase().trim()
-    if (!lq) return config.actions
-    return config.actions.filter(a =>
-      a.label.toLowerCase().includes(lq) || a.group.toLowerCase().includes(lq) || (a.hint || '').toLowerCase().includes(lq)
-    )
+    return fuzzyFilter(q, config.actions, a => a.label + ' ' + a.group + ' ' + (a.hint || '')).map(h => h.item)
   }, [config, q])
 
   useEffect(() => { setActiveIdx(0) }, [q])
 
-  const groupOrder: OliverAction['group'][] = ['Search', 'Create', 'Quick', 'Navigate']
+  const groupOrder: OliverAction['group'][] = ['Search', 'Create', 'Quick']
   const grouped = useMemo(() => {
     return groupOrder
       .map(g => ({ group: g, items: filtered.filter(a => a.group === g) }))
       .filter(g => g.items.length > 0)
   }, [filtered])
+
+  // FAB row: top 4 matches across all groups, always visible when the dock is open.
+  const fabActions = useMemo(() => filtered.slice(0, 4), [filtered])
 
   const enterChat = useCallback((seed?: string) => {
     setMode('chat')
@@ -242,6 +242,7 @@ export default function OliverDock() {
               setQ={setQ}
               filtered={filtered}
               grouped={grouped}
+              fabActions={fabActions}
               activeIdx={activeIdx}
               setActiveIdx={setActiveIdx}
               execute={executeAction}
@@ -314,6 +315,7 @@ interface CommandModeProps {
   setQ: (v: string) => void
   filtered: OliverAction[]
   grouped: { group: OliverAction['group']; items: OliverAction[] }[]
+  fabActions: OliverAction[]
   activeIdx: number
   setActiveIdx: (n: number) => void
   execute: (a: OliverAction) => void
@@ -323,7 +325,7 @@ interface CommandModeProps {
   onUploadClick: () => void
 }
 
-function CommandMode({ config, q, setQ, filtered, grouped, activeIdx, setActiveIdx, execute, enterChat, inputRef, onKey, onUploadClick }: CommandModeProps) {
+function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx, setActiveIdx, execute, enterChat, inputRef, onKey, onUploadClick }: CommandModeProps) {
   if (!config) return null
   const empty = filtered.length === 0
   return (
@@ -340,6 +342,21 @@ function CommandMode({ config, q, setQ, filtered, grouped, activeIdx, setActiveI
           aria-label="What do you want to do"
         />
       </div>
+      {fabActions.length > 0 && (
+        <div className="oliver-fab-row" role="toolbar" aria-label="Quick commands">
+          {fabActions.map(a => (
+            <button
+              key={a.id}
+              type="button"
+              className="oliver-fab-chip"
+              onMouseDown={e => { e.preventDefault(); execute(a) }}
+              title={a.hint || a.label}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
       {config.upload && (
         <div className="chatbot-upload-row">
           <button

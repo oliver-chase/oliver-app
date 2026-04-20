@@ -6,7 +6,6 @@ import { useMemo } from 'react'
    An unstable array ref here = infinite render loop = Links stop working.
    Do not inline the filter into render body. */
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useUser } from '@/context/UserContext'
 import { ModuleCard } from '@/components/hub/ModuleCard'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
@@ -52,7 +51,6 @@ const ALL_MODULES: Module[] = [
 
 export default function HubPage() {
   const { appUser, isAdmin, hasPermission } = useUser()
-  const router = useRouter()
 
   // TODO: remove bypass once app_users table is created in Supabase and permissions are configured.
   // Run: scripts/setup-app-users.sql, then seed the current user as admin via /admin.
@@ -67,15 +65,7 @@ export default function HubPage() {
   )
 
   const oliverConfig = useMemo<OliverConfig>(() => {
-    const actions: OliverAction[] = [
-      ...visibleModules
-        .filter(m => !m.comingSoon)
-        .map<OliverAction>(m => ({ id: 'nav-' + m.id, label: 'Go to ' + m.name, group: 'Navigate', hint: m.description, run: () => router.push(m.href) })),
-      ...(isAdmin ? [
-        { id: 'nav-admin',  label: 'Go to Admin',         group: 'Navigate' as const, run: () => router.push('/admin') },
-        { id: 'nav-ds',     label: 'Go to Design System', group: 'Navigate' as const, run: () => router.push('/design-system') },
-      ] : []),
-    ]
+    const actions: OliverAction[] = []
     return {
       pageLabel: 'Hub',
       placeholder: 'Where do you want to go?',
@@ -88,7 +78,7 @@ export default function HubPage() {
       ],
       contextPayload: () => ({ visibleModules: visibleModules.map(m => m.id), isAdmin }),
     }
-  }, [router, isAdmin, visibleModules])
+  }, [isAdmin, visibleModules])
 
   useRegisterOliver(oliverConfig)
 

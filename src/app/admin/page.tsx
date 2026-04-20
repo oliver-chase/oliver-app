@@ -26,11 +26,9 @@ export default function AdminPage() {
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = [
-      { id: 'tab-users',      label: 'Open Users',        group: 'Navigate', run: () => setTab('users') },
-      { id: 'tab-tokens',     label: 'Open Design Tokens',group: 'Navigate', run: () => setTab('tokens') },
-      { id: 'tab-components', label: 'Open Components',   group: 'Navigate', run: () => setTab('components') },
-      { id: 'nav-ds',         label: 'Go to Design System', group: 'Navigate', run: () => router.push('/design-system') },
-      { id: 'nav-hub',        label: 'Back to Hub',        group: 'Navigate', run: () => router.push('/') },
+      { id: 'tab-users',      label: 'Open Users',         group: 'Quick', run: () => setTab('users') },
+      { id: 'tab-tokens',     label: 'Open Design Tokens', group: 'Quick', run: () => setTab('tokens') },
+      { id: 'tab-components', label: 'Open Components',    group: 'Quick', run: () => setTab('components') },
     ]
     return {
       pageLabel: 'Admin',
@@ -43,7 +41,7 @@ export default function AdminPage() {
       ],
       contextPayload: () => ({ currentTab: tab }),
     }
-  }, [router, tab])
+  }, [tab])
 
   useRegisterOliver(oliverConfig)
 

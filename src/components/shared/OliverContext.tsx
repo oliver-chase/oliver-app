@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 export interface OliverAction {
   id: string
   label: string
-  group: 'Create' | 'Navigate' | 'Search' | 'Quick'
+  group: 'Create' | 'Search' | 'Quick'
   hint?: string
   run: () => void | Promise<void>
 }

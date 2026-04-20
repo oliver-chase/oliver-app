@@ -1,6 +1,5 @@
 'use client'
 import { useState, useCallback, useMemo, useRef, Component } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import { deleteAccountCascade } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
@@ -187,7 +186,6 @@ export default function AccountsApp() {
     ? data.engagements.find(e => e.engagement_id === currentEngagementId)
     : null
 
-  const router = useRouter()
   const dataRef = useRef(data); dataRef.current = data
   const accountIdRef = useRef(currentAccountId); accountIdRef.current = currentAccountId
 
@@ -196,15 +194,11 @@ export default function AccountsApp() {
       { id: 'export',  label: 'Export account plan\u2026',   group: 'Create',   hint: 'Open export panel',            run: () => setExportOpen(true) },
       { id: 'archive', label: currentAccount?.status === 'Archived' ? 'Unarchive account' : 'Archive account', group: 'Create', hint: 'Toggle archive status', run: () => handleArchive() },
       { id: 'delete',  label: 'Delete account\u2026',         group: 'Create',   hint: 'Permanent \u2014 archive first', run: () => handleDelete() },
-      { id: 'all',     label: 'Back to portfolio',            group: 'Navigate', hint: 'Show all accounts',            run: () => setCurrentAccountId(null) },
+      { id: 'all',     label: 'Back to portfolio',            group: 'Quick',    hint: 'Show all accounts',            run: () => setCurrentAccountId(null) },
     ] : []
     const actions: OliverAction[] = [
       { id: 'add-account', label: 'Add account\u2026',            group: 'Create',   hint: 'Quick-add to portfolio',      run: () => handleAddAccount() },
       ...scoped,
-      { id: 'nav-hr',    label: 'Go to HR & People Ops', group: 'Navigate', run: () => router.push('/hr') },
-      { id: 'nav-sdr',   label: 'Go to SDR',             group: 'Navigate', run: () => router.push('/sdr') },
-      { id: 'nav-hub',   label: 'Go to Hub',             group: 'Navigate', run: () => router.push('/') },
-      { id: 'nav-admin', label: 'Go to Admin',           group: 'Navigate', run: () => router.push('/admin') },
     ]
     const greeting = currentAccountId
       ? "Hi, I'm Oliver! I can answer questions about your accounts, make updates, and add notes. Upload a meeting transcript or org chart screenshot and I'll update your account plan."
@@ -290,7 +284,7 @@ export default function AccountsApp() {
       },
       onChatRefresh: () => { refetch() },
     }
-  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, router, refetch])
+  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, refetch])
 
   useRegisterOliver(oliverConfig)
 

@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import SdrOverview from '@/components/sdr/SdrOverview'
 import SdrProspects from '@/components/sdr/SdrProspects'
@@ -64,7 +63,6 @@ export default function SdrPage() {
     closeSidebar()
   }
 
-  const router = useRouter()
   const prospectsRef = useRef(prospects);         prospectsRef.current = prospects
   const approvalItemsRef = useRef(approvalItems); approvalItemsRef.current = approvalItems
   const sendsRef = useRef(sends);                 sendsRef.current = sends
@@ -72,11 +70,7 @@ export default function SdrPage() {
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = [
-      ...TABS.map<OliverAction>(t => ({ id: 'tab-' + t.id, label: 'Go to ' + t.label, group: 'Navigate', run: () => { setTab(t.id); setSidebarOpen(false) } })),
-      { id: 'nav-hub',      label: 'Back to Hub',            group: 'Navigate', run: () => router.push('/') },
-      { id: 'nav-accounts', label: 'Go to Account Planning', group: 'Navigate', run: () => router.push('/accounts') },
-      { id: 'nav-hr',       label: 'Go to HR & People Ops',  group: 'Navigate', run: () => router.push('/hr') },
-      { id: 'nav-admin',    label: 'Go to Admin',            group: 'Navigate', run: () => router.push('/admin') },
+      ...TABS.map<OliverAction>(t => ({ id: 'tab-' + t.id, label: 'Open ' + t.label, group: 'Quick', run: () => { setTab(t.id); setSidebarOpen(false) } })),
     ]
     return {
       pageLabel: 'SDR & Outreach',
@@ -98,7 +92,7 @@ export default function SdrPage() {
       }),
       onChatRefresh: () => { loadData() },
     }
-  }, [router, loadData])
+  }, [loadData])
 
   useRegisterOliver(oliverConfig)
 

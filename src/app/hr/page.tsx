@@ -192,8 +192,8 @@ export default function HrPage() {
       { id: 'return-device',   label: 'Return device\u2026',                         group: 'Quick',    hint: 'Pick \u2192 set new status',    run: () => runFlow(returnDeviceFlow) },
       ...NAV.map<OliverAction>(n => ({
         id: 'nav-' + n.id,
-        label: 'Go to ' + n.label,
-        group: 'Navigate',
+        label: 'Open ' + n.label,
+        group: 'Quick',
         hint: n.section || undefined,
         run: () => navTo(n.id),
       })),
