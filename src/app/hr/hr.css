@@ -169,7 +169,7 @@ tr.selected td{background:var(--accent-light)}
 .dash-grid:last-child{margin-bottom:0}
 .dash-grid>div{display:flex;flex-direction:column}
 .dash-grid>div>.card{flex:1}
-.dash-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--spacing-sm);font-size:var(--font-size-xs)}
+.dash-section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--spacing-sm)}
 .dash-row{display:flex;align-items:center;justify-content:space-between;padding:var(--spacing-sm) 0;border-bottom:1px solid var(--border);cursor:pointer}
 .dash-row-left{display:flex;align-items:center;gap:var(--spacing-sm)}
 .dash-row-right{text-align:right;flex-shrink:0}

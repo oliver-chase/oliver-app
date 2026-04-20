@@ -23,7 +23,7 @@ function fmtDate(dateStr: string) {
 function SectionHdr({ title, nav, onNav }: { title: string; nav: string; onNav: (p: string) => void }) {
   return (
     <div className="dash-section-hdr">
-      <div>{title}</div>
+      <div className="app-card-label" style={{ marginBottom: 0 }}>{title}</div>
       <button type="button" className="btn-link" onClick={() => onNav(nav)}>View all &rarr;</button>
     </div>
   )

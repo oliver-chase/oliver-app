@@ -84,6 +84,9 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
 
   const statuses = [...new Set(db.candidates.map(c => c.candStatus).filter(Boolean))]
   const depts    = [...new Set(db.candidates.map(c => c.dept).filter(Boolean))]
+  const locationOptions = [...new Set(
+    db.candidates.map(c => [c.city, c.state].filter(Boolean).join(', ')).filter(Boolean)
+  )].sort().map(l => ({ value: l, label: l }))
 
   const empWithActiveOnboarding = db.onboardingRuns.filter(r => r.status === 'active' && r.type === 'onboarding').map(r => r.employeeId)
   const onboardingEmpNames = db.employees.filter(e => empWithActiveOnboarding.includes(e.id)).map(e => e.name)
@@ -95,15 +98,17 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     if (status) list = list.filter(c => c.candStatus === status)
     if (stage) list = list.filter(c => c.stage === stage)
     if (dept) list = list.filter(c => c.dept === dept)
-    if (location) list = list.filter(c => (c.city || '').toLowerCase().includes(location.toLowerCase()) || (c.state || '').toLowerCase().includes(location.toLowerCase()))
+    if (location) list = list.filter(c => [c.city, c.state].filter(Boolean).join(', ') === location)
     return list
   }
 
   const list = getFiltered()
-  const total = db.candidates.length
-  const archivedCount = db.candidates.filter(c => c.candStatus === 'Hired' || c.candStatus === 'Closed').length
-  const archivedLabel = archivedCount && view === 'kanban' && !showArchived && !status ? ` (${archivedCount} archived hidden)` : ''
-  const subtitle = `${list.length} of ${total} candidates${archivedLabel}`
+  const visibleCandidates = db.candidates.filter(c => !onboardingEmpNames.includes(c.name))
+  const total = visibleCandidates.length
+  const archivedCount = visibleCandidates.filter(c => c.candStatus === 'Hired' || c.candStatus === 'Closed').length
+  const subtitle = (view === 'kanban' && !showArchived && !status && archivedCount > 0)
+    ? `${list.length} active · ${archivedCount} archived`
+    : `${list.length} of ${total} candidates`
 
   const selected = selectedId ? db.candidates.find(c => c.id === selectedId) || null : null
 
@@ -372,10 +377,13 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             onChange={v => setDept(v as string)}
             showUnassigned={false}
           />
-          <div className="filter-search" style={{ minWidth: 140 }}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 1.5"/></svg>
-            <input placeholder="City, state..." value={location} onChange={e => setLocation(e.target.value)} />
-          </div>
+          <CustomPicker
+            placeholder="All locations"
+            options={locationOptions}
+            selected={location}
+            onChange={v => setLocation(v as string)}
+            showUnassigned={false}
+          />
           <button
             className={'btn btn-sm btn-secondary' + (showArchived ? ' btn-active' : '')}
             onClick={() => setShowArchived(a => !a)}

@@ -355,10 +355,10 @@ export default function ChatbotPanel({ accountId, data }: Props) {
         <div className="chatbot-header">
           <span className="chatbot-header-label">Oliver</span>
           <button
-            className="chatbot-export-btn"
+            className="chatbot-export-btn chatbot-tooltip-wrap"
             id="chatbot-export"
             aria-label="Export conversation"
-            title="Export conversation"
+            data-tooltip="Export conversation"
             onClick={exportConversation}
           >
             &#8595;

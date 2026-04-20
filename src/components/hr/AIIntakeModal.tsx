@@ -189,6 +189,9 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
         <div className="app-modal-actions">
           <button className="btn btn-ghost" type="button" onClick={handleClose} disabled={confirming}>{phase === 'review' ? 'Discard' : 'Cancel'}</button>
           {phase === 'error' && <button className="btn btn-secondary" type="button" onClick={() => setPhase('pick')}>Try Again</button>}
+          {phase === 'pick' && (
+            <button className="btn btn-primary" type="button" onClick={() => fileInputRef.current?.click()}>Choose File</button>
+          )}
           {phase === 'review' && (
             <button className="btn btn-primary" type="button" disabled={!parsed.length || confirming} onClick={handleConfirm}>
               {confirming ? 'Adding\u2026' : 'Add ' + parsed.length + ' Candidate' + (parsed.length === 1 ? '' : 's')}

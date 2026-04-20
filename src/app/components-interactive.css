@@ -318,6 +318,7 @@
 .cand-edit-group { display: flex; flex-direction: column; gap: var(--spacing-2xs); flex: 1; min-width: 0; }
 .cand-edit-row { display: flex; gap: var(--spacing-md); }
 .cand-edit-row-3 > .cand-edit-group { flex: 1 1 0; }
+.cand-edit-group .picker-trigger { width: 100%; }
 @media (max-width: 500px) {
   .cand-edit-row { flex-direction: column; gap: var(--spacing-sm); }
 }

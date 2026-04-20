@@ -15,6 +15,7 @@ import GlobalSearchButton from '@/components/hr/GlobalSearchButton'
 import GlobalSearch from '@/components/hr/GlobalSearch'
 import CommandPalette from '@/components/hr/CommandPalette'
 import StepFlowRunner from '@/components/hr/StepFlowRunner'
+import HrAgentPanel from '@/components/hr/HrAgentPanel'
 import { useAppModal } from '@/components/shared/AppModal'
 import type { Flow, EditTarget } from '@/components/hr/step-flow-types'
 import type { HrDB, HrPage, Candidate, Employee, Device } from '@/components/hr/types'
@@ -284,6 +285,8 @@ export default function HrPage() {
         <main id="main-content">
           {renderPage()}
         </main>
+
+        <HrAgentPanel db={db} currentPage={page} />
 
         <nav className="bottom-nav" id="bottom-nav" aria-label="Bottom navigation">
           {([

@@ -2,6 +2,7 @@
 import { useState, useEffect, useId } from 'react'
 import type { Candidate, HrList } from './types'
 import { getList } from './types'
+import CustomPicker from '@/components/shared/CustomPicker'
 
 interface Props {
   candidate: Candidate
@@ -33,10 +34,13 @@ export default function EditCandidateModal({ candidate, lists, onSave, onCancel,
     return (
       <div className="cand-edit-group">
         <label className="app-modal-label">{label}</label>
-        <select className="app-modal-input" value={String(c[key] ?? '')} onChange={e => update(key, e.currentTarget.value as Candidate[K])}>
-          <option value="">{'\u2014'}</option>
-          {opts.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <CustomPicker
+          options={[{ value: '', label: '\u2014' }, ...opts.map(o => ({ value: o, label: o }))]}
+          selected={String(c[key] ?? '')}
+          onChange={v => update(key, v as Candidate[K])}
+          showUnassigned={false}
+          searchable={false}
+        />
       </div>
     )
   }
@@ -77,10 +81,13 @@ export default function EditCandidateModal({ candidate, lists, onSave, onCancel,
           <div className="cand-edit-row">
             <div className="cand-edit-group">
               <label className="app-modal-label">Comp Type</label>
-              <select className="app-modal-input" value={c.compType || 'salary'} onChange={e => update('compType', e.currentTarget.value)}>
-                <option value="salary">Salary</option>
-                <option value="hourly">Hourly</option>
-              </select>
+              <CustomPicker
+                options={[{ value: '', label: '\u2014' }, { value: 'salary', label: 'Salary' }, { value: 'hourly', label: 'Hourly' }]}
+                selected={c.compType}
+                onChange={v => update('compType', v as string)}
+                showUnassigned={false}
+                searchable={false}
+              />
             </div>
             {inputField('Amount ($)', 'compAmount', 'number')}
           </div>
