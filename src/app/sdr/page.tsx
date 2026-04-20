@@ -152,7 +152,7 @@ export default function SdrPage() {
           </div>
         </header>
 
-        <main className="page" id="main-content">
+        <main id="main-content">
           {loading ? (
             <div className="sdr-empty">Loading...</div>
           ) : (

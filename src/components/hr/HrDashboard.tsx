@@ -1,13 +1,9 @@
 'use client'
 import type { HrDB } from './types'
-import { useAppModal } from '@/components/shared/AppModal'
-import { supabase } from '@/lib/supabase'
 
 interface Props {
   db: HrDB
-  setDb: React.Dispatch<React.SetStateAction<HrDB>>
   onNav: (page: string) => void
-  setSyncState: (s: 'ok' | 'syncing' | 'error') => void
 }
 
 function parseLocalDate(s: string) {
@@ -33,9 +29,7 @@ function EmptyRow({ msg }: { msg: string }) {
   return <div className="dash-empty">{msg}</div>
 }
 
-export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
-  const { modal, showModal } = useAppModal()
-
+export default function HrDashboard({ db, onNav }: Props) {
   const activeReqs       = db.candidates.filter(c => c.candStatus !== 'Hired' && c.candStatus !== 'Closed').length
   const totalEmps        = db.employees.length
   const activeOnboarding = db.onboardingRuns.filter(r => r.status === 'active' && r.type === 'onboarding').length
@@ -106,45 +100,13 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
     return Object.values(groups).slice(0, 2)
   })()
 
-  async function quickAddCand() {
-    const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Name', confirmLabel: 'Add' })
-    if (buttonValue !== 'confirm' || !inputValue.trim()) return
-    const now = new Date().toISOString()
-    const rec = { id: 'CAND-' + crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
-    setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
-    setSyncState('syncing')
-    try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
-  }
-
-  async function quickAddEmp() {
-    const { buttonValue, inputValue } = await showModal({ title: 'Add Employee', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
-    if (buttonValue !== 'confirm' || !inputValue.trim()) return
-    const now = new Date().toISOString()
-    const rec = { id: 'EMP-' + crypto.randomUUID(), name: inputValue.trim(), role: 'TBD', dept: '', status: 'active', client: '', location: 'Remote', city: '', state: '', country: 'US', manager: '', buddy: '', startDate: '', endDate: '', email: '', source: '', created_at: now, updated_at: now }
-    setDb(prev => ({ ...prev, employees: [rec, ...prev.employees] }))
-    setSyncState('syncing')
-    try { await supabase.from('employees').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
-  }
-
-  async function quickStartRun() {
-    const { buttonValue } = await showModal({ title: 'Start Run', message: 'Use the Onboarding or Offboarding section to start a new run.', confirmLabel: 'Go to Onboarding', cancelLabel: 'Close' })
-    if (buttonValue === 'confirm') onNav('onboarding')
-  }
-
   return (
     <div className="page page--split">
-      {modal}
       <div className="section-header">
         <div className="page-header">
           <div>
             <div className="page-title">Dashboard</div>
             <div className="page-subtitle">{activeReqs} open reqs &middot; {totalEmps} employees &middot; {activeOnboarding} onboarding &middot; {activeOffboard} offboarding</div>
-          </div>
-          <div className="dash-quick-add">
-            <button className="btn btn-primary btn--compact" onClick={quickAddCand}>+ Candidate</button>
-            <button className="btn btn-secondary btn--compact" onClick={quickAddEmp}>+ Employee</button>
-            <button className="btn btn-secondary btn--compact" onClick={() => onNav('inventory')}>+ Device</button>
-            <button className="btn btn-secondary btn--compact" onClick={quickStartRun}>Start Run</button>
           </div>
         </div>
       </div>

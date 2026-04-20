@@ -37,13 +37,16 @@ export default function SdrProspects({ prospects, filters, onFiltersChange, onSe
   const paginated = list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
-    <div id="sdr-section-prospects" className="sdr-section">
-      <div className="sdr-section-header">
-        <h2>Prospects</h2>
-        <span className="sdr-section-count">
-          {list.length}{list.length !== total ? ' of ' + total : ''}
-        </span>
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Prospects</div>
+            <div className="page-subtitle">{list.length}{list.length !== total ? ' of ' + total : ''} prospect{total !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
       </div>
+      <div className="page-body">
 
       <div className="sdr-filter-bar">
         <button className={'sdr-pill' + (filters.status === 'all' ? ' active' : '')} onClick={() => onFiltersChange({ status: 'all', page: 0 })}>
@@ -104,13 +107,14 @@ export default function SdrProspects({ prospects, filters, onFiltersChange, onSe
           </div>
           {pageCount > 1 && (
             <div className="sdr-pagination">
-              <button className="sdr-page-btn" disabled={page === 0} onClick={() => onFiltersChange({ page: page - 1 })}>←</button>
+              <button className="sdr-page-btn" disabled={page === 0} onClick={() => onFiltersChange({ page: page - 1 })}>&#8592;</button>
               <span className="sdr-page-info">Page {page + 1} of {pageCount}</span>
-              <button className="sdr-page-btn" disabled={page >= pageCount - 1} onClick={() => onFiltersChange({ page: page + 1 })}>→</button>
+              <button className="sdr-page-btn" disabled={page >= pageCount - 1} onClick={() => onFiltersChange({ page: page + 1 })}>&#8594;</button>
             </div>
           )}
         </>
       )}
+      </div>
     </div>
   )
 }

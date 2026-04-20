@@ -238,7 +238,7 @@ export default function HrPage() {
 
   function renderPage() {
     switch (page) {
-      case 'dashboard':   return <HrDashboard db={db} setDb={setDb} onNav={navTo} setSyncState={setSyncState} />
+      case 'dashboard':   return <HrDashboard db={db} onNav={navTo} />
       case 'hiring':      return <HrHiring db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'candidate' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
       case 'directory':   return <HrDirectory db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'employee' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
       case 'onboarding':  return <HrOnboarding type="onboarding" db={db} setDb={setDb} setSyncState={setSyncState} onNav={navTo} />

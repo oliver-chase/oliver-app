@@ -9,11 +9,16 @@ export default function SdrOutreach({ sends }: Props) {
   const rate = sends.length > 0 ? Math.round((replied / sends.length) * 100) : 0
 
   return (
-    <div id="sdr-section-outreach" className="sdr-section">
-      <div className="sdr-section-header">
-        <h2>Outreach</h2>
-        <span className="sdr-section-count">{sends.length} send{sends.length !== 1 ? 's' : ''}</span>
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Outreach</div>
+            <div className="page-subtitle">{sends.length} send{sends.length !== 1 ? 's' : ''} &middot; {rate}% reply rate</div>
+          </div>
+        </div>
       </div>
+      <div className="page-body">
 
       {sends.length > 0 && (
         <div className="sdr-stat-row">
@@ -51,6 +56,7 @@ export default function SdrOutreach({ sends }: Props) {
           })}
         </div>
       )}
+      </div>
     </div>
   )
 }

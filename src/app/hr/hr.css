@@ -169,7 +169,6 @@ tr.selected td{background:var(--accent-light)}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
 /* .sidebar-back styles provided by shared/components.css */
 /* ── DASHBOARD ───────────────────────────────────────────────────────────── */
-.dash-quick-add{display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-20)}
 .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-md);margin-bottom:var(--spacing-md)}
 .dash-grid:last-child{margin-bottom:0}
 .dash-grid>div{display:flex;flex-direction:column}

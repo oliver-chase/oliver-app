@@ -52,11 +52,16 @@ export default function SdrDrafts({ approvalItems, onItemsChange }: Props) {
   }
 
   return (
-    <div id="sdr-section-drafts" className="sdr-section">
-      <div className="sdr-section-header">
-        <h2>Drafts</h2>
-        {pending > 0 && <span className="sdr-section-count pending">{pending} pending</span>}
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Drafts</div>
+            {pending > 0 && <div className="page-subtitle">{pending} pending approval</div>}
+          </div>
+        </div>
       </div>
+      <div className="page-body">
 
       {batches.length === 0 ? (
         <div className="sdr-empty">No drafts yet. Run the daily draft step in v-two-sdr to generate.</div>
@@ -112,6 +117,7 @@ export default function SdrDrafts({ approvalItems, onItemsChange }: Props) {
           </div>
         )
       })}
+      </div>
     </div>
   )
 }

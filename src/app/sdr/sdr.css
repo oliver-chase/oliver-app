@@ -5,8 +5,13 @@
 html,body { background: var(--surface2); color: var(--text); }
 .main { margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; }
 .topbar { position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: var(--topbar-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 var(--spacing-20); gap: var(--spacing-10); z-index: 40; }
-/* page padding: 28px/40px have no exact tokens — intentional layout constants (matches accounts page) */
-.page { padding: calc(var(--topbar-h) + var(--spacing-md) + var(--spacing-20)) 28px 40px; }
+.page--split{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;bottom:0;overflow:hidden!important;padding:0!important;display:flex;flex-direction:column}
+.page-body{flex:1;overflow-y:auto;padding:var(--spacing-20) var(--spacing-lg) 40px}
+.section-header{padding:calc(var(--spacing-md) + var(--spacing-20)) var(--spacing-lg) 0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.section-header .page-header{margin-bottom:var(--spacing-md)}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--spacing-20);flex-wrap:wrap;gap:var(--spacing-sm)}
+.page-title{font-size:var(--font-size-xl);font-weight:var(--font-weight-semibold);letter-spacing:-.4px}
+.page-subtitle{font-size:var(--font-size-xs);color:var(--gray);margin-top:var(--spacing-2xs)}
 .topbar-hamburger { display: none; width: var(--spacing-xl); height: var(--spacing-xl); align-items: center; justify-content: center; cursor: pointer; color: var(--gray); background: none; border: none; border-radius: var(--radius); }
 .topbar-hamburger:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .topbar-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--text); flex: 1; }
@@ -162,6 +167,8 @@ html,body { background: var(--surface2); color: var(--text); }
   .topbar { left: 0; padding: 0 var(--spacing-12); }
   .topbar-hamburger { display: flex !important; min-height: var(--touch-target); }
   .main { margin-left: 0; }
+  .page--split { left: 0; }
+  .section-header { padding: var(--spacing-12) var(--spacing-md) 0; }
   .sdr-stat-row { gap: var(--spacing-10); }
   .sdr-prospect-grid { grid-template-columns: 1fr; }
 }

@@ -22,50 +22,58 @@ export default function SdrOverview({ prospects, approvalItems, sends, onGoToDra
   prospects.forEach(p => { statusBreakdown[p.st] = (statusBreakdown[p.st] || 0) + 1 })
 
   return (
-    <div id="sdr-section-overview" className="sdr-section">
-      <div className="sdr-section-header"><h2>Overview</h2></div>
-
-      <div className="sdr-stat-row">
-        <div className="sdr-stat">
-          <span className="sdr-stat-value">{total}</span>
-          <span className="sdr-stat-label">Total Prospects</span>
-        </div>
-        <div className="sdr-stat">
-          <span className="sdr-stat-value">{active}</span>
-          <span className="sdr-stat-label">Active</span>
-        </div>
-        <div className="sdr-stat">
-          <span className="sdr-stat-value">{sends.length}</span>
-          <span className="sdr-stat-label">Sent</span>
-        </div>
-        <div className="sdr-stat">
-          <span className="sdr-stat-value">{rate}%</span>
-          <span className="sdr-stat-label">Reply Rate</span>
-        </div>
-      </div>
-
-      {pending > 0 && (
-        <div className="sdr-alert">
-          <span className="sdr-alert-text">
-            {pending} draft{pending !== 1 ? 's' : ''} awaiting approval
-          </span>
-          <button className="btn btn-primary btn-sm" onClick={onGoToDrafts}>Review Drafts</button>
-        </div>
-      )}
-
-      {PIPELINE_ORDER.some(s => statusBreakdown[s]) && (
-        <div className="sdr-overview-breakdown">
-          <h3>Pipeline</h3>
-          <div className="sdr-pipeline">
-            {PIPELINE_ORDER.filter(s => statusBreakdown[s]).map(s => (
-              <div key={s} className="sdr-pipeline-row">
-                <span className="sdr-pipeline-label">{PROSPECT_STATUS_LABEL[s] || s}</span>
-                <span className="sdr-pipeline-count">{statusBreakdown[s]}</span>
-              </div>
-            ))}
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Overview</div>
+            <div className="page-subtitle">{total} prospects &middot; {active} active &middot; {rate}% reply rate</div>
           </div>
         </div>
-      )}
+      </div>
+      <div className="page-body">
+        <div className="sdr-stat-row">
+          <div className="sdr-stat">
+            <span className="sdr-stat-value">{total}</span>
+            <span className="sdr-stat-label">Total Prospects</span>
+          </div>
+          <div className="sdr-stat">
+            <span className="sdr-stat-value">{active}</span>
+            <span className="sdr-stat-label">Active</span>
+          </div>
+          <div className="sdr-stat">
+            <span className="sdr-stat-value">{sends.length}</span>
+            <span className="sdr-stat-label">Sent</span>
+          </div>
+          <div className="sdr-stat">
+            <span className="sdr-stat-value">{rate}%</span>
+            <span className="sdr-stat-label">Reply Rate</span>
+          </div>
+        </div>
+
+        {pending > 0 && (
+          <div className="sdr-alert">
+            <span className="sdr-alert-text">
+              {pending} draft{pending !== 1 ? 's' : ''} awaiting approval
+            </span>
+            <button className="btn btn-primary btn-sm" onClick={onGoToDrafts}>Review Drafts</button>
+          </div>
+        )}
+
+        {PIPELINE_ORDER.some(s => statusBreakdown[s]) && (
+          <div className="sdr-overview-breakdown">
+            <h3>Pipeline</h3>
+            <div className="sdr-pipeline">
+              {PIPELINE_ORDER.filter(s => statusBreakdown[s]).map(s => (
+                <div key={s} className="sdr-pipeline-row">
+                  <span className="sdr-pipeline-label">{PROSPECT_STATUS_LABEL[s] || s}</span>
+                  <span className="sdr-pipeline-count">{statusBreakdown[s]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
