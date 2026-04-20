@@ -5,8 +5,9 @@
 html,body { background: var(--surface2); color: var(--text); }
 .main { margin-left: var(--sidebar-w); display: flex; flex-direction: column; min-height: 100vh; }
 .topbar { position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: var(--topbar-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 var(--spacing-20); gap: var(--spacing-10); z-index: 40; }
+/* page padding: 28px/40px have no exact tokens — intentional layout constants (matches accounts page) */
 .page { padding: calc(var(--topbar-h) + var(--spacing-md)) 28px 40px; }
-.topbar-hamburger { display: none; width: 32px; height: 32px; align-items: center; justify-content: center; cursor: pointer; color: var(--gray); background: none; border: none; border-radius: var(--radius); }
+.topbar-hamburger { display: none; width: var(--spacing-xl); height: var(--spacing-xl); align-items: center; justify-content: center; cursor: pointer; color: var(--gray); background: none; border: none; border-radius: var(--radius); }
 .topbar-hamburger:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .topbar-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--text); flex: 1; }
 .sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-modal-overlay); z-index: 49; pointer-events: none; }
@@ -14,7 +15,7 @@ html,body { background: var(--surface2); color: var(--text); }
 
 /* Sync indicator */
 .sync-indicator { font-size: var(--font-size-xs); color: var(--gray); display: flex; align-items: center; gap: var(--spacing-5); }
-.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.sync-dot { width: var(--spacing-6); height: var(--spacing-6); border-radius: 50%; background: var(--green); }
 .sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
 .sync-dot.error { background: var(--red); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -48,7 +49,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-pipeline-count { font-weight: var(--font-weight-semibold); }
 
 /* Status badges */
-.sdr-status-badge { display: inline-block; font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); padding: 2px var(--spacing-sm); border-radius: 10px; white-space: nowrap; }
+.sdr-status-badge { display: inline-block; font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); padding: var(--spacing-2xs) var(--spacing-sm); border-radius: var(--radius-pill); white-space: nowrap; }
 /* Prospect statuses */
 .sdr-status--new               { background: var(--surface2); color: var(--gray); }
 .sdr-status--email-discovered  { background: var(--blue-light); color: var(--blue); }
@@ -78,11 +79,11 @@ html,body { background: var(--surface2); color: var(--text); }
 
 /* Search bar */
 .sdr-search-bar { margin-bottom: var(--spacing-md); }
-.sdr-search-input { width: 100%; max-width: 360px; padding: 7px var(--spacing-12); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--font-size-sm); background: var(--surface); color: var(--text); box-sizing: border-box; }
+.sdr-search-input { width: 100%; max-width: 360px; padding: var(--spacing-7) var(--spacing-12); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--font-size-sm); background: var(--surface); color: var(--text); box-sizing: border-box; }
 .sdr-search-input:focus { outline: 2px solid var(--pink); outline-offset: 1px; border-color: transparent; }
 
 /* Chips */
-.sdr-track-chip, .sdr-touch-chip, .sdr-date-chip { display: inline-block; font-size: var(--font-size-2xs); padding: 2px 7px; border-radius: 10px; background: var(--surface2); color: var(--gray); }
+.sdr-track-chip, .sdr-touch-chip, .sdr-date-chip { display: inline-block; font-size: var(--font-size-2xs); padding: var(--spacing-2xs) var(--spacing-7); border-radius: var(--radius-pill); background: var(--surface2); color: var(--gray); }
 .sdr-track-chip { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
 .sdr-touch-chip { background: var(--blue-light); color: var(--blue); }
 
@@ -100,7 +101,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-batch-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-12) var(--spacing-md); border-bottom: 1px solid var(--border); background: var(--surface2); }
 .sdr-batch-date { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--text); }
 .sdr-batch-meta { display: flex; gap: var(--spacing-sm); }
-.sdr-batch-stat { font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); padding: 2px var(--spacing-sm); border-radius: 10px; }
+.sdr-batch-stat { font-size: var(--font-size-2xs); font-weight: var(--font-weight-semibold); padding: var(--spacing-2xs) var(--spacing-sm); border-radius: var(--radius-pill); }
 .sdr-batch-stat.pending  { background: var(--amber-light); color: var(--amber); }
 .sdr-batch-stat.approved { background: var(--green-light); color: var(--green); }
 .sdr-batch-stat.sent     { background: var(--color-purple-overlay-legacy); color: var(--accent-text); }
@@ -140,7 +141,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-detail-panel.open { transform: translateX(0); }
 .sdr-detail-header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--spacing-20) var(--spacing-20) var(--spacing-md); border-bottom: 1px solid var(--border); gap: var(--spacing-12); }
 .sdr-detail-name { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--text); line-height: 1.2; }
-.sdr-detail-close { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 18px; line-height: 1; padding: 2px var(--spacing-xs); border-radius: var(--radius-sm); flex-shrink: 0; }
+.sdr-detail-close { background: none; border: none; cursor: pointer; color: var(--gray); font-size: 18px; line-height: 1; padding: var(--spacing-2xs) var(--spacing-xs); border-radius: var(--radius-sm); flex-shrink: 0; }
 .sdr-detail-close:hover { color: var(--text); }
 .sdr-detail-close:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .sdr-detail-body { flex: 1; overflow-y: auto; padding: var(--spacing-md) var(--spacing-20); display: flex; flex-direction: column; gap: var(--spacing-14); }
@@ -153,7 +154,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-detail-footer { padding: var(--spacing-14) var(--spacing-20); border-top: 1px solid var(--border); display: flex; gap: var(--spacing-sm); }
 
 /* Refresh button */
-.sdr-refresh-btn { background: none; border: none; cursor: pointer; color: var(--gray); padding: 2px var(--spacing-xs); border-radius: var(--radius-sm); font-size: var(--font-size-sm); line-height: 1; }
+.sdr-refresh-btn { background: none; border: none; cursor: pointer; color: var(--gray); padding: var(--spacing-2xs) var(--spacing-xs); border-radius: var(--radius-sm); font-size: var(--font-size-sm); line-height: 1; }
 .sdr-refresh-btn:hover { color: var(--text); }
 .sdr-refresh-btn:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 
