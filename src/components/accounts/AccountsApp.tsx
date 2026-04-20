@@ -29,8 +29,57 @@ class ErrorBoundary extends Component<
   }
 }
 
+function buildSummaryText(result: unknown, docType: 'image' | 'document'): string {
+  const r = result as Record<string, unknown>
+  if (docType === 'image') {
+    const people = (r.people as Array<Record<string, string>>) || []
+    return people.map(p => {
+      const parts: string[] = [p.name]
+      if (p.title) parts.push(p.title)
+      if (p.department) parts.push(p.department)
+      if (p.reports_to) parts.push('reports to ' + p.reports_to)
+      return parts.join(' | ')
+    }).join('\n') || 'No people found.'
+  }
+  const meta = (r.metadata as Record<string, unknown>) || {}
+  const lines: string[] = []
+  if (meta.title) lines.push('Meeting: ' + meta.title)
+  if (meta.date) lines.push('Date: ' + meta.date)
+  const attendees = meta.attendees as string[] | undefined
+  if (attendees?.length) lines.push('Attendees: ' + attendees.join(', '))
+  const actions = r.actions as Array<Record<string, string>> | undefined
+  if (actions?.length) {
+    lines.push(''); lines.push('Actions (' + actions.length + '):')
+    actions.forEach(a => lines.push('  - ' + a.task + (a.owner ? ' (' + a.owner + ')' : '')))
+  }
+  const decisions = r.decisions as Array<Record<string, string>> | undefined
+  if (decisions?.length) {
+    lines.push(''); lines.push('Decisions (' + decisions.length + '):')
+    decisions.forEach(d => lines.push('  - ' + d.decision))
+  }
+  return lines.join('\n') || JSON.stringify(result, null, 2).slice(0, 500)
+}
+
+function readAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsText(file)
+  })
+}
+
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function AccountsApp() {
-  const { data, setData, loading, error, syncState, reportSync, saveAccount, addAccount } = useAccountsData()
+  const { data, setData, loading, error, syncState, reportSync, saveAccount, addAccount, refetch } = useAccountsData()
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
   const [currentEngagementId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -158,13 +207,63 @@ export default function AccountsApp() {
       { id: 'nav-admin', label: 'Go to Admin',           group: 'Navigate', run: () => router.push('/admin') },
     ]
     const greeting = currentAccountId
-      ? "Hi, I'm Oliver. Ask about this account, or pick a command."
+      ? "Hi, I'm Oliver. Ask about this account, upload a transcript or org chart, or pick a command."
       : "Hi, I'm Oliver. Pick an account in the sidebar, or add a new one."
+    const upload = currentAccountId ? {
+      accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',
+      hint: '.docx .txt .pdf or image',
+      parse: async (file: File) => {
+        const isImage = file.type.startsWith('image/')
+        if (isImage) {
+          const base64 = await readAsBase64(file)
+          const res = await fetch('/api/parse-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64, mediaType: file.type }),
+          })
+          const d = await res.json()
+          if (d.error) throw new Error(d.error)
+          return { title: 'Extracted People', summary: buildSummaryText(d.result, 'image'), model: d.model, payload: d.result }
+        }
+        const text = await readAsText(file)
+        const res = await fetch('/api/parse-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, filename: file.name }),
+        })
+        const d = await res.json()
+        if (d.error) throw new Error(d.error)
+        return { title: 'Extracted Meeting Data', summary: buildSummaryText(d.result, 'document'), model: d.model, payload: d.result }
+      },
+      dryRun: async (payload: unknown) => {
+        const id = accountIdRef.current
+        const res = await fetch('/api/confirm-write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId: id, payload, dryRun: true }),
+        })
+        const d = await res.json()
+        if (d.error) throw new Error(d.error)
+        return { conflicts: d.conflicts, summary: d.summary }
+      },
+      commit: async (payload: unknown) => {
+        const id = accountIdRef.current
+        const res = await fetch('/api/confirm-write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId: id, payload, dryRun: false }),
+        })
+        const d = await res.json()
+        if (d.error) throw new Error(d.error)
+        return { message: d.message || 'Done. Data written.' }
+      },
+    } : undefined
     return {
       pageLabel: 'Account Planning',
       placeholder: 'What do you want to do?',
       greeting,
       actions,
+      upload,
       quickConvos: currentAccountId ? [
         'Summarise recent activity on this account.',
         'Which actions are overdue?',
@@ -189,8 +288,9 @@ export default function AccountsApp() {
           projects:    d.projects?.filter(p => p.account_id === id) ?? [],
         }
       },
+      onChatRefresh: () => { refetch() },
     }
-  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, router])
+  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, router, refetch])
 
   useRegisterOliver(oliverConfig)
 

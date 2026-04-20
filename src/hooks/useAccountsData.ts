@@ -14,6 +14,18 @@ export function useAccountsData() {
   const [error, setError] = useState<string | null>(null)
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
 
+  const refetch = useCallback(async () => {
+    setSyncState('syncing')
+    try {
+      const d = await loadAllData()
+      setData(d)
+      setSyncState('ok')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+      setSyncState('error')
+    }
+  }, [])
+
   useEffect(() => {
     loadAllData()
       .then(d => { setData(d); setLoading(false); setSyncState('ok') })
@@ -68,5 +80,5 @@ export function useAccountsData() {
 
   const reportSync = (s: 'syncing' | 'ok' | 'error') => setSyncState(s)
 
-  return { data, setData, loading, error, syncState, reportSync, saveAccount, saveBackground, addAccount }
+  return { data, setData, loading, error, syncState, reportSync, saveAccount, saveBackground, addAccount, refetch }
 }

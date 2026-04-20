@@ -10,10 +10,31 @@ export interface OliverAction {
   run: () => void | Promise<void>
 }
 
+export interface OliverUploadConflict {
+  section: string
+  field: string
+  existing: string
+  incoming: string
+}
+
+export interface OliverParseResult {
+  title: string
+  summary: string
+  model: string
+  payload: unknown
+}
+
+export interface OliverDryRunResult {
+  conflicts?: OliverUploadConflict[]
+  summary?: Record<string, number>
+}
+
 export interface OliverUpload {
   accepts: string
   hint: string
-  onFile: (file: File) => void | Promise<void>
+  parse: (file: File) => Promise<OliverParseResult>
+  dryRun: (payload: unknown) => Promise<OliverDryRunResult>
+  commit: (payload: unknown) => Promise<{ message: string }>
 }
 
 export interface OliverConfig {

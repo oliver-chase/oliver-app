@@ -10,6 +10,8 @@ type Mode = 'command' | 'chat'
 type ChatItem =
   | { id: number; kind: 'msg'; role: 'user' | 'assistant'; text: string; model?: string }
   | { id: number; kind: 'topic-prompt' }
+  | { id: number; kind: 'parse-result'; title: string; summary: string; model: string; payload: unknown }
+  | { id: number; kind: 'write-prompt'; text: string; hasConflicts: boolean; payload: unknown }
 
 export default function OliverDock() {
   const { config, openSignal } = useOliverContext()
@@ -232,7 +234,51 @@ export default function OliverDock() {
               messagesRef={messagesRef}
               onFile={async file => {
                 if (!config.upload) return
-                try { await config.upload.onFile(file) } catch (err) { console.error('[Oliver] upload failed', err) }
+                setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Reading ' + file.name + '\u2026' }])
+                try {
+                  const r = await config.upload.parse(file)
+                  setItems(prev => [...prev, { id: nextId(), kind: 'parse-result', title: r.title, summary: r.summary, model: r.model, payload: r.payload }])
+                } catch (err) {
+                  console.error('[Oliver] parse failed', err)
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Parse error: ' + (err instanceof Error ? err.message : String(err)) }])
+                }
+              }}
+              onReview={async (itemId, payload) => {
+                if (!config.upload) return
+                setItems(prev => prev.filter(it => it.id !== itemId))
+                setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Checking for conflicts\u2026' }])
+                try {
+                  const dr = await config.upload.dryRun(payload)
+                  const hasConflicts = !!(dr.conflicts && dr.conflicts.length > 0)
+                  let text: string
+                  if (hasConflicts) {
+                    text = 'Conflicts found:\n'
+                    dr.conflicts!.forEach(c => { text += '  ' + c.section + '/' + c.field + ': existing "' + c.existing + '" vs incoming "' + c.incoming + '"\n' })
+                    text += '\nProceed anyway?'
+                  } else {
+                    text = 'Ready to write:\n'
+                    const s = dr.summary || {}
+                    Object.keys(s).forEach(k => { if (s[k] > 0) text += '  ' + k + ': ' + s[k] + '\n' })
+                  }
+                  setItems(prev => [...prev, { id: nextId(), kind: 'write-prompt', text, hasConflicts, payload }])
+                } catch (err) {
+                  console.error('[Oliver] dryRun failed', err)
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Conflict check failed. Try again.' }])
+                }
+              }}
+              onDiscard={itemId => { setItems(prev => prev.filter(it => it.id !== itemId)) }}
+              onConfirmWrite={async (itemId, payload) => {
+                if (!config.upload) return
+                setItems(prev => prev.filter(it => it.id !== itemId))
+                setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Writing to database\u2026' }])
+                try {
+                  const res = await config.upload.commit(payload)
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: res.message }])
+                  config.onChatRefresh?.()
+                } catch (err) {
+                  console.error('[Oliver] commit failed', err)
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Write failed: ' + (err instanceof Error ? err.message : String(err)) }])
+                }
               }}
               onQuickConvo={(preset: string) => { setInput(preset); setTimeout(() => chatInputRef.current?.focus(), 40) }}
             />
@@ -332,13 +378,16 @@ interface ChatModeProps {
   send: () => void
   back: () => void
   onFile: (file: File) => void
+  onReview: (itemId: number, payload: unknown) => void
+  onDiscard: (itemId: number) => void
+  onConfirmWrite: (itemId: number, payload: unknown) => void
   onQuickConvo: (preset: string) => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
   chatInputRef: React.RefObject<HTMLTextAreaElement | null>
   messagesRef: React.RefObject<HTMLDivElement | null>
 }
 
-function ChatMode({ config, items, busy, input, setInput, send, back, onFile, onQuickConvo, fileInputRef, chatInputRef, messagesRef }: ChatModeProps) {
+function ChatMode({ config, items, busy, input, setInput, send, back, onFile, onReview, onDiscard, onConfirmWrite, onQuickConvo, fileInputRef, chatInputRef, messagesRef }: ChatModeProps) {
   return (
     <>
       <div className="oliver-chat-back">
@@ -358,6 +407,34 @@ function ChatMode({ config, items, busy, input, setInput, send, back, onFile, on
                 {it.role === 'assistant' && (
                   <div className="chatbot-msg-model">{it.model ?? DEFAULT_MODEL}</div>
                 )}
+              </div>
+            )
+          }
+          if (it.kind === 'parse-result') {
+            return (
+              <div key={it.id} className="chatbot-parse-card">
+                <div className="chatbot-parse-header">
+                  <span className="chatbot-parse-title">{it.title}</span>
+                  <span className="chatbot-msg-model">{it.model}</span>
+                </div>
+                <pre className="chatbot-parse-pre">{it.summary}</pre>
+                <div className="chatbot-parse-actions">
+                  <button className="btn btn-primary btn--compact" onClick={() => onReview(it.id, it.payload)}>Review &amp; Confirm</button>
+                  <button className="btn btn-ghost btn--compact" onClick={() => onDiscard(it.id)}>Discard</button>
+                </div>
+              </div>
+            )
+          }
+          if (it.kind === 'write-prompt') {
+            return (
+              <div key={it.id} className="chatbot-parse-card chatbot-confirm-card">
+                <pre className="chatbot-parse-pre">{it.text}</pre>
+                <div className="chatbot-parse-actions">
+                  <button className="btn btn-primary btn--compact" onClick={() => onConfirmWrite(it.id, it.payload)}>
+                    {it.hasConflicts ? 'Write Anyway' : 'Confirm & Write'}
+                  </button>
+                  <button className="btn btn-ghost btn--compact" onClick={() => onDiscard(it.id)}>Cancel</button>
+                </div>
               </div>
             )
           }
