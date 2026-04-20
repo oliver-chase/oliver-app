@@ -83,6 +83,7 @@ tr.clickable{cursor:pointer}
 tr.clickable:hover td{background:var(--bg)}
 tr.selected td{background:var(--accent-light)}
 .pill{display:inline-flex;align-items:center;padding:var(--spacing-xs) var(--spacing-sm);border-radius:var(--radius-full);font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);text-transform:uppercase;white-space:nowrap}
+.pill--xs{font-size:var(--font-size-3xs);padding:var(--spacing-2xs) var(--spacing-xs)}
 .pill-list{display:flex;flex-wrap:wrap;gap:var(--spacing-xs)}
 .pill-green{background:var(--green-light);color:var(--green)}
 .pill-amber{background:var(--amber-light);color:var(--amber)}
@@ -91,7 +92,6 @@ tr.selected td{background:var(--accent-light)}
 .pill-purple{background:var(--accent-light);color:var(--accent-text)}
 .pill-gray{background:var(--surface2);color:var(--text2)}
 .person-cell{display:flex;align-items:center;gap:var(--spacing-10)}
-.person-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);flex-shrink:0}
 .person-name{font-weight:var(--font-weight-medium)}
 .person-sub{font-size:var(--font-size-xs);color:var(--text2)}
 .split-layout{display:flex;gap:0;overflow:hidden;flex:1}
@@ -194,7 +194,6 @@ tr.selected td{background:var(--accent-light)}
 /* ── ONBOARDING CARDS ────────────────────────────────────────────────────── */
 .onboard-group{margin-bottom:var(--spacing-lg)}
 .onboard-person-row{display:flex;gap:var(--spacing-12);align-items:flex-start;margin-bottom:var(--spacing-md);padding:var(--spacing-12);background:var(--bg);border-radius:var(--radius-lg);cursor:pointer}
-.onboard-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-semibold);font-size:var(--font-size-xs);flex-shrink:0}
 .onboard-info{flex:1}
 .onboard-name{font-size:var(--font-size-sm);font-weight:var(--font-weight-semibold);color:var(--text)}
 .onboard-sub{font-size:var(--font-size-xs);color:var(--text2)}
@@ -213,8 +212,6 @@ tr.selected td{background:var(--accent-light)}
 .detail-person-role{font-size:var(--font-size-xs);color:var(--text2)}
 .detail-pills{display:flex;gap:var(--spacing-xs);flex-wrap:wrap}
 .detail-hdr-actions{display:flex;gap:var(--spacing-xs);align-items:flex-start}
-.person-av--lg{width:38px;height:38px}
-.person-av--md{width:40px;height:40px;font-size:var(--font-size-sm)}
 .detail-btn-group{display:flex;flex-wrap:wrap;gap:var(--spacing-6)}
 .detail-action-col{display:flex;flex-direction:column;gap:var(--spacing-sm)}
 /* Bottom nav — hidden on desktop, shown on mobile */
@@ -373,7 +370,6 @@ tr.selected td{background:var(--accent-light)}
 .gs-item-name{font-weight:var(--font-weight-medium);color:var(--text)}
 .gs-item-sub{font-size:var(--font-size-xs);color:var(--text3)}
 .page--loading{display:flex;align-items:center;justify-content:center;color:var(--text2)}
-.dir-table-flush{border-radius:0;border-left:0;border-right:0}
 /* ── Design system classes (session 24) ───────────────────────────────────── */
 .cp-danger-label{color:var(--red);font-weight:var(--font-weight-medium);margin-bottom:var(--spacing-md)}
 .modal-body-text{font-size:var(--font-size-xs);color:var(--text2);margin-bottom:var(--spacing-sm)}

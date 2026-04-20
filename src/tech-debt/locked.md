@@ -13,6 +13,21 @@ If re-opening, add a dated note under the entry with the reason.
 - All HR pages (Dashboard, Hiring, Directory, Onboarding, Offboarding, Inventory, Assignments, Tracks, Reports, Settings) render through `.page` or `.page--split > .section-header` and inherit the 36px.
 - Do not re-tune individual pages with inline `marginTop`.
 
+### HR table standard = `.table-wrap > table`
+- Single pattern across Directory, Hiring (table view), Assignments, Inventory row views.
+- Inside `.split-list` (split pages) or direct child of `.page` (non-split). No flush variants, no inline padding overrides on `.split-list`.
+- Rules: bordered, rounded (`--radius-lg`), 24px horizontal margin inherited from container. Headers use shared `th`/`th.sorted` + `.sort-arrow`. Cells use shared `td`.
+- Any table not using `.table-wrap > table` is non-compliant and must be migrated.
+
+### No avatar initials anywhere
+- Removed `.person-av` (Directory) and `.onboard-av` (Onboarding) and `ini()` helpers.
+- Tables and detail headers show name + sub-line only. No circles, no initial letters.
+- Do not re-introduce on any page.
+
+### Hub render loop fix
+- `src/app/page.tsx` must memoize `visibleModules` with `useMemo`. Inlining the `.filter()` inside render creates a new array ref every render, which destabilises `oliverConfig` and causes `useRegisterOliver` to loop — Links stop firing, nav breaks.
+- Keep comment block at top of file.
+
 ### OliverDock unification (one chatbot, every page)
 - Shell: `src/components/shared/OliverDock.tsx`.
 - Context: `src/components/shared/OliverContext.tsx` with `OliverProvider` + `useRegisterOliver`.

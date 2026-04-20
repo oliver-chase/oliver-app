@@ -18,7 +18,6 @@ interface EmpGroup {
   tracks: { runId: string; trackName: string; pct: number; nextSteps: string[]; allDone: boolean }[]
 }
 
-function ini(name: string) { return (name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase() }
 function today() { return new Date().toISOString().split('T')[0] }
 
 function groupByEmployee(db: HrDB, type: 'onboarding' | 'offboarding', statusFilter: 'active' | 'completed' = 'active'): EmpGroup[] {
@@ -144,10 +143,8 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
     }
   }
 
-  const title     = type === 'onboarding' ? 'Onboarding' : 'Offboarding'
-  const accentBg  = type === 'onboarding' ? 'var(--accent-light)' : 'var(--red-light)'
-  const accentTxt = type === 'onboarding' ? 'var(--accent-text)' : 'var(--red)'
-  const doneTxt   = type === 'onboarding' ? 'var(--accent-text)' : 'var(--red)'
+  const title   = type === 'onboarding' ? 'Onboarding' : 'Offboarding'
+  const doneTxt = type === 'onboarding' ? 'var(--accent-text)' : 'var(--red)'
 
   return (
     <div className="page">
@@ -258,7 +255,6 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
         return (
           <div key={emp.empId} className="onboard-group">
             <div className="onboard-person-row" onClick={() => { const firstRun = db.onboardingRuns.find(r => r.employeeId === emp.empId && r.status === 'active'); if (firstRun) setDetailRunId(firstRun.id) }}>
-              <div className="onboard-av" style={{ background: accentBg, color: accentTxt }}>{ini(emp.empName)}</div>
               <div className="onboard-info">
                 <div className="onboard-name">
                   {emp.empName}
@@ -293,7 +289,6 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
           {completedGroups.map(emp => (
             <div key={emp.empId} className="onboard-group">
               <div className="onboard-person-row" onClick={() => onNav('directory')}>
-                <div className="onboard-av" style={{ background: 'var(--surface2)', color: 'var(--text2)' }}>{ini(emp.empName)}</div>
                 <div className="onboard-info">
                   <div className="onboard-name">{emp.empName}</div>
                   <div className="onboard-sub">{emp.role}</div>

@@ -25,17 +25,15 @@ const BLANK: EmpForm = {
   city: '', state: '', country: 'US', email: '', status: 'active', buddy: '', location: '',
 }
 
-function ini(name: string) { return (name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase() }
-
 function StatusPill({ s }: { s: string }) {
   const label = s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
-  if (!s) return <span className="pill pill-gray">—</span>
-  if (['active', 'good', 'new', 'available'].includes(s)) return <span className="pill pill-purple">{label}</span>
-  if (s === 'onboarding') return <span className="pill pill-amber">{label}</span>
-  if (s === 'pending') return <span className="pill pill-amber">{label}</span>
-  if (s === 'inactive') return <span className="pill pill-gray">{label}</span>
-  if (s === 'lost') return <span className="pill pill-red">{label}</span>
-  return <span className="pill pill-gray">{label}</span>
+  if (!s) return <span className="pill pill--xs pill-gray">—</span>
+  if (['active', 'good', 'new', 'available'].includes(s)) return <span className="pill pill--xs pill-purple">{label}</span>
+  if (s === 'onboarding') return <span className="pill pill--xs pill-amber">{label}</span>
+  if (s === 'pending') return <span className="pill pill--xs pill-amber">{label}</span>
+  if (s === 'inactive') return <span className="pill pill--xs pill-gray">{label}</span>
+  if (s === 'lost') return <span className="pill pill--xs pill-red">{label}</span>
+  return <span className="pill pill--xs pill-gray">{label}</span>
 }
 
 const COLS = ['name', 'role', 'dept', 'status', 'location', 'startDate', 'manager', 'buddy'] as const
@@ -429,8 +427,8 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
       </div>
 
       <div className="split-layout">
-        <div className="split-list" style={{ padding: 0 }}>
-          <div className="table-wrap dir-table-flush">
+        <div className="split-list">
+          <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -453,7 +451,6 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
                   >
                     <td>
                       <div className="person-cell">
-                        <div className="person-av" style={{ background: 'var(--accent-light)', color: 'var(--accent-text)' }}>{ini(e.name)}</div>
                         <div>
                           <div className="person-name">{e.name}</div>
                           {e.email && <div className="person-sub">{e.email}</div>}
@@ -479,7 +476,6 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
             <>
               <div className="detail-header">
                 <div className="detail-person-hdr" style={{ flex: 1 }}>
-                  <div className="person-av person-av--md" style={{ background: 'var(--accent-light)', color: 'var(--accent-text)' }}>{ini(selected.name)}</div>
                   <div>
                     <div className="detail-person-name">{selected.name}</div>
                     <div className="detail-person-role">{selected.role}{selected.dept ? ' · ' + selected.dept : ''}</div>

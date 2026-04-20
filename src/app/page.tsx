@@ -1,6 +1,10 @@
 'use client'
 
 import { useMemo } from 'react'
+/* NOTE: visibleModules MUST be memoized. oliverConfig depends on it, and
+   useRegisterOliver writes config into OliverProvider state on every change.
+   An unstable array ref here = infinite render loop = Links stop working.
+   Do not inline the filter into render body. */
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/context/UserContext'
@@ -53,11 +57,14 @@ export default function HubPage() {
   // TODO: remove bypass once app_users table is created in Supabase and permissions are configured.
   // Run: scripts/setup-app-users.sql, then seed the current user as admin via /admin.
   const permissionsReady = appUser !== null
-  const visibleModules = ALL_MODULES.filter(m => {
-    if (m.comingSoon) return isAdmin
-    if (!permissionsReady) return true
-    return hasPermission(m.id as PagePermission)
-  })
+  const visibleModules = useMemo(
+    () => ALL_MODULES.filter(m => {
+      if (m.comingSoon) return isAdmin
+      if (!permissionsReady) return true
+      return hasPermission(m.id as PagePermission)
+    }),
+    [isAdmin, permissionsReady, hasPermission],
+  )
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = [
