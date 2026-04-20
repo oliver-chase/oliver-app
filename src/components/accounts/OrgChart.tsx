@@ -3,13 +3,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Stakeholder, AppState } from '@/types'
 import { today } from '@/lib/db'
 import { Picker } from './Picker'
+import MessageToast from '@/components/shared/MessageToast'
 
 let _touchDragStkId: string | null = null
 let _touchGhost: HTMLElement | null = null
-
-function initials(name: string) {
-  return name.split(' ').map(p => p[0] || '').join('').toUpperCase().slice(0, 2) || '?'
-}
 
 function isDescendantOf(potDesc: string, potAnc: string, stks: Stakeholder[]): boolean {
   let current: string | undefined = potDesc
@@ -226,11 +223,7 @@ export default function OrgChart({ stakeholders, owners, acctProjs, acctOpps, on
 
   return (
     <>
-      {msgToast && (
-        <div style={{ position: 'fixed', bottom: 80, right: 'var(--spacing-20)', background: 'var(--color-text-primary)', color: 'var(--color-text-inverse)', padding: 'var(--spacing-sm) var(--spacing-md)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', zIndex: 'var(--z-toast)', pointerEvents: 'none' }}>
-          {msgToast}
-        </div>
-      )}
+      {msgToast && <MessageToast message={msgToast} />}
       <div ref={liveRef} id="org-kb-live" aria-live="assertive" aria-atomic="true"
         style={{ clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', height: 1, overflow: 'hidden', position: 'absolute', whiteSpace: 'nowrap', width: 1 }} />
 

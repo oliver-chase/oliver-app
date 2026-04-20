@@ -262,7 +262,6 @@ const LAYOUT_BARS = [
   { token: '--topbar-h',           value: '50px',   label: 'Topbar height',       color: 'var(--color-brand-pink)',       dir: 'v' as const },
   { token: '--filterbar-h',        value: '52px',   label: 'Filterbar height',    color: 'var(--color-brand-pink-light)', dir: 'v' as const },
   { token: '--touch-target',       value: '44px',   label: 'Touch target (WCAG)', color: 'var(--color-green)',             dir: 'v' as const },
-  { token: '--avatar-size',        value: '34px',   label: 'Avatar size',         color: 'var(--color-blue)',              dir: 'sq' as const },
   { token: '--chatbot-trigger-size', value: '48px', label: 'Chatbot trigger',     color: 'var(--color-amber)',             dir: 'sq' as const },
   { token: '--org-node-w',         value: '220px',  label: 'Org node width',      color: 'var(--color-tier-strategic)',   dir: 'h' as const },
   { token: '--sync-dot-size',      value: '7px',    label: 'Sync dot',            color: 'var(--color-green)',             dir: 'sq' as const },

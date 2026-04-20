@@ -45,6 +45,8 @@ export default function AccountView({
   filterVTwoOwner, onFilterVTwoOwnerChange,
 }: Props) {
   const acct = data.accounts.find(a => a.account_id === accountId)
+  const acctRef = useRef(acct)
+  acctRef.current = acct
   const [bttVisible, setBttVisible] = useState(false)
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function AccountView({
             value={acct.account_name}
             ariaLabel="Account name"
             placeholder="Account name"
-            onSave={v => onUpdateAccount({ ...acct, account_name: v, last_updated: today() })}
+            onSave={v => { const cur = acctRef.current; if (cur) onUpdateAccount({ ...cur, account_name: v, last_updated: today() }) }}
           />
           <ContentEditable
             id="account-client-company"
@@ -77,7 +79,7 @@ export default function AccountView({
             value={acct.client_company || ''}
             ariaLabel="Full client name"
             placeholder="Full client name"
-            onSave={v => onUpdateAccount({ ...acct, client_company: v, last_updated: today() })}
+            onSave={v => { const cur = acctRef.current; if (cur) onUpdateAccount({ ...cur, client_company: v, last_updated: today() }) }}
           />
           <div className="page-last-updated" id="page-last-updated">
             {acct.last_updated ? 'Last updated ' + fmtDate(acct.last_updated) : ''}

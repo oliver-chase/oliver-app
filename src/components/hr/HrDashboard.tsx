@@ -10,10 +10,6 @@ interface Props {
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
 }
 
-function initials(name: string) {
-  return (name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase()
-}
-
 function fmtDate(dateStr: string) {
   if (!dateStr) return 'TBD'
   return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -70,11 +66,11 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
       if (!cand) return null
       const allCandIvs = db.interviews.filter(i => i.candidateId === iv.candidateId).sort((a, b) => a.date.localeCompare(b.date))
       const num = allCandIvs.findIndex(i => i.id === iv.id) + 1
-      return { candId: cand.id, candName: cand.name, role: cand.role, interviewer: iv.interviewers, date: iv.date, num, ini: initials(cand.name) }
+      return { candId: cand.id, candName: cand.name, role: cand.role, interviewer: iv.interviewers, date: iv.date, num }
     })
     .filter(Boolean)
     .sort((a, b) => a!.date.localeCompare(b!.date))
-    .slice(0, 4) as { candId: string; candName: string; role: string; interviewer: string; date: string; num: number; ini: string }[]
+    .slice(0, 4) as { candId: string; candName: string; role: string; interviewer: string; date: string; num: number }[]
 
   const recentCands = [...db.candidates]
     .sort((a, b) => (b.updatedAt || b.addedAt || '').localeCompare(a.updatedAt || a.addedAt || ''))

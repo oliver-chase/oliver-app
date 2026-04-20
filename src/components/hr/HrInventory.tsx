@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
@@ -11,6 +11,8 @@ interface Props {
   db: HrDB
   setDb: React.Dispatch<React.SetStateAction<HrDB>>
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
+  pendingEditId?: string | null
+  onEditConsumed?: () => void
 }
 
 interface DevForm {
@@ -32,7 +34,7 @@ function StatusPill({ s }: { s: string }) {
   return <span className="pill pill-gray">{label}</span>
 }
 
-export default function HrInventory({ db, setDb, setSyncState }: Props) {
+export default function HrInventory({ db, setDb, setSyncState, pendingEditId, onEditConsumed }: Props) {
   const [filterStatus, setFilterStatus] = useState('')
   const [modalType, setModalType] = useState<'add' | 'edit' | 'detail' | 'assign' | 'return' | null>(null)
   const [focusDevId, setFocusDevId] = useState<string | null>(null)
@@ -71,6 +73,12 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
     setFocusDevId(id)
     setModalType('edit')
   }
+
+  useEffect(() => {
+    if (!pendingEditId) return
+    openEdit(pendingEditId)
+    onEditConsumed?.()
+  }, [pendingEditId, db.devices, onEditConsumed])
 
   function openAssign(id: string) {
     setFocusDevId(id)
@@ -349,7 +357,7 @@ export default function HrInventory({ db, setDb, setSyncState }: Props) {
               <div className="form-group">
                 <label className="form-label">Employee</label>
                 <CustomPicker
-                  placeholder="Select employee\u2026"
+                  placeholder={'Select employee\u2026'}
                   options={db.employees.map(e => {
                     const hasType = db.assignments.filter(a => a.employeeId === e.id && a.status === 'active').some(a => { const dv = db.devices.find(d => d.id === a.deviceId); return dv?.type === focusDev.type })
                     return { value: e.id, label: e.name + ' \u2014 ' + e.role + (hasType ? ' (already has ' + focusDev.type + ')' : '') }

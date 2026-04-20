@@ -35,7 +35,7 @@
   padding: var(--spacing-sm) 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-2xs);
 }
 /* Grouping container for nav sections (label + items) */
 .app-sidebar-section { padding: 0 var(--spacing-sm); margin-bottom: var(--spacing-xs); }
@@ -44,7 +44,7 @@
   padding: var(--spacing-md) var(--spacing-sm) var(--spacing-xs);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--letter-spacing-caps);
   text-transform: uppercase;
   color: rgba(254, 255, 255, 0.75);
 }
@@ -53,7 +53,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   min-height: var(--touch-target);
-  padding: 7px var(--spacing-md);
+  padding: var(--spacing-7) var(--spacing-md);
   font-family: var(--font-family-base);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -76,7 +76,7 @@
   color: var(--color-text-inverse);
   font-weight: var(--font-weight-bold);
 }
-.app-sidebar-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; border-radius: 3px; padding: 0 2px; }
+.app-sidebar-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; border-radius: var(--spacing-3); padding: 0 var(--spacing-2xs); }
 /* Back-to-hub link — shared between accounts and hr sidebars */
 .sidebar-back {
   display: block;
@@ -106,19 +106,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-}
-.org-node-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  background: var(--color-brand-purple);
-  color: var(--color-text-inverse);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  flex-shrink: 0;
 }
 .org-node-name {
   display: block;

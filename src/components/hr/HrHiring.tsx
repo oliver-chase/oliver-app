@@ -1,16 +1,23 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
+import PromoteEmployeeModal from './PromoteEmployeeModal'
+import InterviewLogModal from './InterviewLogModal'
+import EditCandidateModal from './EditCandidateModal'
+import AIIntakeModal from './AIIntakeModal'
+import DeleteConfirmModal from '@/components/shared/DeleteConfirmModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
-import type { HrDB, Candidate } from './types'
+import type { HrDB, Candidate, Employee, Interview } from './types'
 import { STAGES, getList } from './types'
 
 interface Props {
   db: HrDB
   setDb: React.Dispatch<React.SetStateAction<HrDB>>
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
+  pendingEditId?: string | null
+  onEditConsumed?: () => void
 }
 
 type ViewMode = 'kanban' | 'table'
@@ -21,8 +28,6 @@ const STAGE_COLOR: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   Active: 'purple', 'On Hold': 'amber', Nurturing: 'gray', Hired: 'purple', Closed: 'gray',
 }
-
-function initials(name: string) { return (name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase() }
 
 function relTime(d: string) {
   if (!d) return '—'
@@ -47,7 +52,7 @@ function StatusPill({ status }: { status: string }) {
   return <span className={'pill pill-' + (STATUS_COLOR[status] || 'gray')}>{status || '—'}</span>
 }
 
-export default function HrHiring({ db, setDb, setSyncState }: Props) {
+export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEditConsumed }: Props) {
   const [q, setQ]               = useState('')
   const [status, setStatus]     = useState('')
   const [stage, setStage]       = useState('')
@@ -59,6 +64,20 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
   const [sortDir, setSortDir]   = useState<1 | -1>(-1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dragId, setDragId]     = useState<string | null>(null)
+  const [promoteCand, setPromoteCand] = useState<Candidate | null>(null)
+  const [logIvFor, setLogIvFor] = useState<Candidate | null>(null)
+  const [editIvId, setEditIvId] = useState<string | null>(null)
+  const [confirmDelIvId, setConfirmDelIvId] = useState<string | null>(null)
+  const [editCand, setEditCand] = useState<Candidate | null>(null)
+  const [confirmDelCand, setConfirmDelCand] = useState<Candidate | null>(null)
+  const [intakeOpen, setIntakeOpen] = useState(false)
+
+  useEffect(() => {
+    if (!pendingEditId) return
+    const c = db.candidates.find(x => x.id === pendingEditId)
+    if (c) { setSelectedId(c.id); setEditCand(c) }
+    onEditConsumed?.()
+  }, [pendingEditId, db.candidates, onEditConsumed])
   const { modal, showModal }    = useAppModal()
 
   const { softDelete, toastEl } = useSoftDelete<Candidate>()
@@ -97,6 +116,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
   async function moveStage(id: string, newStage: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
+    if (newStage === 'hired' && !alreadyEmployee(c)) { setPromoteCand(c); return }
     const updated = { ...c, stage: newStage, updatedAt: new Date().toISOString() }
     await save(updated)
     if (selectedId === id) setSelectedId(id)
@@ -105,26 +125,75 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
   async function setCandStatus(id: string, newStatus: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
+    if (newStatus === 'Hired' && !alreadyEmployee(c)) { setPromoteCand(c); return }
     await save({ ...c, candStatus: newStatus, updatedAt: new Date().toISOString() })
   }
 
-  function deleteCand(id: string) {
-    const c = db.candidates.find(x => x.id === id)
+  function alreadyEmployee(c: Candidate) {
+    return db.employees.some(e => e.name.toLowerCase() === c.name.toLowerCase())
+  }
+
+  async function doPromote(dept: string, startDate: string) {
+    const c = promoteCand
     if (!c) return
+    const now = new Date().toISOString()
+    const autoEmail = c.email || (c.name.split(' ')[0].toLowerCase() + '@vtwo.co')
+    const newEmp: Employee = {
+      id: 'EMP-' + Date.now().toString(36),
+      name: c.name,
+      role: c.role || '',
+      dept,
+      status: 'active',
+      client: c.client || '',
+      location: '',
+      city: c.city || '',
+      state: c.state || '',
+      country: c.country || '',
+      manager: '',
+      buddy: '',
+      startDate,
+      endDate: '',
+      email: autoEmail,
+      source: c.source || '',
+      created_at: now,
+      updated_at: now,
+    }
+    setSyncState('syncing')
+    setDb(prev => ({
+      ...prev,
+      employees: [newEmp, ...prev.employees],
+      candidates: prev.candidates.map(x => x.id === c.id ? { ...x, stage: 'hired', candStatus: 'Hired', updatedAt: now } : x),
+    }))
+    setPromoteCand(null)
+    try {
+      await supabase.from('employees').insert(newEmp)
+      await supabase.from('candidates').update({ stage: 'hired', candStatus: 'Hired', updatedAt: now }).eq('id', c.id)
+      setSyncState('ok')
+    } catch {
+      setSyncState('error')
+    }
+  }
+
+  function deleteCandConfirmed(c: Candidate) {
     softDelete(c, {
       displayName: c.name,
       onLocalRemove: () => {
-        setDb(prev => ({ ...prev, candidates: prev.candidates.filter(x => x.id !== id) }))
-        if (selectedId === id) setSelectedId(null)
+        setDb(prev => ({ ...prev, candidates: prev.candidates.filter(x => x.id !== c.id) }))
+        if (selectedId === c.id) setSelectedId(null)
       },
       onLocalRestore: cand => {
         setDb(prev => ({ ...prev, candidates: [cand, ...prev.candidates] }))
       },
       onDeleteRecord: async () => {
         setSyncState('syncing')
-        try { await supabase.from('candidates').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+        try { await supabase.from('candidates').delete().eq('id', c.id); setSyncState('ok') } catch { setSyncState('error') }
       },
     })
+  }
+
+  function requestDeleteCand(id: string) {
+    const c = db.candidates.find(x => x.id === id)
+    if (c) setConfirmDelCand(c)
   }
 
   function tableSortBy(col: string) {
@@ -144,6 +213,118 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
     <div className="page page--split">
       {modal}
       {toastEl}
+      {promoteCand && (
+        <PromoteEmployeeModal
+          candidate={promoteCand}
+          depts={getList(db.lists, 'dept')}
+          onConfirm={doPromote}
+          onCancel={() => setPromoteCand(null)}
+        />
+      )}
+      {editCand && (
+        <EditCandidateModal
+          candidate={editCand}
+          lists={db.lists}
+          onCancel={() => setEditCand(null)}
+          onDelete={() => { setConfirmDelCand(editCand); setEditCand(null) }}
+          onSave={async updated => {
+            setSyncState('syncing')
+            setDb(prev => ({ ...prev, candidates: prev.candidates.map(x => x.id === updated.id ? updated : x) }))
+            setEditCand(null)
+            try { await supabase.from('candidates').update(updated).eq('id', updated.id); setSyncState('ok') } catch { setSyncState('error') }
+          }}
+        />
+      )}
+      {confirmDelCand && (
+        <DeleteConfirmModal
+          title="Delete candidate"
+          message={'Permanently delete "' + confirmDelCand.name + '" and all their interviews? This cannot be undone (you will get a 5-second undo toast).'}
+          confirmLabel="Delete"
+          onConfirm={() => { const c = confirmDelCand; setConfirmDelCand(null); deleteCandConfirmed(c) }}
+          onCancel={() => setConfirmDelCand(null)}
+        />
+      )}
+      {logIvFor && (
+        <InterviewLogModal
+          candidate={logIvFor}
+          lists={db.lists}
+          onSave={async values => {
+            const cand = logIvFor
+            const now = new Date().toISOString()
+            const iv: Interview = {
+              id: 'IV-' + Date.now().toString(36),
+              candidateId: cand.id,
+              date: values.date,
+              interviewers: values.interviewers,
+              notes: values.notes,
+              score: values.score,
+              created_at: now,
+              updated_at: now,
+            }
+            setSyncState('syncing')
+            setDb(prev => ({
+              ...prev,
+              interviews: [...prev.interviews, iv],
+              candidates: prev.candidates.map(x => x.id === cand.id ? { ...x, updatedAt: now } : x),
+            }))
+            setLogIvFor(null)
+            try {
+              await supabase.from('interviews').insert(iv)
+              await supabase.from('candidates').update({ updatedAt: now }).eq('id', cand.id)
+              setSyncState('ok')
+            } catch {
+              setSyncState('error')
+            }
+          }}
+          onCancel={() => setLogIvFor(null)}
+        />
+      )}
+      {editIvId && (() => {
+        const iv = db.interviews.find(x => x.id === editIvId)
+        const cand = iv ? db.candidates.find(c => c.id === iv.candidateId) : null
+        if (!iv || !cand) return null
+        return (
+          <InterviewLogModal
+            candidate={cand}
+            lists={db.lists}
+            initial={{ date: iv.date, score: iv.score, interviewers: iv.interviewers, notes: iv.notes }}
+            onSave={async values => {
+              const now = new Date().toISOString()
+              const updated: Interview = { ...iv, ...values, updated_at: now }
+              setSyncState('syncing')
+              setDb(prev => ({ ...prev, interviews: prev.interviews.map(x => x.id === iv.id ? updated : x) }))
+              setEditIvId(null)
+              try { await supabase.from('interviews').update(updated).eq('id', iv.id); setSyncState('ok') } catch { setSyncState('error') }
+            }}
+            onCancel={() => setEditIvId(null)}
+          />
+        )
+      })()}
+      {intakeOpen && (
+        <AIIntakeModal
+          onCancel={() => setIntakeOpen(false)}
+          onConfirm={async records => {
+            setSyncState('syncing')
+            setDb(prev => ({ ...prev, candidates: [...records, ...prev.candidates] }))
+            setIntakeOpen(false)
+            try { await supabase.from('candidates').insert(records); setSyncState('ok') } catch { setSyncState('error') }
+          }}
+        />
+      )}
+      {confirmDelIvId && (
+        <DeleteConfirmModal
+          title="Delete interview"
+          message="Permanently remove this interview record? This cannot be undone."
+          onConfirm={async () => {
+            const id = confirmDelIvId
+            setConfirmDelIvId(null)
+            setSyncState('syncing')
+            setDb(prev => ({ ...prev, interviews: prev.interviews.filter(x => x.id !== id) }))
+            try { await supabase.from('interviews').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+          }}
+          onCancel={() => setConfirmDelIvId(null)}
+        />
+      )}
       <div className="section-header">
         <div className="page-header">
           <div>
@@ -151,6 +332,9 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
             <div className="page-subtitle">{subtitle}</div>
           </div>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <button className="btn-dashed btn--compact" type="button" onClick={() => setIntakeOpen(true)}>
+              <span className="btn-ai-icon">{'\u2728'}</span> AI Intake
+            </button>
             <button className="btn btn-primary" onClick={async () => {
               const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
               if (buttonValue !== 'confirm' || !inputValue.trim()) return
@@ -336,7 +520,8 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                     {selected.dept && <span className="pill pill-gray">{selected.dept}</span>}
                   </div>
                 </div>
-                <div className="detail-hdr-actions">
+                <div className="detail-hdr-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
+                  <button className="btn btn-sm btn-ghost" type="button" onClick={() => setEditCand(selected)}>Edit</button>
                   <button className="detail-close" aria-label="Close" onClick={() => setSelectedId(null)}>&times;</button>
                 </div>
               </div>
@@ -408,19 +593,27 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                 )}
 
                 <div className="detail-section">
-                  <div className="detail-section-title">Interviews ({candIvs.length})</div>
+                  <div className="detail-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Interviews ({candIvs.length})</span>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setLogIvFor(selected)}>+ Log Interview</button>
+                  </div>
                   {candIvs.length === 0 ? (
                     <div className="iv-empty">No interviews logged yet</div>
                   ) : candIvs.sort((a, b) => a.date.localeCompare(b.date)).map(iv => {
                     const isFuture = new Date(iv.date) >= new Date()
                     return (
-                      <div key={iv.id} className="interview-card">
+                      <div key={iv.id} className="interview-card" style={{ position: 'relative' }}>
                         {isFuture
                           ? <div className="iv-date-upcoming">{iv.date} <span className="iv-date-upcoming-label">Upcoming</span></div>
                           : <div className="iv-date-past">{iv.date}</div>
                         }
                         <div className="iv-interviewer">{iv.interviewers || '—'}</div>
+                        {iv.score && <div className="iv-score">Score: {iv.score}</div>}
                         {iv.notes && <p className="iv-notes">{iv.notes}</p>}
+                        <div className="iv-actions" style={{ position: 'absolute', top: 'var(--spacing-xs)', right: 'var(--spacing-xs)', display: 'flex', gap: 'var(--spacing-2xs)' }}>
+                          <button className="btn btn-sm btn-ghost" type="button" onClick={() => setEditIvId(iv.id)}>Edit</button>
+                          <button className="btn btn-sm btn-ghost" type="button" aria-label="Delete interview" onClick={() => setConfirmDelIvId(iv.id)}>&times;</button>
+                        </div>
                       </div>
                     )
                   })}
@@ -429,7 +622,7 @@ export default function HrHiring({ db, setDb, setSyncState }: Props) {
                 <div className="detail-section" style={{ paddingTop: 'var(--spacing-sm)' }}>
                   <button
                     className="btn btn-sm btn-secondary btn--danger-text"
-                    onClick={() => deleteCand(selected.id)}
+                    onClick={() => requestDeleteCand(selected.id)}
                   >
                     Delete Candidate
                   </button>

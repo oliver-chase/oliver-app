@@ -18,10 +18,6 @@ function getTeamNames(bg?: Background): string[] {
   return [...new Set(names)]
 }
 
-function initials(name: string) {
-  return name.split(' ').map(p => p[0] || '').join('').toUpperCase().slice(0, 2) || '?'
-}
-
 function buildEngItems(projs: AppState['projects'], opps: AppState['opportunities']) {
   const items: Array<{ value: string; label: string; isHeader?: boolean }> = [{ value: '', label: 'Account-wide' }]
   const sp = [...projs].sort((a, b) => a.project_name.localeCompare(b.project_name))

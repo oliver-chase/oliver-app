@@ -68,9 +68,9 @@ export default function SdrPage() {
   return (
     <div className="app show-hamburger">
       <div
-        className="sidebar-backdrop"
-        style={{ display: sidebarOpen ? 'block' : 'none', pointerEvents: sidebarOpen ? 'auto' : 'none' }}
+        className={'sidebar-backdrop' + (sidebarOpen ? ' open' : '')}
         onClick={closeSidebar}
+        aria-hidden="true"
       />
       <nav className="app-sidebar" id="sidebar" aria-label="SDR navigation">
         <div className="app-sidebar-logo">SDR &amp; Outreach</div>

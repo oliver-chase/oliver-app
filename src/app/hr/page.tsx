@@ -11,7 +11,15 @@ import HrAssignments from '@/components/hr/HrAssignments'
 import HrTracks from '@/components/hr/HrTracks'
 import HrReports from '@/components/hr/HrReports'
 import HrSettings from '@/components/hr/HrSettings'
-import type { HrDB, HrPage } from '@/components/hr/types'
+import GlobalSearchButton from '@/components/hr/GlobalSearchButton'
+import GlobalSearch from '@/components/hr/GlobalSearch'
+import CommandPalette from '@/components/hr/CommandPalette'
+import StepFlowRunner from '@/components/hr/StepFlowRunner'
+import { useAppModal } from '@/components/shared/AppModal'
+import type { Flow, EditTarget } from '@/components/hr/step-flow-types'
+import type { HrDB, HrPage, Candidate, Employee, Device } from '@/components/hr/types'
+
+const PAGE_FOR_TARGET: Record<EditTarget, HrPage> = { candidate: 'hiring', employee: 'directory', device: 'inventory' }
 
 const NAV: { id: HrPage; label: string; section: string; icon: string }[] = [
   { id: 'dashboard',   label: 'Dashboard',   section: '',        icon: 'M1 1h6v6H1zM9 1h6v6H9zM1 9h6v6H1zM9 9h6v6H9z' },
@@ -46,6 +54,85 @@ export default function HrPage() {
   const [db, setDb]                   = useState<HrDB>(EMPTY_DB)
   const [loading, setLoading]         = useState(true)
   const [syncState, setSyncState]     = useState<'ok' | 'syncing' | 'error'>('syncing')
+  const [searchOpen, setSearchOpen]   = useState(false)
+  const [cpOpen, setCpOpen]           = useState(false)
+  const [activeFlow, setActiveFlow]   = useState<Flow<unknown> | null>(null)
+  const [pendingEdit, setPendingEdit] = useState<{ target: EditTarget; id: string } | null>(null)
+  const { modal, showModal }          = useAppModal()
+
+  const requestEdit = useCallback((target: EditTarget, id: string) => {
+    setPage(PAGE_FOR_TARGET[target])
+    setPendingEdit({ target, id })
+  }, [])
+
+  const clearPendingEdit = useCallback(() => setPendingEdit(null), [])
+
+  async function quickAddCandidate() {
+    const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputLabel: 'Full name', inputPlaceholder: 'e.g. Jane Doe', confirmLabel: 'Add' })
+    if (buttonValue !== 'confirm' || !inputValue.trim()) return
+    const now = new Date().toISOString()
+    const rec: Candidate = {
+      id: 'CAND-' + Date.now().toString(36),
+      name: inputValue.trim(),
+      role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active',
+      empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '',
+      email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '',
+      rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '',
+    }
+    setSyncState('syncing')
+    setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
+    try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
+    setPage('hiring')
+  }
+
+  async function quickAddEmployee() {
+    const { buttonValue, inputValue } = await showModal({ title: 'Add Employee', inputLabel: 'Full name', inputPlaceholder: 'e.g. Jane Doe', confirmLabel: 'Add' })
+    if (buttonValue !== 'confirm' || !inputValue.trim()) return
+    const now = new Date().toISOString()
+    const rec: Employee = {
+      id: 'EMP-' + Date.now().toString(36), name: inputValue.trim(), role: '', dept: '', status: 'active',
+      client: '', location: '', city: '', state: '', country: '', manager: '', buddy: '',
+      startDate: '', endDate: '', email: '', source: '', created_at: now, updated_at: now,
+    }
+    setSyncState('syncing')
+    setDb(prev => ({ ...prev, employees: [rec, ...prev.employees] }))
+    try { await supabase.from('employees').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
+    setPage('directory')
+  }
+
+  async function quickAddDevice() {
+    const { buttonValue, inputValue } = await showModal({ title: 'Add Device', inputLabel: 'Device name', inputPlaceholder: 'e.g. MacBook Pro 14"', confirmLabel: 'Add' })
+    if (buttonValue !== 'confirm' || !inputValue.trim()) return
+    const now = new Date().toISOString()
+    const rec: Device = {
+      id: 'DEV-' + Date.now().toString(36), name: inputValue.trim(), make: '', type: '', model: '',
+      modelNumber: '', serial: '', status: 'available', assignedTo: '', condition: 'good',
+      purchaseDate: '', purchaseStore: '', orderNumber: '', specs: '', location: '', notes: '',
+      created_at: now, updated_at: now,
+    }
+    setSyncState('syncing')
+    setDb(prev => ({ ...prev, devices: [rec, ...prev.devices] }))
+    try { await supabase.from('devices').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
+    setPage('inventory')
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      const editing = tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCpOpen(o => !o)
+        return
+      }
+      if (e.key === '/' && !editing && !cpOpen) {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [cpOpen])
 
   const loadData = useCallback(async () => {
     setSyncState('syncing')
@@ -92,11 +179,11 @@ export default function HrPage() {
   function renderPage() {
     switch (page) {
       case 'dashboard':   return <HrDashboard db={db} setDb={setDb} onNav={navTo} setSyncState={setSyncState} />
-      case 'hiring':      return <HrHiring db={db} setDb={setDb} setSyncState={setSyncState} />
-      case 'directory':   return <HrDirectory db={db} setDb={setDb} setSyncState={setSyncState} />
+      case 'hiring':      return <HrHiring db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'candidate' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
+      case 'directory':   return <HrDirectory db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'employee' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
       case 'onboarding':  return <HrOnboarding type="onboarding" db={db} setDb={setDb} setSyncState={setSyncState} onNav={navTo} />
       case 'offboarding': return <HrOnboarding type="offboarding" db={db} setDb={setDb} setSyncState={setSyncState} onNav={navTo} />
-      case 'inventory':   return <HrInventory db={db} setDb={setDb} setSyncState={setSyncState} />
+      case 'inventory':   return <HrInventory db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'device' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
       case 'assignments': return <HrAssignments db={db} setDb={setDb} setSyncState={setSyncState} />
       case 'tracks':      return <HrTracks db={db} setDb={setDb} setSyncState={setSyncState} />
       case 'reports':     return <HrReports db={db} setDb={setDb} setSyncState={setSyncState} />
@@ -107,10 +194,47 @@ export default function HrPage() {
 
   return (
     <div className="app show-hamburger">
+      {modal}
+      {activeFlow && (
+        <StepFlowRunner
+          flow={activeFlow}
+          ctx={{ db, setDb, setSyncState, requestEdit }}
+          onClose={() => setActiveFlow(null)}
+        />
+      )}
+      {cpOpen && (
+        <CommandPalette
+          ctx={{
+            setPage: p => setPage(p),
+            openSearch: () => setSearchOpen(true),
+            addCandidate: quickAddCandidate,
+            addEmployee: quickAddEmployee,
+            addDevice: quickAddDevice,
+            runFlow: <D,>(f: Flow<D>) => setActiveFlow(f as Flow<unknown>),
+          }}
+          onClose={() => setCpOpen(false)}
+        />
+      )}
+      <button
+        id="cp-fab"
+        type="button"
+        aria-label="Open command palette"
+        title={'Commands (\u2318K)'}
+        onClick={() => setCpOpen(true)}
+      >
+        +
+      </button>
+      {searchOpen && (
+        <GlobalSearch
+          db={db}
+          onClose={() => setSearchOpen(false)}
+          onNavigate={p => navTo(p)}
+        />
+      )}
       <div
-        className="sidebar-backdrop"
-        style={{ display: sidebarOpen ? 'block' : 'none', pointerEvents: sidebarOpen ? 'auto' : 'none' }}
+        className={'sidebar-backdrop' + (sidebarOpen ? ' open' : '')}
         onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
       />
       <nav className="app-sidebar" id="sidebar" aria-label="HR navigation">
         <div className="app-sidebar-logo">HR &amp; People Ops</div>
@@ -148,7 +272,9 @@ export default function HrPage() {
           >
             &#9776;
           </button>
-          <div className="gs-wrap" style={{ flex: 1 }} />
+          <div className="gs-wrap" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+            <GlobalSearchButton onClick={() => setSearchOpen(true)} />
+          </div>
           <div className="sync-status" aria-live="polite">
             <div className={'sync-dot' + (syncState === 'syncing' ? ' syncing' : syncState === 'error' ? ' error' : '')} />
             <span id="sync-text">{syncState === 'syncing' ? 'Syncing...' : syncState === 'error' ? 'Error' : 'Synced'}</span>
@@ -160,14 +286,20 @@ export default function HrPage() {
         </main>
 
         <nav className="bottom-nav" id="bottom-nav" aria-label="Bottom navigation">
-          {['dashboard', 'hiring', 'directory', 'onboarding', 'offboarding'].map(p => (
+          {([
+            { id: 'dashboard',   label: 'Home' },
+            { id: 'hiring',      label: 'Hiring' },
+            { id: 'directory',   label: 'Directory' },
+            { id: 'onboarding',  label: 'Onboarding' },
+            { id: 'offboarding', label: 'Offboarding' },
+          ] as const).map(n => (
             <div
-              key={p}
-              className={'bottom-nav-item' + (page === p ? ' active' : '')}
-              data-page={p}
-              onClick={() => navTo(p)}
+              key={n.id}
+              className={'bottom-nav-item' + (page === n.id ? ' active' : '')}
+              data-page={n.id}
+              onClick={() => navTo(n.id)}
             >
-              {p.charAt(0).toUpperCase() + p.slice(1)}
+              {n.label}
             </div>
           ))}
         </nav>

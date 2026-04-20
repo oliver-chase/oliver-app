@@ -167,7 +167,7 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
               <div className="form-group">
                 <label className="form-label">Track Template</label>
                 <CustomPicker
-                  placeholder="Select track\u2026"
+                  placeholder={'Select track\u2026'}
                   options={db.tracks.map(t => ({ value: t.id, label: t.name }))}
                   selected={runTrackId}
                   onChange={v => setRunTrackId(v as string)}

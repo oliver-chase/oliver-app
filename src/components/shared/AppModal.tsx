@@ -63,12 +63,13 @@ function AppModalUI({
       onMouseDown={e => { if (e.target === e.currentTarget) onCancel() }}
     >
       <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <button type="button" className="app-modal-close" aria-label="Close" onClick={onCancel}>&times;</button>
         <h2 className="app-modal-title" id={titleId}>{title}</h2>
         <div className="app-modal-body">
           {message && <p>{message}</p>}
           {inputPlaceholder !== undefined && (
             <>
-              {inputLabel && <label style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-xs)' }}>{inputLabel}</label>}
+              {inputLabel && <label className="app-modal-label">{inputLabel}</label>}
               <input
                 ref={inputRef}
                 className="app-modal-input"
@@ -82,7 +83,7 @@ function AppModalUI({
           )}
           {secondInputPlaceholder !== undefined && (
             <>
-              {secondInputLabel && <label style={{ display: 'block', fontSize: 'var(--font-size-xs)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-secondary)', marginTop: 'var(--spacing-md)', marginBottom: 'var(--spacing-xs)' }}>{secondInputLabel}</label>}
+              {secondInputLabel && <label className="app-modal-label app-modal-label--spaced">{secondInputLabel}</label>}
               <input
                 ref={secondInputRef}
                 className="app-modal-input"

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
@@ -10,6 +10,8 @@ interface Props {
   db: HrDB
   setDb: React.Dispatch<React.SetStateAction<HrDB>>
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
+  pendingEditId?: string | null
+  onEditConsumed?: () => void
 }
 
 interface EmpForm {
@@ -39,7 +41,7 @@ function StatusPill({ s }: { s: string }) {
 const COLS = ['name', 'role', 'dept', 'status', 'location', 'startDate', 'manager', 'buddy'] as const
 const COL_LABELS: Record<string, string> = { name: 'Employee', role: 'Role', dept: 'Dept', status: 'Status', location: 'City', startDate: 'Start Date', manager: 'Manager', buddy: 'Buddy' }
 
-export default function HrDirectory({ db, setDb, setSyncState }: Props) {
+export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, onEditConsumed }: Props) {
   const [q, setQ]                   = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterDept, setFilterDept]   = useState('')
@@ -103,6 +105,13 @@ export default function HrDirectory({ db, setDb, setSyncState }: Props) {
   }
 
   function openAdd() { setForm(BLANK); setModalType('add') }
+
+  useEffect(() => {
+    if (!pendingEditId) return
+    const emp = db.employees.find(x => x.id === pendingEditId)
+    if (emp) { setSelectedId(emp.id); openEdit(emp) }
+    onEditConsumed?.()
+  }, [pendingEditId, db.employees, onEditConsumed])
 
   function openEdit(e: Employee) {
     const [firstName, ...rest] = e.name.split(' ')

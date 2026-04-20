@@ -263,6 +263,161 @@
   transition: width linear;
 }
 
+.app-message-toast {
+  position: fixed;
+  bottom: 80px;
+  right: var(--spacing-20);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  z-index: var(--z-toast);
+  pointer-events: none;
+}
+
+.app-modal-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+.app-modal-label--spaced {
+  margin-top: var(--spacing-md);
+}
+
+/* Larger modal variant for complex forms */
+.app-modal-lg { max-width: 720px; }
+
+/* Top-right close icon button for canonical modals */
+.app-modal { position: relative; }
+.app-modal-close {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  background: none;
+  border: none;
+  z-index: 1;
+}
+.app-modal-close:hover { background: var(--color-bg-hover); }
+
+/* Generic edit-form layout helpers (used by HR EditCandidate/Employee/Device) */
+.cand-edit-body { display: flex; flex-direction: column; gap: var(--spacing-sm); }
+.cand-edit-group { display: flex; flex-direction: column; gap: var(--spacing-2xs); flex: 1; min-width: 0; }
+.cand-edit-row { display: flex; gap: var(--spacing-md); }
+.cand-edit-row-3 > .cand-edit-group { flex: 1 1 0; }
+@media (max-width: 500px) {
+  .cand-edit-row { flex-direction: column; gap: var(--spacing-sm); }
+}
+
+/* AI Intake modal */
+.ai-intake-drop {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  margin-top: var(--spacing-md);
+}
+.ai-intake-drop:hover, .ai-intake-drop:focus-visible { border-color: var(--color-brand-purple); outline: none; }
+.ai-intake-drop-text { color: var(--color-text-primary); font-weight: var(--font-weight-medium); margin-bottom: var(--spacing-sm); }
+.ai-intake-drop-hint { color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+.ai-intake-processing { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-md); padding: var(--spacing-2xl) 0; color: var(--color-text-secondary); }
+.ai-intake-spinner { width: 24px; height: 24px; border: 2px solid var(--color-border); border-top-color: var(--color-brand-purple); border-radius: 50%; animation: ai-intake-spin 0.8s linear infinite; }
+@keyframes ai-intake-spin { to { transform: rotate(360deg); } }
+.ai-intake-results { max-height: 280px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--spacing-sm) 0; margin-top: var(--spacing-md); }
+.ai-intake-row { padding: var(--spacing-xs) var(--spacing-md); font-size: var(--font-size-sm); border-bottom: 1px solid var(--color-border); }
+.ai-intake-row:last-child { border-bottom: none; }
+.ai-intake-error { padding: var(--spacing-md); background: var(--color-pink-overlay-sm); border-radius: var(--radius-md); color: var(--color-text-primary); }
+.ai-intake-error-msg { font-size: var(--font-size-sm); margin-top: var(--spacing-xs); font-family: var(--font-family-mono); }
+.ai-intake-error-hint { font-size: var(--font-size-xs); margin-top: var(--spacing-sm); color: var(--color-text-secondary); }
+
+/* Step-flow runner — multi-step modal forms */
+.step-flow-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-page);
+}
+.step-flow-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+.step-flow-progress-dot--active { background: var(--color-brand-pink); transform: scale(1.3); }
+.step-flow-progress-dot--done { background: var(--color-brand-purple); }
+.step-flow-progress-label {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.step-flow-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+}
+.step-flow-error {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-pink-overlay-sm);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+.step-flow-pick-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.step-flow-pick-search {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  outline: none;
+  font-size: var(--font-size-sm);
+  background: transparent;
+  font-family: var(--font-family-base);
+}
+.step-flow-pick-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition-fast);
+}
+.step-flow-pick-item:last-child { border-bottom: none; }
+.step-flow-pick-item:hover { background: var(--color-bg-hover); }
+.step-flow-pick-item--selected { background: var(--color-brand-pink-light); }
+.step-flow-pick-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-primary); }
+.step-flow-pick-sub { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 2px; }
+.step-flow-confirm-summary {
+  padding: var(--spacing-md);
+  background: var(--color-bg-page);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Mobile responsive — below 500px
  * ══════════════════════════════════════════════════════════════════════════ */

@@ -10,6 +10,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .topbar-hamburger:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .topbar-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--text); flex: 1; }
 .sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-modal-overlay); z-index: 49; pointer-events: none; }
+.sidebar-backdrop.open { display: block; pointer-events: auto; }
 
 /* Sync indicator */
 .sync-indicator { font-size: var(--font-size-xs); color: var(--gray); display: flex; align-items: center; gap: var(--spacing-5); }
@@ -156,7 +157,7 @@ html,body { background: var(--surface2); color: var(--text); }
 .sdr-refresh-btn:hover { color: var(--text); }
 .sdr-refresh-btn:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 
-@media (max-width: 768px) {
+@media (max-width: 500px) {
   .topbar { left: 0; padding: 0 var(--spacing-12); }
   .topbar-hamburger { display: flex !important; min-height: var(--touch-target); }
   .main { margin-left: 0; }

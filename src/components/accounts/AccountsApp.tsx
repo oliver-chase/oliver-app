@@ -171,6 +171,7 @@ export default function AccountsApp() {
           syncText={syncText}
           onExportClick={() => setExportOpen(true)}
           onHamburgerClick={() => setSidebarOpen(s => !s)}
+          sidebarOpen={sidebarOpen}
           onAccountNameChange={currentAccount ? (name => handleUpdateAccount({ ...currentAccount, account_name: name })) : undefined}
         />
 
@@ -181,7 +182,7 @@ export default function AccountsApp() {
           onReset={handleFilterReset}
         />
 
-        <main className="main" id="main-content">
+        <main className={'main' + (currentAccountId ? ' main-with-filterbar' : '')} id="main-content">
           {loading ? (
             <div className="section-loading">Loading…</div>
           ) : currentAccountId ? (

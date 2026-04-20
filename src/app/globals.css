@@ -9,10 +9,6 @@
  * DM Mono falls back to ui-monospace. No font loading step required.
  */
 
-@import './tokens.css';
-@import './components-base.css';
-@import './components-interactive.css';
-@import './components-layout.css';
 @import './components.css';
 @import './accounts.css';
 @import './chatbot.css';

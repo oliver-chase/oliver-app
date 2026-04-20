@@ -51,13 +51,6 @@
 }
 
 
-@media (max-width: 600px) {
-  .chatbot-trigger {
-    right: var(--spacing-md);
-    bottom: 72px; /* clear bottom-nav */
-  }
-}
-
 /* ── Chat popup panel ────────────────────────────────────────────────────── */
 
 .chatbot-panel {
@@ -459,7 +452,7 @@
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
-@media (max-width: 480px) {
+@media (max-width: 500px) {
   .chatbot-trigger {
     right: var(--spacing-md);
     bottom: 72px;

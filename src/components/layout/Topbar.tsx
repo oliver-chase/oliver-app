@@ -22,6 +22,7 @@ interface TopbarProps {
   accountName?: string;
   engagementName?: string;
   onHamburgerClick?: () => void;
+  sidebarOpen?: boolean;
   activeSection?: string;
   onAccountNameChange?: (name: string) => void;
 }
@@ -34,6 +35,7 @@ export default function Topbar({
   accountName,
   engagementName,
   onHamburgerClick,
+  sidebarOpen,
   activeSection,
   onAccountNameChange,
 }: TopbarProps) {
@@ -47,8 +49,8 @@ export default function Topbar({
       <button
         id="btn-hamburger"
         className="topbar-hamburger"
-        aria-label="Open navigation"
-        aria-expanded="false"
+        aria-label={sidebarOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={sidebarOpen ?? false}
         aria-controls="sidebar"
         onClick={onHamburgerClick}
         type="button"
