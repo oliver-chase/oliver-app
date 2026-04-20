@@ -59,6 +59,8 @@ html,body{background:var(--bg);color:var(--text)}
 .stat-sub{font-size:var(--font-size-xs);color:var(--text3);margin-top:var(--spacing-xs)}
 .filter-bar{display:flex;align-items:center;gap:var(--spacing-sm);flex-wrap:nowrap;overflow-x:auto;padding:var(--spacing-12) 0;margin-bottom:var(--spacing-md);border-bottom:1px solid var(--border)}
 .filter-bar .picker-wrap{width:auto;flex-shrink:0}
+.filter-bar .picker-trigger{min-height:0;padding:var(--spacing-6) 22px var(--spacing-6) var(--spacing-10);font-size:var(--font-size-xs)}
+.filter-bar .btn,.filter-bar .btn-sm{min-height:0;padding:var(--spacing-6) var(--spacing-12);font-size:var(--font-size-xs)}
 .filter-search{display:flex;align-items:center;gap:var(--spacing-sm);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--spacing-6) var(--spacing-12);min-width:220px}
 .filter-search input{background:none;border:none;outline:none;font-size:var(--font-size-xs);color:var(--text);width:100%}
 .filter-search input::placeholder{color:var(--text3)}
