@@ -143,7 +143,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   async function moveStage(id: string, newStage: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
-    if (newStage === 'hired' && !alreadyEmployee(c)) { requestMoveToHired(c); return }
+    if (newStage === 'hired' && !alreadyEmployee(c)) { await requestMoveToHired(c); return }
     const updated = { ...c, stage: newStage, updatedAt: new Date().toISOString() }
     await save(updated)
     if (selectedId === id) setSelectedId(id)
@@ -152,7 +152,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   async function setCandStatus(id: string, newStatus: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
-    if (newStatus === 'Hired' && !alreadyEmployee(c)) { requestMoveToHired(c); return }
+    if (newStatus === 'Hired' && !alreadyEmployee(c)) { await requestMoveToHired(c); return }
     await save({ ...c, candStatus: newStatus, updatedAt: new Date().toISOString() })
   }
 

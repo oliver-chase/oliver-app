@@ -11,7 +11,7 @@ interface Props {
 function fmtDate(d: string) {
   if (!d) return '—'
   const dt = new Date(d)
-  return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
 type SortCol = 'name' | 'device' | 'assignedAt'

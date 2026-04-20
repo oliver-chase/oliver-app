@@ -481,6 +481,7 @@ tr.selected td{background:var(--accent-light)}
 .iv-date-upcoming{font-weight:var(--font-weight-medium);font-size:var(--font-size-xs);color:var(--blue)}
 .iv-date-upcoming-label{font-weight:var(--font-weight-normal);font-size:var(--font-size-xs)}
 .iv-date-past{font-weight:var(--font-weight-medium);font-size:var(--font-size-xs)}
+.iv-score{font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);color:var(--text2);margin-top:var(--spacing-2xs)}
 .iv-notes{font-size:var(--font-size-xs);color:var(--text2);line-height:1.5}
 .iv-interviewer{font-size:var(--font-size-xs);color:var(--text2)}
 /* Detail panel */
