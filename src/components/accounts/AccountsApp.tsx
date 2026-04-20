@@ -260,7 +260,7 @@ export default function AccountsApp() {
     } : undefined
     return {
       pageLabel: 'Account Planning',
-      placeholder: 'What do you want to do?',
+      placeholder: 'Type a message or pick a command...',
       greeting,
       actions,
       upload,
