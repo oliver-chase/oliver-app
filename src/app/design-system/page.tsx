@@ -189,16 +189,18 @@ interface FontSize {
 
 const FONT_SIZES: FontSize[] = [
   { token: '--font-size-3xs',     value: '9px',  label: '3XS',
-    specimen: 'META · APR 2026',
+    specimen: 'PENDING · QUEUED',
     usages: [
-      { surface: 'Accounts', example: 'Dash-row-sub caption under person name' },
+      { surface: 'HR',        example: 'pill, overdue-badge (2026-04-20: shrunk from xs→3xs)' },
+      { surface: 'Accounts',  example: 'badge-archived, portfolio-archived-sep, dash-row-sub' },
+      { surface: 'SDR',       example: 'sdr-status-badge, sdr-batch-stat, sdr-track-chip pills' },
     ],
   },
   { token: '--font-size-2xs',     value: '11px', label: '2XS',
-    specimen: 'PENDING · QUEUED',
+    specimen: 'SECTION LABEL',
     usages: [
-      { surface: 'SDR', example: 'sdr-status-badge, sdr-batch-stat pills' },
       { surface: 'Design-system', example: 'typeUsagesLabel small uppercase caption' },
+      { surface: 'HR', example: 'historical — pills migrated to 3xs on 2026-04-20' },
     ],
   },
   { token: '--font-size-xs',      value: '13px', label: 'XS',
