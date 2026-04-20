@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { dbWrite } from '@/lib/db-helpers'
 import HrDashboard from '@/components/hr/HrDashboard'
 import HrHiring from '@/components/hr/HrHiring'
 import HrDirectory from '@/components/hr/HrDirectory'
@@ -89,8 +90,14 @@ export default function HrPage() {
     }
     setSyncState('syncing')
     setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
-    try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
-    setPage('hiring')
+    try {
+      await dbWrite(supabase.from('candidates').insert(rec), 'quickAddCandidate')
+      setSyncState('ok')
+      setPage('hiring')
+    } catch {
+      setSyncState('error')
+      setDb(prev => ({ ...prev, candidates: prev.candidates.filter(c => c.id !== rec.id) }))
+    }
   }, [showModal])
 
   const quickAddEmployee = useCallback(async () => {
@@ -104,8 +111,14 @@ export default function HrPage() {
     }
     setSyncState('syncing')
     setDb(prev => ({ ...prev, employees: [rec, ...prev.employees] }))
-    try { await supabase.from('employees').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
-    setPage('directory')
+    try {
+      await dbWrite(supabase.from('employees').insert(rec), 'quickAddEmployee')
+      setSyncState('ok')
+      setPage('directory')
+    } catch {
+      setSyncState('error')
+      setDb(prev => ({ ...prev, employees: prev.employees.filter(e => e.id !== rec.id) }))
+    }
   }, [showModal])
 
   const quickAddDevice = useCallback(async () => {
@@ -120,8 +133,14 @@ export default function HrPage() {
     }
     setSyncState('syncing')
     setDb(prev => ({ ...prev, devices: [rec, ...prev.devices] }))
-    try { await supabase.from('devices').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
-    setPage('inventory')
+    try {
+      await dbWrite(supabase.from('devices').insert(rec), 'quickAddDevice')
+      setSyncState('ok')
+      setPage('inventory')
+    } catch {
+      setSyncState('error')
+      setDb(prev => ({ ...prev, devices: prev.devices.filter(d => d.id !== rec.id) }))
+    }
   }, [showModal])
 
   const loadData = useCallback(async () => {
@@ -259,10 +278,18 @@ export default function HrPage() {
         <AIIntakeModal
           onCancel={() => setIntakeOpen(false)}
           onConfirm={async records => {
+            const recs = records as Candidate[]
+            const recIds = new Set(recs.map(r => r.id))
             setSyncState('syncing')
-            setDb(prev => ({ ...prev, candidates: [...(records as Candidate[]), ...prev.candidates] }))
+            setDb(prev => ({ ...prev, candidates: [...recs, ...prev.candidates] }))
             setIntakeOpen(false)
-            try { await supabase.from('candidates').insert(records); setSyncState('ok') } catch { setSyncState('error') }
+            try {
+              await dbWrite(supabase.from('candidates').insert(records), 'aiIntakeCandidates')
+              setSyncState('ok')
+            } catch {
+              setSyncState('error')
+              setDb(prev => ({ ...prev, candidates: prev.candidates.filter(c => !recIds.has(c.id)) }))
+            }
           }}
         />
       )}
