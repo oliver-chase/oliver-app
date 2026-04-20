@@ -12,6 +12,8 @@ import ExportPanel from './ExportPanel'
 import { SyncContext } from '@/lib/sync-context'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
+import { triggerOliverUpload } from '@/components/shared/OliverDock'
+import { ACCOUNTS_COMMANDS } from '@/app/accounts/commands'
 import type { Account } from '@/types'
 import { parseTranscript } from '@/lib/parsers/transcript-parser'
 
@@ -195,19 +197,19 @@ export default function AccountsApp() {
   const accountIdRef = useRef(currentAccountId); accountIdRef.current = currentAccountId
 
   const oliverConfig = useMemo<OliverConfig>(() => {
-    const scoped: OliverAction[] = currentAccountId ? [
-      { id: 'export',  label: 'Export account plan\u2026',   group: 'Create',   hint: 'Open export panel',            run: () => setExportOpen(true) },
-      { id: 'archive', label: currentAccount?.status === 'Archived' ? 'Unarchive account' : 'Archive account', group: 'Create', hint: 'Toggle archive status', run: () => handleArchive() },
-      { id: 'delete',  label: 'Delete account\u2026',         group: 'Create',   hint: 'Permanent \u2014 archive first', run: () => handleDelete() },
-      { id: 'all',     label: 'Back to portfolio',            group: 'Quick',    hint: 'Show all accounts',            run: () => setCurrentAccountId(null) },
-    ] : []
-    const actions: OliverAction[] = [
-      { id: 'add-account', label: 'Add account\u2026',            group: 'Create',   hint: 'Quick-add to portfolio',      run: () => handleAddAccount() },
-      ...scoped,
-    ]
-    const greeting = currentAccountId
-      ? "Hi, I'm Oliver! I can answer questions about your accounts, make updates, and add notes. Upload a meeting transcript or org chart screenshot and I'll update your account plan."
-      : "Hi, I'm Oliver. Pick an account in the sidebar, or add a new one."
+    const actions: OliverAction[] = ACCOUNTS_COMMANDS.map(c => {
+      let run: () => void
+      switch (c.id) {
+        case 'add-account':       run = () => handleAddAccount(); break
+        case 'import-transcript': run = () => triggerOliverUpload(); break
+        case 'view-org-chart':    run = () => { document.querySelector('[data-section="people"]')?.scrollIntoView({ behavior: 'smooth' }) }; break
+        case 'export-data':       run = () => setExportOpen(true); break
+        case 'change-pw':         run = () => { window.location.href = '/profile' }; break
+        default:                  run = () => {}
+      }
+      return { ...c, run }
+    })
+    const greeting = "Hi, I'm Oliver. You're viewing Account Planning. You can add a new account, import transcripts, view your org chart, or ask me anything about your accounts. What would you like to do?"
     const upload = currentAccountId ? {
       accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',
       hint: 'Transcripts (.txt): parsed instantly, no AI call. Org charts (image): extracts people + titles. Docs (.docx/.pdf): AI-parsed.',
@@ -305,7 +307,7 @@ export default function AccountsApp() {
       },
       onChatRefresh: () => { refetch() },
     }
-  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, refetch])
+  }, [currentAccountId, handleAddAccount, refetch])
 
   useRegisterOliver(oliverConfig)
 

@@ -9,6 +9,7 @@ import SdrOutreach from '@/components/sdr/SdrOutreach'
 import SdrProspectDetail from '@/components/sdr/SdrProspectDetail'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
+import { SDR_COMMANDS } from '@/app/sdr/commands'
 import type { SdrProspect, SdrApprovalItem, SdrSend, SdrTab, SdrFilters } from '@/components/sdr/types'
 
 const TABS: { id: SdrTab; label: string }[] = [
@@ -69,19 +70,22 @@ export default function SdrPage() {
   const tabRef = useRef(tab);                     tabRef.current = tab
 
   const oliverConfig = useMemo<OliverConfig>(() => {
-    const actions: OliverAction[] = [
-      ...TABS.map<OliverAction>(t => ({ id: 'tab-' + t.id, label: 'Open ' + t.label, group: 'Quick', run: () => { setTab(t.id); setSidebarOpen(false) } })),
-    ]
+    const actions: OliverAction[] = SDR_COMMANDS.map(c => {
+      let run: () => void
+      switch (c.id) {
+        case 'log-call':      run = () => navTo('prospects'); break
+        case 'add-opp':       run = () => navTo('prospects'); break
+        case 'view-pipeline': run = () => navTo('prospects'); break
+        case 'change-pw':     run = () => { window.location.href = '/profile' }; break
+        default:              run = () => {}
+      }
+      return { ...c, run }
+    })
     return {
       pageLabel: 'SDR & Outreach',
       placeholder: 'What do you want to do?',
-      greeting: "Hi, I'm Oliver. Ask about the prospect pipeline, drafts, or outreach sends.",
+      greeting: "Hi, I'm Oliver. You're viewing SDR. You can log a call, add an opportunity, view your pipeline, or ask me anything. What would you like to do?",
       actions,
-      quickConvos: [
-        'Which prospects are ready for outreach this week?',
-        'How many drafts are awaiting approval?',
-        'Summarise recent sends and reply rates.',
-      ],
       contextPayload: () => ({
         currentTab: tabRef.current,
         summary: {

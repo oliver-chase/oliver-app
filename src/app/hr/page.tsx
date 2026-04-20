@@ -19,6 +19,8 @@ import AIIntakeModal from '@/components/hr/AIIntakeModal'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
+import { triggerOliverUpload } from '@/components/shared/OliverDock'
+import { HR_COMMANDS } from '@/app/hr/commands'
 import { editCandidateFlow, deleteCandidateFlow, setCandStatusFlow, setCandStageFlow, logInterviewFlow } from '@/components/hr/flows/cand-flows'
 import { editEmployeeFlow, deleteEmployeeFlow, startOffboardingFlow } from '@/components/hr/flows/emp-flows'
 import { editDeviceFlow, deleteDeviceFlow, assignDeviceFlow, returnDeviceFlow } from '@/components/hr/flows/device-flows'
@@ -194,42 +196,23 @@ export default function HrPage() {
   const runFlow = useCallback(<D,>(f: Flow<D>) => setActiveFlow(f as Flow<unknown>), [])
 
   const oliverConfig = useMemo<OliverConfig>(() => {
-    const actions: OliverAction[] = [
-      { id: 'search',          label: 'Search candidates, employees, devices\u2026', group: 'Search',   hint: 'Press / to open',               run: () => setSearchOpen(true) },
-      { id: 'ai-intake',       label: 'AI Intake candidates\u2026',                  group: 'Create',   hint: 'Import from file or text',      run: () => setIntakeOpen(true) },
-      { id: 'add-cand',        label: 'Add candidate',                               group: 'Create',   hint: 'Quick-add to hiring pipeline',  run: quickAddCandidate },
-      { id: 'add-emp',         label: 'Add employee',                                group: 'Create',   hint: 'Quick-add to directory',        run: quickAddEmployee },
-      { id: 'add-device',      label: 'Add device',                                  group: 'Create',   hint: 'Quick-add to inventory',        run: quickAddDevice },
-      { id: 'edit-cand',       label: 'Edit candidate\u2026',                        group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editCandidateFlow) },
-      { id: 'delete-cand',     label: 'Delete candidate\u2026',                      group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteCandidateFlow) },
-      { id: 'set-cand-stage',  label: 'Move candidate stage\u2026',                  group: 'Quick',    hint: 'Pick \u2192 choose stage',      run: () => runFlow(setCandStageFlow) },
-      { id: 'set-cand-status', label: 'Set candidate status\u2026',                  group: 'Quick',    hint: 'Pick \u2192 choose status',     run: () => runFlow(setCandStatusFlow) },
-      { id: 'log-iv',          label: 'Log interview\u2026',                         group: 'Quick',    hint: 'Pick \u2192 details',           run: () => runFlow(logInterviewFlow) },
-      { id: 'edit-emp',        label: 'Edit employee\u2026',                         group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editEmployeeFlow) },
-      { id: 'delete-emp',      label: 'Delete employee\u2026',                       group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteEmployeeFlow) },
-      { id: 'start-offboard',  label: 'Start offboarding\u2026',                     group: 'Quick',    hint: 'Pick \u2192 track + last day',  run: () => runFlow(startOffboardingFlow) },
-      { id: 'edit-device',     label: 'Edit device\u2026',                           group: 'Quick',    hint: 'Pick \u2192 open full edit',    run: () => runFlow(editDeviceFlow) },
-      { id: 'delete-device',   label: 'Delete device\u2026',                         group: 'Quick',    hint: 'Pick \u2192 confirm',           run: () => runFlow(deleteDeviceFlow) },
-      { id: 'assign-device',   label: 'Assign device\u2026',                         group: 'Quick',    hint: 'Pick device \u2192 employee',   run: () => runFlow(assignDeviceFlow) },
-      { id: 'return-device',   label: 'Return device\u2026',                         group: 'Quick',    hint: 'Pick \u2192 set new status',    run: () => runFlow(returnDeviceFlow) },
-      ...NAV.map<OliverAction>(n => ({
-        id: 'nav-' + n.id,
-        label: 'Open ' + n.label,
-        group: 'Quick',
-        hint: n.section || undefined,
-        run: () => navTo(n.id),
-      })),
-    ]
+    const actions: OliverAction[] = HR_COMMANDS.map(c => {
+      let run: () => void
+      switch (c.id) {
+        case 'add-cand':      run = quickAddCandidate; break
+        case 'upload-resume': run = () => triggerOliverUpload(); break
+        case 'view-postings': run = () => navTo('hiring'); break
+        case 'upload-device': run = () => triggerOliverUpload(); break
+        case 'change-pw':     run = () => { window.location.href = '/profile' }; break
+        default:              run = () => {}
+      }
+      return { ...c, run }
+    })
     return {
       pageLabel: 'HR & People Ops',
       placeholder: 'What do you want to do?',
-      greeting: "Hi, I'm Oliver. Ask about HR data — candidates, employees, onboarding, devices — or pick a command.",
+      greeting: "Hi, I'm Oliver. You're viewing Hiring. You can add a candidate, upload a resume, view job postings, or ask me anything about hiring. What would you like to do?",
       actions,
-      quickConvos: [
-        'How many active candidates are in final stages?',
-        'Which employees have no device assigned?',
-        'Summarise open offboarding runs.',
-      ],
       contextPayload: () => ({
         currentPage: pageRef.current,
         summary: {
@@ -244,7 +227,7 @@ export default function HrPage() {
       }),
       onChatRefresh: () => loadData(),
     }
-  }, [quickAddCandidate, quickAddEmployee, quickAddDevice, runFlow, navTo, loadData])
+  }, [quickAddCandidate, navTo, loadData])
 
   useRegisterOliver(oliverConfig)
 
