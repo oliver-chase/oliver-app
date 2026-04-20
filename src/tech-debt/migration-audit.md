@@ -54,6 +54,32 @@ All resolved except sdr.css:
 
 Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) have no exact token match — intentional custom values, not P1.
 
+### P2 — supabase-js silent-failure pattern (systemic)
+supabase-js v2 never throws on failure — it returns `{ data, error }`. Many
+writes in HR/Accounts/SDR use `try { await supabase.from(t).insert(x) } catch`
+which looks defensive but the catch block is dead: the client resolves
+successfully even on RLS / constraint / connectivity errors, so the UI shows
+"synced" while the write was dropped.
+
+**Fixed 2026-04-20:**
+- `src/lib/users.ts`: every write now inspects `error` and throws on failure.
+- `src/components/admin/UserManager.tsx`: wraps calls in try/catch, surfaces
+  the message in an inline red banner + reverts optimistic state.
+
+**Still affected (sweep needed):**
+- `src/app/hr/page.tsx` quick-add candidate/employee/device + AI intake.
+- `src/components/hr/HrHiring.tsx` receipt-save, promote-to-hired, interview
+  insert/update/delete, candidate delete/edit.
+- `src/components/hr/HrDirectory.tsx` employee add/edit/delete (partial via
+  `dbMulti` helper — check helper behaviour).
+- `src/components/hr/HrSettings.tsx` list item add/delete/rename.
+- `src/components/hr/flows/*` device/emp/cand flows that call
+  `supabase.from(...)...` directly.
+- `src/components/accounts/*` notes/actions/opps/projects writes that follow
+  the same pattern.
+- Refactor candidate: introduce a `dbWrite(promise)` helper that throws on
+  `error` so callers only need to catch once.
+
 **Fixed (Apr 18) — commits #1/#2:**
 - `tokens.css`: removed dead `--color-nav-accent-hover: #ff3399`; added 4 new tokens
 - `accounts.css`: all 4 hardcoded rgba() values → tokens; `--radius-xs` ghost fallbacks → `var(--radius-sm)`; `padding-top: 40px` → `var(--spacing-2xl)`

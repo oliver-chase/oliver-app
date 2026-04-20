@@ -11,16 +11,25 @@ export function UserManager() {
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    listUsers().then(u => { setUsers(u); setLoading(false) })
+    listUsers()
+      .then(u => { setUsers(u); setLoading(false) })
+      .catch(err => { setError(err instanceof Error ? err.message : String(err)); setLoading(false) })
   }, [])
 
   async function handleRoleChange(userId: string, role: Role) {
     setSaving(userId)
-    await updateUserRole(userId, role)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
-    setSaving(null)
+    setError(null)
+    try {
+      await updateUserRole(userId, role)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(null)
+    }
   }
 
   async function handlePermissionToggle(userId: string, perm: PagePermission) {
@@ -31,15 +40,26 @@ export function UserManager() {
       ? current.filter(p => p !== perm)
       : [...current, perm]
     setSaving(userId)
-    await updateUserPermissions(userId, updated)
-    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, page_permissions: updated } : u))
-    setSaving(null)
+    setError(null)
+    try {
+      await updateUserPermissions(userId, updated)
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, page_permissions: updated } : u))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(null)
+    }
   }
 
   if (loading) return <p className={styles.loading}>Loading users...</p>
 
   return (
     <div className={styles.tableWrap}>
+      {error && (
+        <div className={styles.errorBanner} role="alert">
+          Save failed: {error}
+        </div>
+      )}
       <table className={styles.table}>
         <thead>
           <tr>

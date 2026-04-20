@@ -11,6 +11,15 @@
   width: 100%;
 }
 
+.errorBanner {
+  background: var(--color-red-light);
+  color: var(--color-red);
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
