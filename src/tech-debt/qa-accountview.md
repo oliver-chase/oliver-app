@@ -1,7 +1,7 @@
 # QA: AccountView
 
 Component: `src/components/accounts/AccountView.tsx`
-CSS source: `accounts.css` lines 195-250
+CSS source: `accounts.css` lines 51-63
 Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 ---
@@ -10,7 +10,8 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 - [ ] Outer wrapper: `<div id="account-content">` (no class)
 - [ ] Header row: `<div class="account-header-row">`
-- [ ] Name heading: `<div id="account-name-heading" class="account-name-heading" contenteditable title="Click to edit account name">`
+- [ ] Name heading: `<div id="account-name-heading" class="account-name-heading" aria-label="Account name">` (read-only plain text)
+- [ ] Client company (editable): `<div id="account-client-company" class="account-client-company" contenteditable data-placeholder="Norwegian Cruise Line">`
 - [ ] Last updated: `<div class="page-last-updated" id="page-last-updated">`
 - [ ] Actions container: `<div class="account-header-actions" id="account-header-actions">`
 - [ ] Archive button: `<button class="btn-acct-action">` (text: "Archive Account" or "Unarchive Account")
@@ -26,20 +27,21 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 | Display | `flex` | |
 | Justify content | `space-between` | |
 | Align items | `flex-start` | |
-| Margin bottom | `var(--spacing-md)` = `16px` | |
+| Gap | `var(--spacing-md)` | |
+| Margin bottom | `var(--spacing-12)` = `12px` | |
+| Padding top | `var(--spacing-20)` = `20px` | |
 
 ---
 
-## .account-name-heading
+## .account-name-heading (read-only)
 
 | Property | Expected value | Check |
 |---|---|---|
-| Font size | `var(--font-size-xl)` = `20px` | |
+| Font size | `var(--font-size-2xl)` | |
 | Font weight | `var(--font-weight-bold)` = `700` | |
 | Color | `var(--text)` = `#1a1a1a` | |
-| Cursor | `text` | |
-| Outline on focus | `none` | |
-| Min width | `120px` | |
+| Padding | `var(--editable-padding)` (alignment with editable below) | |
+| Margin bottom | `var(--spacing-6)` | |
 
 ---
 
@@ -48,8 +50,10 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 | Property | Expected value | Check |
 |---|---|---|
 | Display | `flex` | |
-| Gap | `var(--spacing-sm)` = `8px` | |
+| Gap | `var(--spacing-6)` = `6px` | |
 | Align items | `center` | |
+| Padding top | `var(--spacing-6)` | |
+| Flex shrink | `0` | |
 
 ---
 
@@ -57,12 +61,12 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 | Property | Expected value | Check |
 |---|---|---|
-| Font size | `var(--font-size-sm)` = `14px` | |
-| Padding | `6px 14px` | |
+| Font size | `var(--font-size-xs)` | |
+| Padding | `var(--spacing-xs) var(--spacing-10)` | |
 | Border radius | `var(--radius)` | |
 | Border | `1px solid var(--border)` | |
-| Background | `var(--surface)` | |
-| Color | `var(--text)` | |
+| Background | `none` | |
+| Color | `var(--gray)` | |
 | Cursor | `pointer` | |
 | Hover background | `var(--surface2)` | |
 
@@ -70,9 +74,9 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 | Property | Expected value | Check |
 |---|---|---|
-| Color | `var(--red)` = `#c0392b` | |
-| Border color | `var(--red)` | |
-| Hover background | `#fdecea` or similar red tint | |
+| Color | `var(--red)` | |
+| Border color | `var(--color-danger-border)` | |
+| Hover background | `var(--color-danger-bg-hover)` | |
 
 ---
 
@@ -108,11 +112,13 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 ## Interactions
 
-1. Click account name → cursor appears, text editable
-2. Type new name + blur → name saves (Supabase update), heading reflects new value
-3. Press Enter in name → blurs (saves)
-4. Clear name + blur → reverts to original (no empty save)
-5. Click "Archive Account" → button text changes to "Unarchive Account", account status flips
-6. Click "Unarchive Account" → reverts to Active, button text flips back
-7. Click "Delete Account" → confirm dialog appears, on cancel: nothing; on confirm: navigates back to portfolio
-8. All 6 section headings scroll-anchor correctly (topbar nav links work)
+1. Account name heading is plain read-only text; clicking does nothing
+2. Click client company field → cursor appears, text editable
+3. When client_company empty → placeholder "Norwegian Cruise Line" visible (gray italic)
+4. Type new client_company + blur → saves (Supabase update)
+5. Press Enter in client_company → blurs (saves)
+6. Clear client_company + blur → reverts to previous (no empty save)
+7. Click "Archive Account" → button text changes to "Unarchive Account", account status flips
+8. Click "Unarchive Account" → reverts to Active, button text flips back
+9. Click "Delete Account" → confirm dialog appears, on cancel: nothing; on confirm: navigates back to portfolio
+10. All 6 section headings scroll-anchor correctly (topbar nav links work)

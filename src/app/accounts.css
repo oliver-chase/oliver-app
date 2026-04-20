@@ -50,9 +50,8 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text);font-s
 .sort-select:focus-visible{outline:none;box-shadow:0 0 0 2px var(--color-border-focus)}
 .account-header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--spacing-md);margin-bottom:var(--spacing-12);padding-top:var(--spacing-20)}
 .account-header-actions{display:flex;gap:var(--spacing-6);align-items:center;padding-top:var(--spacing-6);flex-shrink:0}
-.account-name-heading{font-size:var(--font-size-2xl);font-weight:var(--font-weight-bold);color:var(--text);margin-bottom:var(--spacing-6);outline:none;border-radius:var(--radius-sm)}
+.account-name-heading{font-size:var(--font-size-2xl);font-weight:var(--font-weight-bold);color:var(--text);margin-bottom:var(--spacing-6);padding:var(--editable-padding)}
 .account-client-company{font-size:var(--font-size-base);color:var(--gray);margin-bottom:var(--spacing-6);outline:none;border-radius:var(--radius-sm)}
-.account-client-company:empty::before{content:attr(data-placeholder);color:var(--color-text-placeholder);pointer-events:none}
 .page-last-updated{font-size:var(--font-size-xs);color:var(--gray);font-style:italic}
 .portfolio-section-header{padding-top:var(--spacing-sm)}
 #btn-export-plan{font-size:var(--font-size-xs);padding:var(--spacing-5) var(--spacing-10)}
