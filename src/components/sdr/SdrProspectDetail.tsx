@@ -1,16 +1,25 @@
 'use client'
-import { useEffect, useRef } from 'react'
-import type { SdrProspect, SdrSend } from './types'
+import { useEffect, useRef, useState } from 'react'
+import type { SdrProspect, SdrSend, SdrApprovalItem } from './types'
 import { PROSPECT_STATUS_LABEL, TRACK_LABEL } from './types'
 
 interface Props {
   prospect: SdrProspect | null
   sends: SdrSend[]
+  approvalItems?: SdrApprovalItem[]
   onClose: () => void
+  onRefresh?: () => void | Promise<void>
 }
 
-export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
+export default function SdrProspectDetail({ prospect, sends, approvalItems = [], onClose, onRefresh }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function refresh() {
+    if (!onRefresh || refreshing) return
+    setRefreshing(true)
+    try { await onRefresh() } finally { setRefreshing(false) }
+  }
 
   useEffect(() => {
     if (prospect) {
@@ -37,6 +46,8 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
   const touchN    = parseInt(p.fuc, 10) || 0
   const location  = [p.city, p.state, p.country].filter(Boolean).join(', ')
   const pSends    = sends.filter(s => s.prospect_id === p.id)
+  const pQueued   = approvalItems.filter(a => a.prospect_id === p.id && (a.status === 'approved' || a.status === 'pending'))
+  const queuedCount = pQueued.length
 
   function copyEmail() {
     if (p.em) navigator.clipboard.writeText(p.em).catch(() => null)
@@ -49,7 +60,12 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
         <div className="sdr-detail-header">
           <div>
             <div className="sdr-detail-name">{p.nm || p.fn || 'Unknown'}</div>
-            <div style={{ marginTop: 'var(--spacing-xs)' }}><span className={'sdr-status-badge ' + stClass}>{stLabel}</span></div>
+            <div style={{ marginTop: 'var(--spacing-xs)', display: 'flex', gap: 'var(--spacing-xs)', flexWrap: 'wrap' }}>
+              <span className={'sdr-status-badge ' + stClass}>{stLabel}</span>
+              {queuedCount > 0 && (
+                <span className="sdr-status-badge sdr-status--approved">Queued {queuedCount}</span>
+              )}
+            </div>
           </div>
           <button ref={closeRef} className="sdr-detail-close" aria-label="Close" onClick={onClose}>×</button>
         </div>
@@ -96,6 +112,11 @@ export default function SdrProspectDetail({ prospect, sends, onClose }: Props) {
 
         <div className="sdr-detail-footer">
           {p.em && <button className="btn btn-ghost btn-sm" onClick={copyEmail}>Copy Email</button>}
+          {onRefresh && (
+            <button className="sdr-refresh-btn" aria-label="Refresh" title="Refresh" disabled={refreshing} onClick={refresh}>
+              {refreshing ? '\u2026' : '\u21bb'}
+            </button>
+          )}
         </div>
       </div>
     </>

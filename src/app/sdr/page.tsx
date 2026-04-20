@@ -194,7 +194,9 @@ export default function SdrPage() {
       <SdrProspectDetail
         prospect={selectedProspect}
         sends={sends}
+        approvalItems={approvalItems}
         onClose={() => setSelectedProspect(null)}
+        onRefresh={loadData}
       />
     </div>
   )
