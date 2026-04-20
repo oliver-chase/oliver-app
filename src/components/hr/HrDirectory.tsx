@@ -144,7 +144,7 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
     if (!name) return
     const ts = new Date().toISOString()
     const ne: Employee = {
-      id: crypto.randomUUID(), name, role: form.role || 'TBD', dept: form.dept,
+      id: 'EMP-' + crypto.randomUUID(), name, role: form.role || 'TBD', dept: form.dept,
       status: 'active', client: '', location: form.city || 'Remote',
       city: form.city, state: form.state, country: form.country,
       manager: form.manager, buddy: '', startDate: form.startDate || 'TBD', endDate: '',
@@ -205,12 +205,12 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
     const e = db.employees.find(x => x.id === editingId)
     if (!e || !offTrackId) return
     const ts = new Date().toISOString()
-    const runId = crypto.randomUUID()
+    const runId = 'RUN-' + crypto.randomUUID()
     const trackTasks = db.tasks.filter(t => t.trackId === offTrackId)
     const newTasks = trackTasks.map(tt => {
       const due = new Date(offDate)
-      due.setDate(due.getDate() + parseInt(tt.dueDaysOffset || '0'))
-      return { id: crypto.randomUUID(), runId, name: tt.name, ownerRole: tt.ownerRole, status: 'pending', dueDate: due.toISOString().split('T')[0], created_at: ts, updated_at: ts }
+      due.setDate(due.getDate() + parseInt(tt.dueDaysOffset || '0', 10))
+      return { id: 'TASK-' + crypto.randomUUID(), runId, name: tt.name, ownerRole: tt.ownerRole, status: 'pending', dueDate: due.toISOString().split('T')[0], created_at: ts, updated_at: ts }
     })
     const updatedEmp = { ...e, status: 'offboarding', endDate: offDate, updated_at: ts }
     const newRun = { id: runId, employeeId: e.id, trackId: offTrackId, type: 'offboarding', status: 'active', startDate: offDate, created_at: ts }

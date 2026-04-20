@@ -11,7 +11,7 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 - [ ] Outer wrapper: `<div id="account-content">` (no class)
 - [ ] Header row: `<div class="account-header-row">`
 - [ ] Name heading: `<div id="account-name-heading" class="account-name-heading" aria-label="Account name">` (read-only plain text)
-- [ ] Client company (editable): `<div id="account-client-company" class="account-client-company" contenteditable data-placeholder="Norwegian Cruise Line">`
+- [ ] Client company (editable): `<div id="account-client-company" class="account-client-company" contenteditable data-placeholder="Company Name">`
 - [ ] Last updated: `<div class="page-last-updated" id="page-last-updated">`
 - [ ] Actions container: `<div class="account-header-actions" id="account-header-actions">`
 - [ ] Archive button: `<button class="btn-acct-action">` (text: "Archive Account" or "Unarchive Account")
@@ -114,7 +114,7 @@ Run against: staging.oliver-app.pages.dev/accounts (select any account)
 
 1. Account name heading is plain read-only text; clicking does nothing
 2. Click client company field → cursor appears, text editable
-3. When client_company empty → placeholder "Norwegian Cruise Line" visible (gray italic)
+3. When client_company empty → placeholder "Company Name" visible (gray italic)
 4. Type new client_company + blur → saves (Supabase update)
 5. Press Enter in client_company → blurs (saves)
 6. Clear client_company + blur → reverts to previous (no empty save)

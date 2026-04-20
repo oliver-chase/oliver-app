@@ -59,7 +59,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
   async function addTrack() {
     if (!trackForm.name.trim()) return
     const ts = new Date().toISOString()
-    const nt: Track = { id: crypto.randomUUID(), name: trackForm.name, type: trackForm.type, description: '', autoApply: trackForm.autoApply, createdAt: ts, updated_at: ts }
+    const nt: Track = { id: 'TRACK-' + crypto.randomUUID(), name: trackForm.name, type: trackForm.type, description: '', autoApply: trackForm.autoApply, createdAt: ts, updated_at: ts }
     setDb(prev => ({ ...prev, tracks: [...prev.tracks, nt] }))
     setSelectedId(nt.id)
     closeModal()
@@ -101,7 +101,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
     if (!taskForm.name.trim() || !selectedId) return
     const ts  = new Date().toISOString()
     const ord = trackTasks.length + 1
-    const nt: TrackTask = { id: crypto.randomUUID(), trackId: selectedId, name: taskForm.name, ownerRole: taskForm.ownerRole, dueDaysOffset: taskForm.dueDaysOffset || '0', order: ord, created_at: ts, updated_at: ts }
+    const nt: TrackTask = { id: 'TASK-' + crypto.randomUUID(), trackId: selectedId, name: taskForm.name, ownerRole: taskForm.ownerRole, dueDaysOffset: taskForm.dueDaysOffset || '0', order: ord, created_at: ts, updated_at: ts }
     setDb(prev => ({ ...prev, tasks: [...prev.tasks, nt] }))
     closeModal()
     await dbMulti([() => supabase.from('tasks').insert(nt)])
@@ -258,7 +258,6 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                   <button className="btn btn-sm btn-secondary" title="Edit" onClick={() => openEditTrack(selectedTrack)}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 2l4 4-6 6H4v-4l6-6z"/></svg>
                   </button>
-                  <button className="btn btn-primary btn-sm" onClick={() => {}}>Apply Track</button>
                 </div>
               </div>
               <div className="card">
@@ -270,7 +269,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                   {trackTasks.length === 0 ? (
                     <div className="task-empty">No tasks yet — add one above</div>
                   ) : trackTasks.map((task, i) => {
-                    const days = parseInt(task.dueDaysOffset)
+                    const days = parseInt(task.dueDaysOffset, 10)
                     const dayLabel = days === 0 ? 'Day 0' : days > 0 ? '+' + days + 'd' : days + 'd'
                     return (
                       <div key={task.id} className="task-row">

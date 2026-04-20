@@ -135,7 +135,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
     if (!d || !emp) return
     const ts = new Date().toISOString()
     const updated = { ...d, status: 'assigned', assignedTo: emp.id, updated_at: ts }
-    const newAssign = { id: crypto.randomUUID(), employeeId: emp.id, deviceId: d.id, assignedAt: ts, status: 'active', returnedAt: '', created_at: ts }
+    const newAssign = { id: 'ASG-' + crypto.randomUUID(), employeeId: emp.id, deviceId: d.id, assignedAt: ts, status: 'active', returnedAt: '', created_at: ts }
     setDb(prev => ({
       ...prev,
       devices: prev.devices.map(x => x.id === d.id ? updated : x),

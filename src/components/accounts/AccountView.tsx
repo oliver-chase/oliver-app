@@ -76,7 +76,7 @@ export default function AccountView({
             title="Click to edit full client name"
             value={acct.client_company || ''}
             ariaLabel="Full client name"
-            placeholder="Norwegian Cruise Line"
+            placeholder="Company Name"
             onSave={v => { const cur = acctRef.current; if (cur) onUpdateAccount({ ...cur, client_company: v, last_updated: today() }) }}
           />
           <div className="page-last-updated" id="page-last-updated">

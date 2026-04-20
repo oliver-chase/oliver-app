@@ -39,11 +39,13 @@ export default function StepFlowRunner<D>({ flow, ctx, onClose }: Props<D>) {
       if (v) { setError(v); return }
     }
     if (isLast) {
+      busyRef.current = true
       setBusy(true)
       try {
         await flow.finalize(draft, ctx)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Save failed')
+        busyRef.current = false
         setBusy(false)
         return
       }

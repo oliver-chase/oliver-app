@@ -176,6 +176,6 @@ export const DEFAULT_LISTS: Record<string, string[]> = {
 }
 
 export function getList(lists: HrList[], key: string): string[] {
-  const vals = lists.filter(l => l.listKey === key).sort((a, b) => parseInt(a.order) - parseInt(b.order)).map(l => l.value)
+  const vals = lists.filter(l => l.listKey === key).sort((a, b) => parseInt(a.order, 10) - parseInt(b.order, 10)).map(l => l.value)
   return vals.length ? vals : (DEFAULT_LISTS[key] || [])
 }

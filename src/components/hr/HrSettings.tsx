@@ -37,9 +37,9 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
     const val = (newVals[listKey] || '').trim()
     if (!val) return
     if (db.lists.find(l => l.listKey === listKey && l.value === val)) return
-    const maxOrder = db.lists.filter(l => l.listKey === listKey).reduce((m, l) => Math.max(m, parseInt(l.order) || 0), 0)
+    const maxOrder = db.lists.filter(l => l.listKey === listKey).reduce((m, l) => Math.max(m, parseInt(l.order, 10) || 0), 0)
     const ts = new Date().toISOString()
-    const nl: HrList = { id: crypto.randomUUID(), listKey, value: val, order: String(maxOrder + 1), created_at: ts, updated_at: ts }
+    const nl: HrList = { id: 'LIST-' + crypto.randomUUID(), listKey, value: val, order: String(maxOrder + 1), created_at: ts, updated_at: ts }
     setDb(prev => ({ ...prev, lists: [...prev.lists, nl] }))
     setNewVals(v => ({ ...v, [listKey]: '' }))
     await dbMulti([() => supabase.from('lists').insert(nl)])

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useId } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
@@ -48,6 +48,8 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
   const [runStart, setRunStart]           = useState(today())
   const [detailRunId, setDetailRunId]     = useState<string | null>(null)
   const { modal, showModal }              = useAppModal()
+  const runModalTitleId = useId()
+  const detailModalTitleId = useId()
 
   const groups         = groupByEmployee(db, type)
   const completedGroups = type === 'offboarding' ? groupByEmployee(db, type, 'completed') : []
@@ -72,12 +74,12 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
   async function startRun() {
     if (!runEmpId || !runTrackId) return
     const ts = new Date().toISOString()
-    const runId = crypto.randomUUID()
+    const runId = 'RUN-' + crypto.randomUUID()
     const trackTasks = db.tasks.filter(t => t.trackId === runTrackId)
     const newTasks = trackTasks.map(tt => {
       const due = new Date(runStart)
-      due.setDate(due.getDate() + parseInt(tt.dueDaysOffset || '0'))
-      return { id: crypto.randomUUID(), runId, name: tt.name, ownerRole: tt.ownerRole, status: 'pending', dueDate: due.toISOString().split('T')[0], created_at: ts, updated_at: ts }
+      due.setDate(due.getDate() + parseInt(tt.dueDaysOffset || '0', 10))
+      return { id: 'TASK-' + crypto.randomUUID(), runId, name: tt.name, ownerRole: tt.ownerRole, status: 'pending', dueDate: due.toISOString().split('T')[0], created_at: ts, updated_at: ts }
     })
     const newRun: OnboardingRun = { id: runId, employeeId: runEmpId, trackId: runTrackId, type, status: 'active', startDate: runStart, created_at: ts }
     const updatedEmps = type === 'offboarding'
@@ -106,8 +108,15 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
     const updated = { ...task, status: newStatus, updated_at: new Date().toISOString() }
     setDb(prev => ({ ...prev, runTasks: prev.runTasks.map(t => t.id === task.id ? updated : t) }))
     setSyncState('syncing')
-    try { await supabase.from('runTasks').upsert(updated); setSyncState('ok') } catch { setSyncState('error') }
-    // Check if all tasks complete
+    try {
+      const res = await supabase.from('runTasks').upsert(updated)
+      if (res.error) throw res.error
+      setSyncState('ok')
+    } catch {
+      setSyncState('error')
+      return
+    }
+    // Check if all tasks complete (only if DB write succeeded)
     const allTasks = db.runTasks.filter(t => t.runId === runId)
     const allUpdated = allTasks.map(t => t.id === task.id ? updated : t)
     const allDone = allUpdated.length > 0 && allUpdated.every(t => t.status === 'completed')
@@ -147,9 +156,9 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
       {/* Start run modal */}
       {runModalOpen && (
         <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setRunModalOpen(false) }}>
-          <div className="app-modal" role="dialog" aria-modal="true">
+          <div className="app-modal" role="dialog" aria-modal="true" aria-labelledby={runModalTitleId}>
             <div className="app-modal-header">
-              <div className="app-modal-title">Start Run</div>
+              <div className="app-modal-title" id={runModalTitleId}>Start Run</div>
               <button className="detail-close" aria-label="Close" onClick={() => setRunModalOpen(false)}>&times;</button>
             </div>
             <div className="app-modal-body">
@@ -190,9 +199,9 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
       {/* Run detail modal */}
       {detailRunId && detailRun && detailEmp && (
         <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setDetailRunId(null) }}>
-          <div className="app-modal" style={{ maxWidth: 560 }} role="dialog" aria-modal="true">
+          <div className="app-modal" style={{ maxWidth: 560 }} role="dialog" aria-modal="true" aria-labelledby={detailModalTitleId}>
             <div className="app-modal-header">
-              <div className="app-modal-title">{detailEmp.name} — {detailRun.type}</div>
+              <div className="app-modal-title" id={detailModalTitleId}>{detailEmp.name} — {detailRun.type}</div>
               <button className="detail-close" aria-label="Close" onClick={() => setDetailRunId(null)}>&times;</button>
             </div>
             <div className="app-modal-body">

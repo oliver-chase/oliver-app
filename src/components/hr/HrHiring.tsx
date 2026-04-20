@@ -42,7 +42,7 @@ function relTime(d: string) {
 }
 
 function locDisplay(c: Candidate) { return [c.city, c.state].filter(Boolean).join(', ') || '—' }
-function compDisplay(c: Candidate) { return c.compAmount ? (c.compType === 'hourly' ? '$' + c.compAmount + '/hr' : '$' + parseInt(c.compAmount).toLocaleString()) : '—' }
+function compDisplay(c: Candidate) { return c.compAmount ? (c.compType === 'hourly' ? '$' + c.compAmount + '/hr' : '$' + parseInt(c.compAmount, 10).toLocaleString()) : '—' }
 
 function StagePill({ stage }: { stage: string }) {
   const label = stage ? stage.charAt(0).toUpperCase() + stage.slice(1) : '—'
@@ -339,7 +339,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
               const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
               if (buttonValue !== 'confirm' || !inputValue.trim()) return
               const now = new Date().toISOString()
-              const rec: Candidate = { id: crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
+              const rec: Candidate = { id: 'CAND-' + crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
               setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
               setSyncState('syncing')
               try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
@@ -586,7 +586,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                 {(selected.stage === 'offer' || selected.stage === 'hired') && (selected.offerAmount || selected.offerDate || selected.offerStatus) && (
                   <div className="detail-section">
                     <div className="detail-section-title">Offer</div>
-                    {selected.offerAmount && <div className="detail-row"><span className="detail-key">Amount</span><span className="detail-val">${parseInt(selected.offerAmount).toLocaleString()}</span></div>}
+                    {selected.offerAmount && <div className="detail-row"><span className="detail-key">Amount</span><span className="detail-val">${parseInt(selected.offerAmount, 10).toLocaleString()}</span></div>}
                     {selected.offerDate && <div className="detail-row"><span className="detail-key">Date</span><span className="detail-val">{selected.offerDate}</span></div>}
                     {selected.offerStatus && <div className="detail-row"><span className="detail-key">Status</span><span className="detail-val">{selected.offerStatus}</span></div>}
                   </div>

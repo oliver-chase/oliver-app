@@ -10,14 +10,14 @@ interface Props {
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
 }
 
-function fmtDate(dateStr: string) {
-  if (!dateStr) return 'TBD'
-  return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 function parseLocalDate(s: string) {
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, m - 1, d)
+}
+
+function fmtDate(dateStr: string) {
+  if (!dateStr) return 'TBD'
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 function SectionHdr({ title, nav, onNav }: { title: string; nav: string; onNav: (p: string) => void }) {
@@ -43,9 +43,10 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
+  const nowMs = Date.now()
   const upcomingStarts = db.employees
-    .filter(e => e.startDate && new Date(e.startDate) > new Date())
-    .map(e => ({ ...e, daysAway: Math.ceil((new Date(e.startDate).getTime() - new Date().getTime()) / 86400000) }))
+    .filter(e => e.startDate && parseLocalDate(e.startDate).getTime() > nowMs)
+    .map(e => ({ ...e, daysAway: Math.ceil((parseLocalDate(e.startDate).getTime() - nowMs) / 86400000) }))
     .sort((a, b) => a.daysAway - b.daysAway)
     .slice(0, 3)
 
@@ -53,7 +54,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
     .filter(e => e.status === 'offboarding')
     .map(e => ({
       ...e,
-      daysAway: e.endDate ? Math.ceil((new Date(e.endDate).getTime() - new Date().getTime()) / 86400000) : null,
+      daysAway: e.endDate ? Math.ceil((parseLocalDate(e.endDate).getTime() - nowMs) / 86400000) : null,
     }))
     .slice(0, 3)
 
@@ -109,7 +110,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Name', confirmLabel: 'Add' })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
-    const rec = { id: crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
+    const rec = { id: 'CAND-' + crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
     setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
     setSyncState('syncing')
     try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
@@ -119,7 +120,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Employee', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
-    const rec = { id: crypto.randomUUID(), name: inputValue.trim(), role: 'TBD', dept: '', status: 'active', client: '', location: 'Remote', city: '', state: '', country: 'US', manager: '', buddy: '', startDate: '', endDate: '', email: '', source: '', created_at: now, updated_at: now }
+    const rec = { id: 'EMP-' + crypto.randomUUID(), name: inputValue.trim(), role: 'TBD', dept: '', status: 'active', client: '', location: 'Remote', city: '', state: '', country: 'US', manager: '', buddy: '', startDate: '', endDate: '', email: '', source: '', created_at: now, updated_at: now }
     setDb(prev => ({ ...prev, employees: [rec, ...prev.employees] }))
     setSyncState('syncing')
     try { await supabase.from('employees').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
