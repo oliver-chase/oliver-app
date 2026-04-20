@@ -139,7 +139,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     const now = new Date().toISOString()
     const autoEmail = c.email || (c.name.split(' ')[0].toLowerCase() + '@vtwo.co')
     const newEmp: Employee = {
-      id: 'EMP-' + Date.now().toString(36),
+      id: 'EMP-' + crypto.randomUUID(),
       name: c.name,
       role: c.role || '',
       dept,
@@ -252,7 +252,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             const cand = logIvFor
             const now = new Date().toISOString()
             const iv: Interview = {
-              id: 'IV-' + Date.now().toString(36),
+              id: 'IV-' + crypto.randomUUID(),
               candidateId: cand.id,
               date: values.date,
               interviewers: values.interviewers,

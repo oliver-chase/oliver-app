@@ -98,6 +98,7 @@ export const deleteCandidateFlow: Flow<PickDraft> = {
         interviews: [...prev.interviews, ...deletedIvs.filter(iv => !prev.interviews.some(x => x.id === iv.id))],
       }))
       ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
     }
   },
 }
@@ -225,7 +226,7 @@ export const logInterviewFlow: Flow<IvDraft> = {
     if (!draft.id) return
     const now = new Date().toISOString()
     const iv: Interview = {
-      id: 'IV-' + Date.now().toString(36),
+      id: 'IV-' + crypto.randomUUID(),
       candidateId: draft.id,
       date: draft.date,
       interviewers: draft.interviewers,

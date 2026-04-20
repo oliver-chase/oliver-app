@@ -7,6 +7,7 @@ export interface FlowCtx {
   setDb: React.Dispatch<React.SetStateAction<HrDB>>
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
   requestEdit: (target: EditTarget, id: string) => void
+  refresh: () => Promise<void>
 }
 
 export interface StepRender<D> {

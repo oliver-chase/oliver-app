@@ -40,11 +40,12 @@ export default function StepFlowRunner<D>({ flow, ctx, onClose }: Props<D>) {
       setBusy(true)
       try {
         await flow.finalize(draft, ctx)
-        onClose()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Save failed')
         setBusy(false)
+        return
       }
+      onClose()
       return
     }
     setStepIdx(i => i + 1)

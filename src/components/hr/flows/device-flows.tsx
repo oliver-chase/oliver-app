@@ -90,6 +90,7 @@ export const deleteDeviceFlow: Flow<PickDraft> = {
         assignments: [...prev.assignments, ...deletedAsgs.filter(a => !prev.assignments.some(x => x.id === a.id))],
       }))
       ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
     }
   },
 }
@@ -125,7 +126,7 @@ export const assignDeviceFlow: Flow<AssignDraft> = {
     if (!draft.id || !draft.empId) return
     const now = new Date().toISOString()
     const asg: Assignment = {
-      id: 'ASG-' + Date.now().toString(36),
+      id: 'ASG-' + crypto.randomUUID(),
       employeeId: draft.empId,
       deviceId: draft.id,
       assignedAt: now,

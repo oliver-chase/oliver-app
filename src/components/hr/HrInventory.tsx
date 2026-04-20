@@ -76,7 +76,12 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
 
   useEffect(() => {
     if (!pendingEditId) return
-    openEdit(pendingEditId)
+    const d = db.devices.find(x => x.id === pendingEditId)
+    if (d) {
+      setForm({ make: d.make, model: d.model, modelNumber: d.modelNumber || '', serial: d.serial || '', type: d.type || 'laptop', condition: d.condition || 'new', purchaseDate: d.purchaseDate || '', purchaseStore: d.purchaseStore || '', orderNumber: d.orderNumber || '', specs: d.specs || '' })
+      setFocusDevId(pendingEditId)
+      setModalType('edit')
+    }
     onEditConsumed?.()
   }, [pendingEditId, db.devices, onEditConsumed])
 

@@ -67,13 +67,15 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
   const [error, setError] = useState('')
   const [parsed, setParsed] = useState<ParsedCandidate[]>([])
   const [model, setModel] = useState('')
+  const [confirming, setConfirming] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const handleClose = useCallback(() => {
+    if (confirming) return
     abortRef.current?.abort()
     onCancel()
-  }, [onCancel])
+  }, [onCancel, confirming])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); handleClose() } }
@@ -104,10 +106,11 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
   }
 
   async function handleConfirm() {
-    if (!parsed.length) return
+    if (!parsed.length || confirming) return
+    setConfirming(true)
     const now = new Date().toISOString()
     const records: Candidate[] = parsed.map(p => ({
-      id: 'CAND-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      id: 'CAND-' + crypto.randomUUID(),
       name: p.name || 'Unknown',
       role: p.role || '', seniority: p.seniority || '', dept: p.dept || '',
       source: p.source || 'AI Intake', stage: 'sourced', candStatus: 'Active',
@@ -116,13 +119,17 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
       addedAt: now, updatedAt: now, notes: '',
       rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '',
     }))
-    await onConfirm(records)
+    try {
+      await onConfirm(records)
+    } finally {
+      setConfirming(false)
+    }
   }
 
   return (
     <div className="app-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="app-modal app-modal-lg" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <button type="button" className="app-modal-close" aria-label="Close" onClick={handleClose}>&times;</button>
+        <button type="button" className="app-modal-close" aria-label="Close" onClick={handleClose} disabled={confirming}>&times;</button>
         <h2 className="app-modal-title" id={titleId}>Candidate Intake</h2>
         <div className="app-modal-body">
           {phase === 'pick' && (
@@ -179,11 +186,11 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
           )}
         </div>
         <div className="app-modal-actions">
-          <button className="btn btn-ghost" type="button" onClick={handleClose}>{phase === 'review' ? 'Discard' : 'Cancel'}</button>
+          <button className="btn btn-ghost" type="button" onClick={handleClose} disabled={confirming}>{phase === 'review' ? 'Discard' : 'Cancel'}</button>
           {phase === 'error' && <button className="btn btn-secondary" type="button" onClick={() => setPhase('pick')}>Try Again</button>}
           {phase === 'review' && (
-            <button className="btn btn-primary" type="button" disabled={!parsed.length} onClick={handleConfirm}>
-              Add {parsed.length} Candidate{parsed.length === 1 ? '' : 's'}
+            <button className="btn btn-primary" type="button" disabled={!parsed.length || confirming} onClick={handleConfirm}>
+              {confirming ? 'Adding\u2026' : 'Add ' + parsed.length + ' Candidate' + (parsed.length === 1 ? '' : 's')}
             </button>
           )}
         </div>

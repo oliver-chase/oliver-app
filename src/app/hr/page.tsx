@@ -72,7 +72,7 @@ export default function HrPage() {
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
     const rec: Candidate = {
-      id: 'CAND-' + Date.now().toString(36),
+      id: 'CAND-' + crypto.randomUUID(),
       name: inputValue.trim(),
       role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active',
       empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '',
@@ -90,7 +90,7 @@ export default function HrPage() {
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
     const rec: Employee = {
-      id: 'EMP-' + Date.now().toString(36), name: inputValue.trim(), role: '', dept: '', status: 'active',
+      id: 'EMP-' + crypto.randomUUID(), name: inputValue.trim(), role: '', dept: '', status: 'active',
       client: '', location: '', city: '', state: '', country: '', manager: '', buddy: '',
       startDate: '', endDate: '', email: '', source: '', created_at: now, updated_at: now,
     }
@@ -105,7 +105,7 @@ export default function HrPage() {
     if (buttonValue !== 'confirm' || !inputValue.trim()) return
     const now = new Date().toISOString()
     const rec: Device = {
-      id: 'DEV-' + Date.now().toString(36), name: inputValue.trim(), make: '', type: '', model: '',
+      id: 'DEV-' + crypto.randomUUID(), name: inputValue.trim(), make: '', type: '', model: '',
       modelNumber: '', serial: '', status: 'available', assignedTo: '', condition: 'good',
       purchaseDate: '', purchaseStore: '', orderNumber: '', specs: '', location: '', notes: '',
       created_at: now, updated_at: now,
@@ -198,7 +198,7 @@ export default function HrPage() {
       {activeFlow && (
         <StepFlowRunner
           flow={activeFlow}
-          ctx={{ db, setDb, setSyncState, requestEdit }}
+          ctx={{ db, setDb, setSyncState, requestEdit, refresh: loadData }}
           onClose={() => setActiveFlow(null)}
         />
       )}

@@ -85,6 +85,7 @@ export const deleteEmployeeFlow: Flow<PickDraft> = {
         assignments: [...prev.assignments, ...deletedAsgs.filter(a => !prev.assignments.some(x => x.id === a.id))],
       }))
       ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
     }
   },
 }
@@ -130,7 +131,7 @@ export const startOffboardingFlow: Flow<OffboardDraft> = {
     if (!draft.id || !draft.trackId) return
     const now = new Date().toISOString()
     const run: OnboardingRun = {
-      id: 'RUN-' + Date.now().toString(36),
+      id: 'RUN-' + crypto.randomUUID(),
       employeeId: draft.id,
       trackId: draft.trackId,
       type: 'offboarding',
