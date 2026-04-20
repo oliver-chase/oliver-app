@@ -6,6 +6,8 @@ import { fuzzyFilter } from '@/lib/fuzzy'
 
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
+const GROUP_ORDER: OliverAction['group'][] = ['Search', 'Create', 'Quick']
+
 type Mode = 'command' | 'chat'
 
 type ChatItem =
@@ -71,9 +73,8 @@ export default function OliverDock() {
 
   useEffect(() => { setActiveIdx(0) }, [q])
 
-  const groupOrder: OliverAction['group'][] = ['Search', 'Create', 'Quick']
   const grouped = useMemo(() => {
-    return groupOrder
+    return GROUP_ORDER
       .map(g => ({ group: g, items: filtered.filter(a => a.group === g) }))
       .filter(g => g.items.length > 0)
   }, [filtered])
