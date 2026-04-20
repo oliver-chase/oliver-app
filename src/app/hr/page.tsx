@@ -187,7 +187,7 @@ export default function HrPage() {
       case 'inventory':   return <HrInventory db={db} setDb={setDb} setSyncState={setSyncState} pendingEditId={pendingEdit?.target === 'device' ? pendingEdit.id : null} onEditConsumed={clearPendingEdit} />
       case 'assignments': return <HrAssignments db={db} setDb={setDb} setSyncState={setSyncState} />
       case 'tracks':      return <HrTracks db={db} setDb={setDb} setSyncState={setSyncState} />
-      case 'reports':     return <HrReports db={db} setDb={setDb} setSyncState={setSyncState} />
+      case 'reports':     return <HrReports db={db} />
       case 'settings':    return <HrSettings db={db} setDb={setDb} setSyncState={setSyncState} />
       default:            return null
     }

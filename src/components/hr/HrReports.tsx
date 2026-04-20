@@ -1,53 +1,21 @@
 'use client'
-import { useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
-import { useAppModal } from '@/components/shared/AppModal'
+import { useState } from 'react'
 import type { HrDB } from './types'
 import { STAGES, getList } from './types'
 
 interface Props {
   db: HrDB
-  setDb: React.Dispatch<React.SetStateAction<HrDB>>
-  setSyncState: (s: 'ok' | 'syncing' | 'error') => void
-}
-
-function relTime(d: string) {
-  if (!d) return '—'
-  const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return days + 'd ago'
-  if (days < 30) return Math.floor(days / 7) + 'w ago'
-  return Math.floor(days / 30) + 'mo ago'
-}
-
-const ACT_COLORS: Record<string, string> = {
-  add: 'var(--accent)', hire: 'var(--accent-text)', stage: 'var(--amber)',
-  offboard: 'var(--red)', device: 'var(--text3)', interview: 'var(--accent)',
 }
 
 function def30ago() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] }
 function todayStr()  { return new Date().toISOString().split('T')[0] }
 
-export default function HrReports({ db, setDb, setSyncState }: Props) {
+export default function HrReports({ db }: Props) {
   const [from, setFrom] = useState(def30ago)
   const [to, setTo]     = useState(todayStr)
   const [pending, setPending] = useState({ from, to })
-  const { modal, showModal }  = useAppModal()
-
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
-  }, [setSyncState])
 
   function applyFilter() { setPending({ from, to }) }
-
-  async function clearActivity() {
-    const { buttonValue } = await showModal({ title: 'Clear Activity', message: 'Clear all activity log entries? This cannot be undone.', confirmLabel: 'Clear All', dangerConfirm: true })
-    if (buttonValue !== 'confirm') return
-    setDb(prev => ({ ...prev, activities: [] }))
-    await dbMulti([() => supabase.from('activities').delete().neq('id', '__none__')])
-  }
 
   const total   = db.candidates.length
   const hired   = db.candidates.filter(c => c.candStatus === 'Hired').length
@@ -62,8 +30,6 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
 
   return (
     <div className="page">
-      {modal}
-
       <div className="page-header">
         <div>
           <div className="page-title">Reports</div>
@@ -148,7 +114,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       {depts.length > 0 && (
         <div className="card hr-card-group">
           <div className="card-section-hdr">By Department</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-10)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-sm)' }}>
             {depts.map(sp => (
               <div key={sp} className="report-spec-card">
                 <div className="report-spec-count">{db.candidates.filter(c => c.dept === sp).length}</div>
@@ -158,26 +124,6 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
           </div>
         </div>
       )}
-
-      <div className="card hr-card-group">
-        <div className="card-section-hdr">
-          Recent Activity
-          {db.activities.length > 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={clearActivity}>Clear All</button>
-          )}
-        </div>
-        {db.activities.slice(0, 50).length === 0 ? (
-          <div className="activity-empty">No activity yet</div>
-        ) : db.activities.slice(0, 50).map(a => (
-          <div key={a.id} className="activity-row">
-            <div className="activity-dot" style={{ background: ACT_COLORS[a.type] || 'var(--text3)' }} />
-            <div className="activity-info">
-              <div className="activity-desc">{a.desc}</div>
-              <div className="activity-time">{relTime(a.at)}</div>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
