@@ -39,21 +39,23 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text);font-s
 .filter-checkbox-group{display:flex;flex-direction:column;gap:var(--spacing-6)}
 .filter-checkbox-group label{display:flex;align-items:center;gap:var(--spacing-6);font-size:var(--font-size-sm);color:var(--text);cursor:pointer;user-select:none}
 .filter-checkbox-group input[type="checkbox"],.filter-checkbox-group input[type="radio"]{cursor:pointer;accent-color:var(--pink)}
-.main{margin-left:var(--sidebar-w);padding-top:calc(var(--topbar-h) + var(--spacing-md));padding-left:var(--spacing-lg);padding-right:var(--spacing-lg);padding-bottom:80px;box-sizing:border-box;max-width:100%}
-.main.main-with-filterbar{padding-top:calc(var(--topbar-h) + var(--filterbar-h) + var(--spacing-md))}
-.main-with-filterbar .section{scroll-margin-top:calc(var(--topbar-h) + var(--filterbar-h) + var(--spacing-md))}
-.section{margin-bottom:var(--spacing-xl);scroll-margin-top:calc(var(--topbar-h) + var(--spacing-md))}
+/* Top-margin parity with HR (.section-header): 36px visible gap below topbar/filterbar.
+   Locked — see src/tech-debt/locked.md + src/tech-debt/margin-scale.md. */
+.main{margin-left:var(--sidebar-w);padding-top:calc(var(--topbar-h) + var(--spacing-md) + var(--spacing-20));padding-left:var(--spacing-lg);padding-right:var(--spacing-lg);padding-bottom:80px;box-sizing:border-box;max-width:100%}
+.main.main-with-filterbar{padding-top:calc(var(--topbar-h) + var(--filterbar-h) + var(--spacing-md) + var(--spacing-20))}
+.main-with-filterbar .section{scroll-margin-top:calc(var(--topbar-h) + var(--filterbar-h) + var(--spacing-md) + var(--spacing-20))}
+.section{margin-bottom:var(--spacing-xl);scroll-margin-top:calc(var(--topbar-h) + var(--spacing-md) + var(--spacing-20))}
 .section-header-row2{display:flex;align-items:center;justify-content:space-between;min-height:var(--cadence-row-min-h)}
 .section-header-left{display:flex;align-items:center;gap:var(--spacing-xs)}
 .section-actions{display:flex;gap:var(--spacing-6);align-items:center;flex-wrap:nowrap;overflow-x:auto}.section-actions .picker-wrap{width:auto}
 .sort-select{font-family:var(--font);font-size:var(--font-size-sm);padding:var(--spacing-xs) var(--spacing-12) var(--spacing-xs) 28px;border:1px solid var(--border);border-radius:var(--radius-pill-lg);background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Crect x='0' y='0' width='12' height='1.5' rx='.75' fill='%23797979'/%3E%3Crect x='2' y='3' width='8' height='1.5' rx='.75' fill='%23797979'/%3E%3Crect x='4' y='6' width='4' height='1.5' rx='.75' fill='%23797979'/%3E%3C/svg%3E") no-repeat 10px center;color:var(--text);appearance:none;-webkit-appearance:none;cursor:pointer;white-space:nowrap;display:flex;align-items:center}
 .sort-select:focus-visible{outline:none;box-shadow:0 0 0 2px var(--color-border-focus)}
-.account-header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--spacing-md);margin-bottom:var(--spacing-md);padding-top:var(--spacing-20)}
+.account-header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--spacing-md);margin-bottom:var(--spacing-md)}
 .account-header-actions{display:flex;gap:var(--spacing-6);align-items:center;padding-top:var(--spacing-6);flex-shrink:0}
 .account-name-heading{font-size:var(--font-size-2xl);font-weight:var(--font-weight-bold);color:var(--text);margin-bottom:var(--spacing-xs);padding:var(--editable-padding)}
 .account-client-company{font-size:var(--font-size-base);color:var(--gray);margin-bottom:var(--spacing-xs);outline:none;border-radius:var(--radius-sm)}
 .page-last-updated{font-size:var(--font-size-xs);color:var(--gray);font-style:italic}
-.portfolio-section-header{padding-top:var(--spacing-sm)}
+.portfolio-section-header{padding-top:0}
 #btn-export-plan{font-size:var(--font-size-xs);padding:var(--spacing-5) var(--spacing-10)}
 .notes-search{font-size:var(--font-size-sm);padding:var(--spacing-5) var(--spacing-10);border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);outline:none;width:180px;flex-shrink:0;font-family:var(--font)}
 .btn-acct-action{font-family:var(--font);font-size:var(--font-size-xs);padding:var(--spacing-xs) var(--spacing-10);border:1px solid var(--border);border-radius:var(--radius);background:none;color:var(--gray);cursor:pointer;transition:.12s;white-space:nowrap}

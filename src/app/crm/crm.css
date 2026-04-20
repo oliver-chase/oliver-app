@@ -9,7 +9,7 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text)}
 .topbar-name{font-size:var(--font-size-sm);font-weight:700;color:var(--text)}
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:var(--color-modal-overlay);z-index:49;pointer-events:none}
 .sidebar-backdrop.open{display:block;pointer-events:auto}
-.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + var(--spacing-md)) 24px 80px;box-sizing:border-box;min-height:100vh}
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + var(--spacing-md) + var(--spacing-20)) 24px 80px;box-sizing:border-box;min-height:100vh}
 @media (max-width:500px){
   .topbar{left:0}
   .topbar-hamburger{display:flex!important}
