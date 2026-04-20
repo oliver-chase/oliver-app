@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import AppChip from '@/components/shared/AppChip'
 import AppBadge from '@/components/shared/AppBadge'
@@ -11,6 +11,15 @@ import { useAppModal } from '@/components/shared/AppModal'
 import './ds.css'
 
 // ── Copy helper ─────────────────────────────────────────────────────────────
+
+function ResolvedValue({ token, fallback }: { token: string; fallback: string }) {
+  const [v, setV] = useState(fallback)
+  useEffect(() => {
+    const computed = getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+    if (computed) setV(computed)
+  }, [token])
+  return <>{v}</>
+}
 
 function CopyToken({ name }: { name: string }) {
   const [copied, setCopied] = useState(false)
@@ -334,7 +343,7 @@ export default function DesignSystemPage() {
                   />
                   <div className="swatchMeta">
                     <CopyToken name={name} />
-                    <div className="swatchValue">{value}</div>
+                    <div className="swatchValue"><ResolvedValue token={name} fallback={value} /></div>
                   </div>
                 </div>
               ))}
