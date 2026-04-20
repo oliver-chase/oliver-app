@@ -1,5 +1,6 @@
 'use client'
-import { useState, useCallback, Component } from 'react'
+import { useState, useCallback, useMemo, useRef, Component } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import { deleteAccountCascade } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
@@ -9,8 +10,9 @@ import Filterbar from './Filterbar'
 import PortfolioView from './PortfolioView'
 import AccountView from './AccountView'
 import ExportPanel from './ExportPanel'
-import ChatbotPanel from './ChatbotPanel'
 import { SyncContext } from '@/lib/sync-context'
+import { useRegisterOliver } from '@/components/shared/OliverContext'
+import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import type { Account } from '@/types'
 
 class ErrorBoundary extends Component<
@@ -136,6 +138,62 @@ export default function AccountsApp() {
     ? data.engagements.find(e => e.engagement_id === currentEngagementId)
     : null
 
+  const router = useRouter()
+  const dataRef = useRef(data); dataRef.current = data
+  const accountIdRef = useRef(currentAccountId); accountIdRef.current = currentAccountId
+
+  const oliverConfig = useMemo<OliverConfig>(() => {
+    const scoped: OliverAction[] = currentAccountId ? [
+      { id: 'export',  label: 'Export account plan\u2026',   group: 'Create',   hint: 'Open export panel',            run: () => setExportOpen(true) },
+      { id: 'archive', label: currentAccount?.status === 'Archived' ? 'Unarchive account' : 'Archive account', group: 'Create', hint: 'Toggle archive status', run: () => handleArchive() },
+      { id: 'delete',  label: 'Delete account\u2026',         group: 'Create',   hint: 'Permanent \u2014 archive first', run: () => handleDelete() },
+      { id: 'all',     label: 'Back to portfolio',            group: 'Navigate', hint: 'Show all accounts',            run: () => setCurrentAccountId(null) },
+    ] : []
+    const actions: OliverAction[] = [
+      { id: 'add-account', label: 'Add account\u2026',            group: 'Create',   hint: 'Quick-add to portfolio',      run: () => handleAddAccount() },
+      ...scoped,
+      { id: 'nav-hr',    label: 'Go to HR & People Ops', group: 'Navigate', run: () => router.push('/hr') },
+      { id: 'nav-sdr',   label: 'Go to SDR',             group: 'Navigate', run: () => router.push('/sdr') },
+      { id: 'nav-hub',   label: 'Go to Hub',             group: 'Navigate', run: () => router.push('/') },
+      { id: 'nav-admin', label: 'Go to Admin',           group: 'Navigate', run: () => router.push('/admin') },
+    ]
+    const greeting = currentAccountId
+      ? "Hi, I'm Oliver. Ask about this account, or pick a command."
+      : "Hi, I'm Oliver. Pick an account in the sidebar, or add a new one."
+    return {
+      pageLabel: 'Account Planning',
+      placeholder: 'What do you want to do?',
+      greeting,
+      actions,
+      quickConvos: currentAccountId ? [
+        'Summarise recent activity on this account.',
+        'Which actions are overdue?',
+        'Who are the key stakeholders?',
+      ] : [
+        'Which accounts need attention this week?',
+        'Summarise the portfolio.',
+      ],
+      contextPayload: () => {
+        const id = accountIdRef.current
+        const d = dataRef.current
+        if (!id) return { view: 'portfolio', accounts: d.accounts.length }
+        const acct = d.accounts.find(a => a.account_id === id)
+        const bg = d.background?.find(b => b.account_id === id && !b.engagement_id)
+        return {
+          view: 'account',
+          account: acct,
+          background: bg,
+          stakeholders: d.stakeholders?.filter(s => s.account_id === id) ?? [],
+          actions:     d.actions?.filter(a => a.account_id === id) ?? [],
+          opportunities: d.opportunities?.filter(o => o.account_id === id) ?? [],
+          projects:    d.projects?.filter(p => p.account_id === id) ?? [],
+        }
+      },
+    }
+  }, [currentAccountId, currentAccount?.status, handleAddAccount, handleArchive, handleDelete, router])
+
+  useRegisterOliver(oliverConfig)
+
   const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'All Accounts'
   const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
   const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'
@@ -227,9 +285,6 @@ export default function AccountsApp() {
           data={data}
           onClose={() => setExportOpen(false)}
         />
-      )}
-      {currentAccountId && (
-        <ChatbotPanel accountId={currentAccountId} data={data} />
       )}
     </div>
     </SyncContext.Provider>
