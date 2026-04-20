@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { runWrites } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
@@ -51,9 +52,8 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
   const visibleDevices = filterStatus ? db.devices.filter(d => d.status === filterStatus) : db.devices
   const focusDev = focusDevId ? db.devices.find(d => d.id === focusDevId) || null : null
 
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
+  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<{ error: { message: string } | null }>>) => {
+    await runWrites(setSyncState, ops, 'hr-inventory')
   }, [setSyncState])
 
   function openAdd() {

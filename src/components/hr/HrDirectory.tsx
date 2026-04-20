@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { runWrites } from '@/lib/db-helpers'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Employee } from './types'
@@ -145,9 +146,8 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
 
   function closeModal() { setModalType(null); setEditingId(null) }
 
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
+  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<{ error: { message: string } | null }>>) => {
+    await runWrites(setSyncState, ops, 'hr-directory')
   }, [setSyncState])
 
   async function addEmployee() {

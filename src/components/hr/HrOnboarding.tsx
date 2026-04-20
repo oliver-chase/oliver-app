@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useId } from 'react'
 import { supabase } from '@/lib/supabase'
+import { runWrites } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
 import type { HrDB, OnboardingRun, RunTask } from './types'
@@ -58,9 +59,8 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
   const detailTasks = detailRunId ? db.runTasks.filter(t => t.runId === detailRunId) : []
   const detailDone  = detailTasks.filter(t => t.status === 'completed').length
 
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
+  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<{ error: { message: string } | null }>>) => {
+    await runWrites(setSyncState, ops, 'hr-onboarding')
   }, [setSyncState])
 
   function openStartRun() {
@@ -91,7 +91,7 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
       employees: type === 'offboarding' ? updatedEmps : prev.employees,
     }))
     setRunModalOpen(false)
-    const ops: Array<() => PromiseLike<unknown>> = [
+    const ops: Array<() => PromiseLike<{ error: { message: string } | null }>> = [
       () => supabase.from('onboardingRuns').insert(newRun),
       ...newTasks.map(t => () => supabase.from('runTasks').insert(t)),
     ]

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { runWrites, dbWrite } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
@@ -33,9 +34,8 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
   const selectedTrack = selectedId ? db.tracks.find(t => t.id === selectedId) || null : null
   const trackTasks    = selectedId ? db.tasks.filter(t => t.trackId === selectedId).sort((a, b) => a.order - b.order) : []
 
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
+  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<{ error: { message: string } | null }>>) => {
+    await runWrites(setSyncState, ops, 'hr-tracks')
   }, [setSyncState])
 
   function closeModal() { setModalType(null); setEditingId(null) }
@@ -125,7 +125,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
       onLocalRestore: task => setDb(prev => ({ ...prev, tasks: [...prev.tasks, task] })),
       onDeleteRecord: async () => {
         setSyncState('syncing')
-        try { await supabase.from('tasks').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+        try { await dbWrite(supabase.from('tasks').delete().eq('id', id), 'tracks.taskDelete'); setSyncState('ok') } catch { setSyncState('error') }
       },
     })
   }

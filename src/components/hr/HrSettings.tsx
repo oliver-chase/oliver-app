@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { runWrites, dbWrite } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, HrList } from './types'
@@ -28,9 +29,8 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
   const { modal, showModal }    = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<HrList>()
 
-  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<unknown>>) => {
-    setSyncState('syncing')
-    try { await Promise.all(ops.map(fn => fn())); setSyncState('ok') } catch { setSyncState('error') }
+  const dbMulti = useCallback(async (ops: Array<() => PromiseLike<{ error: { message: string } | null }>>) => {
+    await runWrites(setSyncState, ops, 'hr-settings')
   }, [setSyncState])
 
   async function addItem(listKey: string) {
@@ -54,7 +54,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
       onLocalRestore: restored => setDb(prev => ({ ...prev, lists: [...prev.lists, restored] })),
       onDeleteRecord: async () => {
         setSyncState('syncing')
-        try { await supabase.from('lists').delete().eq('id', item.id); setSyncState('ok') } catch { setSyncState('error') }
+        try { await dbWrite(supabase.from('lists').delete().eq('id', item.id), 'settings.listDelete'); setSyncState('ok') } catch { setSyncState('error') }
       },
     })
   }
@@ -77,7 +77,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
       devices: listKey === 'deviceType' ? prev.devices.map(d => d.type === oldVal ? { ...d, type: newVal } : d) : prev.devices,
     }))
     if (!item) return
-    const saves: Array<() => PromiseLike<unknown>> = [() => supabase.from('lists').upsert({ ...item, value: newVal, updated_at: ts })]
+    const saves: Array<() => PromiseLike<{ error: { message: string } | null }>> = [() => supabase.from('lists').upsert({ ...item, value: newVal, updated_at: ts })]
     await dbMulti(saves)
   }
 

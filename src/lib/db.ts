@@ -78,7 +78,9 @@ export async function deleteRecord(table: string, idCol: string, id: string) {
 
 export async function deleteAccountCascade(accountId: string) {
   const related = ['stakeholders', 'actions', 'notes', 'opportunities', 'projects', 'background', 'engagements']
-  await Promise.all(related.map(table => supabase.from(table).delete().eq('account_id', accountId)))
+  const results = await Promise.all(related.map(table => supabase.from(table).delete().eq('account_id', accountId)))
+  const failed = results.map((r, i) => r.error ? related[i] + ': ' + r.error.message : null).filter(Boolean)
+  if (failed.length) throw new Error('deleteAccountCascade partial failure: ' + failed.join('; '))
   await deleteRecord('accounts', 'account_id', accountId)
 }
 

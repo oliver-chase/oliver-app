@@ -61,24 +61,28 @@ which looks defensive but the catch block is dead: the client resolves
 successfully even on RLS / constraint / connectivity errors, so the UI shows
 "synced" while the write was dropped.
 
-**Fixed 2026-04-20:**
-- `src/lib/users.ts`: every write now inspects `error` and throws on failure.
+**Fixed 2026-04-20 (sweep complete):**
+- `src/lib/db-helpers.ts` (new): `dbWrite(query, label)` for single writes +
+  `dbWriteMulti(ops, label)` for parallel batches + `runWrites(setSync, ops, label)`
+  that wraps the setSyncState lifecycle.
+- `src/lib/users.ts`: every write inspects `error` and throws on failure.
+- `src/lib/db.ts`: `deleteAccountCascade` now surfaces partial-failure errors.
 - `src/components/admin/UserManager.tsx`: wraps calls in try/catch, surfaces
   the message in an inline red banner + reverts optimistic state.
+- `src/app/hr/page.tsx` quick-add + AI intake: dbWrite + revert on error.
+- `src/components/hr/HrHiring.tsx`: all 9 silent-failure sites (receipt,
+  upsert, promote 2-step, candidate delete/edit, interview log/update/delete,
+  add candidate) now use `dbWrite`.
+- `src/components/hr/{HrTracks,HrInventory,HrOnboarding,HrSettings,HrDirectory}.tsx`:
+  the local broken `dbMulti` helper in each file now delegates to shared
+  `runWrites`, which performs real error inspection.
+- `src/components/hr/HrTracks.tsx` + `HrSettings.tsx`: the one-off `try {
+  await supabase... } catch` sites (task-delete, list-delete) migrated to
+  `dbWrite`.
+- `src/components/hr/flows/*`: already had `if (res.error) throw` pattern —
+  audited clean.
 
-**Still affected (sweep needed):**
-- `src/app/hr/page.tsx` quick-add candidate/employee/device + AI intake.
-- `src/components/hr/HrHiring.tsx` receipt-save, promote-to-hired, interview
-  insert/update/delete, candidate delete/edit.
-- `src/components/hr/HrDirectory.tsx` employee add/edit/delete (partial via
-  `dbMulti` helper — check helper behaviour).
-- `src/components/hr/HrSettings.tsx` list item add/delete/rename.
-- `src/components/hr/flows/*` device/emp/cand flows that call
-  `supabase.from(...)...` directly.
-- `src/components/accounts/*` notes/actions/opps/projects writes that follow
-  the same pattern.
-- Refactor candidate: introduce a `dbWrite(promise)` helper that throws on
-  `error` so callers only need to catch once.
+No silent-failure supabase writes remain in `src/`.
 
 **Fixed (Apr 18) — commits #1/#2:**
 - `tokens.css`: removed dead `--color-nav-accent-hover: #ff3399`; added 4 new tokens

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { dbWrite } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
 import PromoteEmployeeModal from './PromoteEmployeeModal'
@@ -196,7 +197,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     setDb(prev => ({ ...prev, devices: [rec, ...prev.devices] }))
     setSyncState('syncing')
     try {
-      await supabase.from('devices').insert(rec)
+      await dbWrite(supabase.from('devices').insert(rec), 'hiring.receiptSaveDevice')
       setSyncState('ok')
     } catch {
       setSyncState('error')
@@ -241,7 +242,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   const save = useCallback(async (c: Candidate) => {
     setDb(prev => ({ ...prev, candidates: prev.candidates.map(x => x.id === c.id ? c : x) }))
     setSyncState('syncing')
-    try { await supabase.from('candidates').upsert(c); setSyncState('ok') } catch { setSyncState('error') }
+    try { await dbWrite(supabase.from('candidates').upsert(c), 'hiring.candidateUpsert'); setSyncState('ok') } catch { setSyncState('error') }
   }, [setDb, setSyncState])
 
   async function moveStage(id: string, newStage: string) {
@@ -297,8 +298,8 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     }))
     setPromoteCand(null)
     try {
-      await supabase.from('employees').insert(newEmp)
-      await supabase.from('candidates').update({ stage: 'hired', candStatus: 'Hired', updatedAt: now }).eq('id', c.id)
+      await dbWrite(supabase.from('employees').insert(newEmp), 'hiring.promoteInsertEmployee')
+      await dbWrite(supabase.from('candidates').update({ stage: 'hired', candStatus: 'Hired', updatedAt: now }).eq('id', c.id), 'hiring.promoteUpdateCandidate')
       setSyncState('ok')
     } catch {
       setSyncState('error')
@@ -317,7 +318,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
       },
       onDeleteRecord: async () => {
         setSyncState('syncing')
-        try { await supabase.from('candidates').delete().eq('id', c.id); setSyncState('ok') } catch { setSyncState('error') }
+        try { await dbWrite(supabase.from('candidates').delete().eq('id', c.id), 'hiring.candidateDelete'); setSyncState('ok') } catch { setSyncState('error') }
       },
     })
   }
@@ -362,7 +363,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             setSyncState('syncing')
             setDb(prev => ({ ...prev, candidates: prev.candidates.map(x => x.id === updated.id ? updated : x) }))
             setEditCand(null)
-            try { await supabase.from('candidates').update(updated).eq('id', updated.id); setSyncState('ok') } catch { setSyncState('error') }
+            try { await dbWrite(supabase.from('candidates').update(updated).eq('id', updated.id), 'hiring.candidateEditSave'); setSyncState('ok') } catch { setSyncState('error') }
           }}
         />
       )}
@@ -400,8 +401,8 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             }))
             setLogIvFor(null)
             try {
-              await supabase.from('interviews').insert(iv)
-              await supabase.from('candidates').update({ updatedAt: now }).eq('id', cand.id)
+              await dbWrite(supabase.from('interviews').insert(iv), 'hiring.interviewLogInsert')
+              await dbWrite(supabase.from('candidates').update({ updatedAt: now }).eq('id', cand.id), 'hiring.interviewLogTouchCand')
               setSyncState('ok')
             } catch {
               setSyncState('error')
@@ -425,7 +426,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
               setSyncState('syncing')
               setDb(prev => ({ ...prev, interviews: prev.interviews.map(x => x.id === iv.id ? updated : x) }))
               setEditIvId(null)
-              try { await supabase.from('interviews').update(updated).eq('id', iv.id); setSyncState('ok') } catch { setSyncState('error') }
+              try { await dbWrite(supabase.from('interviews').update(updated).eq('id', iv.id), 'hiring.interviewUpdate'); setSyncState('ok') } catch { setSyncState('error') }
             }}
             onCancel={() => setEditIvId(null)}
           />
@@ -440,7 +441,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             setConfirmDelIvId(null)
             setSyncState('syncing')
             setDb(prev => ({ ...prev, interviews: prev.interviews.filter(x => x.id !== id) }))
-            try { await supabase.from('interviews').delete().eq('id', id); setSyncState('ok') } catch { setSyncState('error') }
+            try { await dbWrite(supabase.from('interviews').delete().eq('id', id), 'hiring.interviewDelete'); setSyncState('ok') } catch { setSyncState('error') }
           }}
           onCancel={() => setConfirmDelIvId(null)}
         />
@@ -459,7 +460,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
               const rec: Candidate = { id: 'CAND-' + crypto.randomUUID(), name: inputValue.trim(), role: '', seniority: '', dept: '', source: '', stage: 'sourced', candStatus: 'Active', empType: '', compType: '', compAmount: '', city: '', state: '', country: '', client: '', email: '', resumeLink: '', skills: '', addedAt: now, updatedAt: now, notes: '', rejectionReason: '', offerAmount: '', offerDate: '', offerStatus: '' }
               setDb(prev => ({ ...prev, candidates: [rec, ...prev.candidates] }))
               setSyncState('syncing')
-              try { await supabase.from('candidates').insert(rec); setSyncState('ok') } catch { setSyncState('error') }
+              try { await dbWrite(supabase.from('candidates').insert(rec), 'hiring.addCandidate'); setSyncState('ok') } catch { setSyncState('error') }
             }}>+ Add Candidate</button>
           </div>
         </div>

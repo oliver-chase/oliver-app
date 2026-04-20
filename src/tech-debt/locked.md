@@ -83,6 +83,15 @@ If re-opening, add a dated note under the entry with the reason.
 - `src/components/sdr/SdrProspectDetail.tsx`: `queuedCount = pQueued.length` where `pQueued = approvalItems where status in {pending, approved}`.
 - Footer refresh button gated by `refreshing` state + optional `onRefresh` prop (set to SDR page `loadData`).
 
+### Supabase error surfacing (complete)
+- supabase-js v2 never throws on failure — it resolves with `{ error }`. All writes in `src/` now inspect `error` via one of these paths:
+  - `src/lib/db-helpers.ts` `dbWrite(query, label)` for single writes.
+  - `runWrites(setSyncState, ops, label)` for parallel HR batches (replaces the broken local `dbMulti` helper in 5 HR files).
+  - Direct `if (res.error) throw` in flows + HrOnboarding (already had it).
+  - `src/lib/db.ts` upsert/delete helpers destructure `error` and throw.
+- Admin UserManager surfaces write errors via inline red `.errorBanner`.
+- Do not reintroduce the `try { await supabase.from(x).op(...) } catch` pattern — the catch never fires.
+
 ---
 
 ## Out of scope / separate tasks (flag only)
