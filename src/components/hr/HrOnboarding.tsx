@@ -147,7 +147,7 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
   const doneTxt = type === 'onboarding' ? 'var(--accent-text)' : 'var(--red)'
 
   return (
-    <div className="page">
+    <div className="page page--split">
       {modal}
 
       {/* Start run modal */}
@@ -229,23 +229,26 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
         </div>
       )}
 
-      <div className="page-header">
-        <div>
-          <div className="page-title">{title}</div>
-          <div className="page-subtitle">{groups.length} active</div>
-        </div>
-        <div className="page-header-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
-          {type === 'offboarding' && (
-            <button
-              className={'btn btn-secondary btn-sm' + (showCompleted ? ' btn-active' : '')}
-              onClick={() => setShowCompleted(v => !v)}
-            >
-              Show Completed ({completedGroups.length})
-            </button>
-          )}
-          <button className="btn btn-primary" onClick={openStartRun}>+ Start Run</button>
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">{title}</div>
+            <div className="page-subtitle">{groups.length} active</div>
+          </div>
+          <div className="page-header-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
+            {type === 'offboarding' && (
+              <button
+                className={'btn btn-secondary btn-sm' + (showCompleted ? ' btn-active' : '')}
+                onClick={() => setShowCompleted(v => !v)}
+              >
+                Show Completed ({completedGroups.length})
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={openStartRun}>+ Start Run</button>
+          </div>
         </div>
       </div>
+      <div className="page-body">
 
       {groups.length > 0 ? groups.map(emp => {
         const overdueTasks = db.runTasks.filter(t =>
@@ -305,6 +308,7 @@ export default function HrOnboarding({ type, db, setDb, setSyncState, onNav }: P
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

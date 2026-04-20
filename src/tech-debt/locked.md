@@ -13,6 +13,13 @@ If re-opening, add a dated note under the entry with the reason.
 - All HR pages (Dashboard, Hiring, Directory, Onboarding, Offboarding, Inventory, Assignments, Tracks, Reports, Settings) render through `.page` or `.page--split > .section-header` and inherit the 36px.
 - Do not re-tune individual pages with inline `marginTop`.
 
+### HR page shell = `.page.page--split > .section-header + .page-body`
+- Every HR page (Dashboard, Hiring, Directory, Onboarding, Offboarding, Inventory, Assignments, Tracks, Reports, Settings) uses this exact structure.
+- `.section-header` provides the visual band below the topbar (surface bg + border-bottom + 36px top padding) so every page anchors identically.
+- `.page-body` is the scroll container (`flex:1; overflow-y:auto; padding:20px 24px 40px`).
+- `.page` without `page--split` is no longer used in HR. Do not add new pages with the plain `.page` shell.
+- Same-width filter-bar sits inside `.section-header` after `.page-header`.
+
 ### HR table standard = `.table-wrap > table`
 - Single pattern across Directory, Hiring (table view), Assignments, Inventory row views.
 - Inside `.split-list` (split pages) or direct child of `.page` (non-split). No flush variants, no inline padding overrides on `.split-list`.

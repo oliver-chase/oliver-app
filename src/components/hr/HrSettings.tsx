@@ -90,13 +90,16 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
   }
 
   return (
-    <div className="page">
+    <div className="page page--split">
       {modal}
       {toastEl}
 
-      <div className="page-header">
-        <div><div className="page-title">Settings</div></div>
+      <div className="section-header">
+        <div className="page-header">
+          <div><div className="page-title">Settings</div></div>
+        </div>
       </div>
+      <div className="page-body">
 
       <div className="tabs">
         <div className={'tab' + (tab === 'dropdowns' ? ' active' : '')} onClick={() => setTab('dropdowns')}>Dropdowns</div>
@@ -149,6 +152,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

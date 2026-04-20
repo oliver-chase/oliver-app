@@ -173,7 +173,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
   const assignHistory    = focusDev ? db.assignments.filter(a => a.deviceId === focusDev.id && a.status === 'returned') : []
 
   return (
-    <div className="page">
+    <div className="page page--split">
       {modal}
       {toastEl}
 
@@ -404,21 +404,23 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
         </div>
       )}
 
-      <div className="page-header">
-        <div>
-          <div className="page-title">Device Inventory</div>
-          <div className="page-subtitle">{db.devices.length} devices &middot; {avail} available</div>
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Device Inventory</div>
+            <div className="page-subtitle">{db.devices.length} devices &middot; {avail} available</div>
+          </div>
+          <button className="btn btn-primary" onClick={openAdd}>+ Add Device</button>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>+ Add Device</button>
+        <div className="filter-bar">
+          <button className={'btn btn-secondary btn-sm' + (!filterStatus ? ' btn-active' : '')} onClick={() => setFilterStatus('')}>All ({db.devices.length})</button>
+          <button className={'btn btn-secondary btn-sm' + (filterStatus === 'available' ? ' btn-active' : '')} onClick={() => setFilterStatus('available')}>Available ({avail})</button>
+          <button className={'btn btn-secondary btn-sm' + (filterStatus === 'assigned' ? ' btn-active' : '')} onClick={() => setFilterStatus('assigned')}>Assigned ({assigned})</button>
+          <button className={'btn btn-secondary btn-sm' + (filterStatus === 'inactive' ? ' btn-active' : '')} onClick={() => setFilterStatus('inactive')}>Inactive ({inactive})</button>
+          <button className={'btn btn-secondary btn-sm' + (filterStatus === 'lost' ? ' btn-active' : '')} onClick={() => setFilterStatus('lost')}>Lost ({lost})</button>
+        </div>
       </div>
-
-      <div className="filter-bar">
-        <button className={'btn btn-secondary btn-sm' + (!filterStatus ? ' btn-active' : '')} onClick={() => setFilterStatus('')}>All ({db.devices.length})</button>
-        <button className={'btn btn-secondary btn-sm' + (filterStatus === 'available' ? ' btn-active' : '')} onClick={() => setFilterStatus('available')}>Available ({avail})</button>
-        <button className={'btn btn-secondary btn-sm' + (filterStatus === 'assigned' ? ' btn-active' : '')} onClick={() => setFilterStatus('assigned')}>Assigned ({assigned})</button>
-        <button className={'btn btn-secondary btn-sm' + (filterStatus === 'inactive' ? ' btn-active' : '')} onClick={() => setFilterStatus('inactive')}>Inactive ({inactive})</button>
-        <button className={'btn btn-secondary btn-sm' + (filterStatus === 'lost' ? ' btn-active' : '')} onClick={() => setFilterStatus('lost')}>Lost ({lost})</button>
-      </div>
+      <div className="page-body">
 
       <div className="device-grid" id="device-grid">
         {visibleDevices.map(d => {
@@ -435,6 +437,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

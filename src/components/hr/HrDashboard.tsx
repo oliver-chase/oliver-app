@@ -132,15 +132,23 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
   }
 
   return (
-    <div className="page">
+    <div className="page page--split">
       {modal}
-
-      <div className="dash-quick-add">
-        <button className="btn btn-primary btn--compact" onClick={quickAddCand}>+ Candidate</button>
-        <button className="btn btn-secondary btn--compact" onClick={quickAddEmp}>+ Employee</button>
-        <button className="btn btn-secondary btn--compact" onClick={() => onNav('inventory')}>+ Device</button>
-        <button className="btn btn-secondary btn--compact" onClick={quickStartRun}>Start Run</button>
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Dashboard</div>
+            <div className="page-subtitle">{activeReqs} open reqs &middot; {totalEmps} employees &middot; {activeOnboarding} onboarding &middot; {activeOffboard} offboarding</div>
+          </div>
+          <div className="dash-quick-add">
+            <button className="btn btn-primary btn--compact" onClick={quickAddCand}>+ Candidate</button>
+            <button className="btn btn-secondary btn--compact" onClick={quickAddEmp}>+ Employee</button>
+            <button className="btn btn-secondary btn--compact" onClick={() => onNav('inventory')}>+ Device</button>
+            <button className="btn btn-secondary btn--compact" onClick={quickStartRun}>Start Run</button>
+          </div>
+        </div>
       </div>
+      <div className="page-body">
 
       {/* Row 1: Upcoming starts + Active onboarding */}
       <div className="dash-grid">
@@ -256,6 +264,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
             ))}
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -46,6 +46,7 @@ html,body{background:var(--bg);color:var(--text)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--spacing-md)}.card:hover{box-shadow:var(--shadow-card)}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--spacing-20);flex-wrap:wrap;gap:var(--spacing-sm)}
 .page--split{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;bottom:0;overflow:hidden!important;padding:0!important;display:flex;flex-direction:column}
+.page-body{flex:1;overflow-y:auto;padding:var(--spacing-20) var(--spacing-lg) 40px}
 .section-header{padding:calc(var(--spacing-md) + var(--spacing-20)) var(--spacing-lg) 0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
 .section-header .page-header{margin-bottom:var(--spacing-md)}
 .section-header .filter-bar{border-bottom:none;padding:0 0 var(--spacing-md);margin-bottom:0}

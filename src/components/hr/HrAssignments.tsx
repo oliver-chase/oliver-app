@@ -56,20 +56,22 @@ export default function HrAssignments({ db }: Props) {
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Assignments</div>
-          <div className="page-subtitle">{active.length} active</div>
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Assignments</div>
+            <div className="page-subtitle">{active.length} active</div>
+          </div>
+        </div>
+        <div className="filter-bar">
+          <div className="filter-search">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
+            <input placeholder="Filter by employee or device..." value={q} onChange={e => setQ(e.target.value)} />
+          </div>
         </div>
       </div>
-
-      <div className="filter-bar">
-        <div className="filter-search">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
-          <input placeholder="Filter by employee or device..." value={q} onChange={e => setQ(e.target.value)} />
-        </div>
-      </div>
+      <div className="page-body">
 
       <div className="table-wrap">
         <table>
@@ -102,6 +104,7 @@ export default function HrAssignments({ db }: Props) {
             })}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   )

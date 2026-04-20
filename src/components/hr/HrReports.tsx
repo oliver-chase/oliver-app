@@ -29,13 +29,16 @@ export default function HrReports({ db }: Props) {
   const depts   = [...new Set(db.candidates.map(c => c.dept).filter(Boolean))]
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <div className="page-title">Reports</div>
-          <div className="page-subtitle">Pipeline analytics</div>
+    <div className="page page--split">
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Reports</div>
+            <div className="page-subtitle">Pipeline analytics</div>
+          </div>
         </div>
       </div>
+      <div className="page-body">
 
       <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
         <div className="report-card-label">Date Range</div>
@@ -124,6 +127,7 @@ export default function HrReports({ db }: Props) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
