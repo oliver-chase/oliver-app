@@ -328,20 +328,25 @@ interface CommandModeProps {
 function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx, setActiveIdx, execute, enterChat, inputRef, onKey, onUploadClick }: CommandModeProps) {
   if (!config) return null
   const empty = filtered.length === 0
+
+  function onSend() {
+    const a = filtered[activeIdx]
+    if (a) execute(a)
+    else if (q.trim()) enterChat(q.trim())
+  }
+
   return (
     <div className="oliver-cmd">
-      <div className="oliver-cmd-search">
-        <input
-          ref={inputRef}
-          className="cp-input"
-          type="text"
-          placeholder={config.placeholder}
-          value={q}
-          onChange={e => setQ(e.currentTarget.value)}
-          onKeyDown={onKey}
-          aria-label="What do you want to do"
-        />
-      </div>
+      {/* Greeting */}
+      {config.greeting && (
+        <div className="oliver-cmd-greeting">
+          <div className="chatbot-msg chatbot-msg--assistant">
+            <div className="chatbot-msg-text">{config.greeting}</div>
+          </div>
+        </div>
+      )}
+
+      {/* FAB quick commands */}
       {fabActions.length > 0 && (
         <div className="oliver-fab-row" role="toolbar" aria-label="Quick commands">
           {fabActions.map(a => (
@@ -357,6 +362,7 @@ function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx
           ))}
         </div>
       )}
+
       {config.upload && (
         <div className="chatbot-upload-row">
           <button
@@ -370,6 +376,8 @@ function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx
           <span className="chatbot-upload-hint">{config.upload.hint}</span>
         </div>
       )}
+
+      {/* Grouped action list */}
       <div className="oliver-cmd-body" role="listbox">
         {empty ? (
           <div className="oliver-empty">
@@ -379,9 +387,7 @@ function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx
               <button className="btn btn-primary btn--compact" onClick={() => enterChat(q.trim() || undefined)}>Ask Oliver</button>
               <button
                 className="btn btn-ghost btn--compact"
-                onClick={() => {
-                  window.open('mailto:support@v-two.com?subject=Live%20chat%20request', '_blank')
-                }}
+                onClick={() => { window.open('mailto:support@v-two.com?subject=Live%20chat%20request', '_blank') }}
               >
                 Live chat
               </button>
@@ -412,8 +418,29 @@ function CommandMode({ config, q, setQ, filtered, grouped, fabActions, activeIdx
           </div>
         ))}
       </div>
-      <div className="oliver-cmd-footer">
-        <button className="btn-link" onClick={() => enterChat()}>Open chat &rarr;</button>
+
+      {/* Bottom search input + send arrow */}
+      <div className="oliver-cmd-input-row">
+        <input
+          ref={inputRef}
+          className="cp-input"
+          type="text"
+          placeholder={config.placeholder}
+          value={q}
+          onChange={e => setQ(e.currentTarget.value)}
+          onKeyDown={onKey}
+          aria-label="What do you want to do"
+        />
+        <button
+          className="chatbot-send oliver-cmd-send"
+          type="button"
+          aria-label="Execute or chat"
+          onMouseDown={e => { e.preventDefault(); onSend() }}
+        >
+          <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden="true">
+            <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
+          </svg>
+        </button>
       </div>
     </div>
   )
