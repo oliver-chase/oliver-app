@@ -44,15 +44,15 @@ UserProvider/permissions system scaffolded — wiring deferred (intentional, tra
 
 ## Open Issues by Priority
 
-### P1 — Token cleanup (2 items remaining)
-All resolved except sdr.css:
+### P1 — Token cleanup (closed 2026-04-20)
+Final raw font-size:Npx sites tokenized in commit `03754af`:
+- `sdr.css`: `.sdr-stat-value` 28px → `--font-size-display` (26px); `.sdr-detail-close` 18px → `--font-size-lg` (17px).
+- `chatbot.css`: `.chatbot-msg-model` 10px → `--font-size-3xs`; trigger-button dead text rules removed.
+- `admin.module.css`: `.tokenGroupLabel` 10px → `--font-size-3xs`.
 
-| File | Values | Token equivalent |
-|------|--------|-----------------|
-| `src/app/sdr/sdr.css` | `rgba(0,0,0,.4/.35)` backdrops | `--color-modal-overlay` / `--color-backdrop-overlay` |
-| `src/app/sdr/sdr.css` | `28px`, `11px`, `13px`, `18px` font sizes | `--font-size-*` tokens exist |
+`scripts/check-tokens.mjs` now gates hex / rgba / raw font-size:Npx on every push. 16 stylesheets scan clean.
 
-Also tracked: `hr.css` command palette overlays (`.45` opacity, shadow values) have no exact token match — intentional custom values, not P1.
+Historical note: rgba(0,0,0,.4/.35) backdrops in sdr.css were already fixed in commit #26 (see below). `hr.css` command palette overlays are retired (CommandPalette deleted).
 
 ### P2 — supabase-js silent-failure pattern (systemic)
 supabase-js v2 never throws on failure — it returns `{ data, error }`. Many

@@ -73,7 +73,12 @@ If re-opening, add a dated note under the entry with the reason.
 
 ### SDR CSS token sweep
 - Commit `475e16a` replaced remaining raw radius/spacing literals in `sdr.css` with tokens. No behaviour change.
-- Any future raw px in `sdr.css` should be treated as a regression.
+- Commit `03754af` tokenized the final two raw font-size:Npx (28→display, 18→lg). `check-tokens.mjs` now blocks any future raw px in CSS at CI time.
+
+### CI gate
+- `.github/workflows/ci.yml` runs on push + PR to main/staging: `npm ci → typecheck → check-tokens → build`.
+- `scripts/check-tokens.mjs` walks src/**/*.css and fails on raw hex, rgba, or `font-size:Npx` outside tokens.css. Exemptions: tokens.css itself, SVG data URI lines, comments.
+- Do not bypass CI. If a raw value is genuinely intentional, add a new semantic token to `tokens.css` and reference it — do not inline the value.
 
 ### Accounts portfolio editable `client_company`
 - `src/components/accounts/PortfolioView.tsx` `AccountCard`: `contentEditable` on company row; `stopPropagation` on click + keydown to prevent card navigation; Enter blurs; `onBlur` persists via `onUpdateCompany` only when value actually changed.
