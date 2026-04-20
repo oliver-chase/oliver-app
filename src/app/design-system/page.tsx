@@ -292,22 +292,28 @@ const LETTER_SPACINGS = [
 
 // ── Spacing ─────────────────────────────────────────────────────────────────
 
-const SPACING = [
-  { token: '--spacing-2xs', value: '2px' },
-  { token: '--spacing-3',   value: '3px' },
-  { token: '--spacing-xs',  value: '4px' },
-  { token: '--spacing-6',   value: '6px' },
-  { token: '--spacing-7',   value: '7px' },
-  { token: '--spacing-sm',  value: '8px' },
-  { token: '--spacing-10',  value: '10px' },
-  { token: '--spacing-12',  value: '12px' },
-  { token: '--spacing-14',  value: '14px' },
-  { token: '--spacing-md',  value: '16px' },
-  { token: '--spacing-20',  value: '20px' },
-  { token: '--spacing-lg',  value: '24px' },
-  { token: '--spacing-xl',  value: '32px' },
-  { token: '--spacing-2xl', value: '48px' },
-  { token: '--spacing-56',  value: '56px' },
+interface SpacingToken {
+  token: string
+  value: string
+  usages: string[]
+}
+
+const SPACING: SpacingToken[] = [
+  { token: '--spacing-2xs', value: '2px',  usages: ['Meta lines, dash-row-sub gap, detail-row padding, badge-overdue pill'] },
+  { token: '--spacing-3',   value: '3px',  usages: [] },
+  { token: '--spacing-xs',  value: '4px',  usages: ['Inline captions, pill padding-y, gs-item-sub, stat-sub'] },
+  { token: '--spacing-6',   value: '6px',  usages: ['Filter-bar gap, btn-ghost padding-x, .sync-dot height'] },
+  { token: '--spacing-7',   value: '7px',  usages: ['sdr-search-input padding-y'] },
+  { token: '--spacing-sm',  value: '8px',  usages: ['Tight micro gap in margin-scale (hr-row-pad), chip padding-x, pill padding-x'] },
+  { token: '--spacing-10',  value: '10px', usages: ['Topbar gap, filter-select padding-x, table td padding-x'] },
+  { token: '--spacing-12',  value: '12px', usages: ['Filter-bar padding-y, form-row gap, sdr-pagination gap'] },
+  { token: '--spacing-14',  value: '14px', usages: ['stat-grid gap, table-toolbar padding-y, sdr-prospect-card padding-y'] },
+  { token: '--spacing-md',  value: '16px', usages: ['Sub-header gap (hr-sub), card padding, form-group margin-bottom, section-header padding-y'] },
+  { token: '--spacing-20',  value: '20px', usages: ['Topbar padding-x, account-header-row top, split-list padding, detail-header padding'] },
+  { token: '--spacing-lg',  value: '24px', usages: ['Card group gap (hr-card-group), page padding-x, typeRow gap, anchorNav items wrap'] },
+  { token: '--spacing-xl',  value: '32px', usages: ['Section margin-bottom (accounts .section, hr-section), empty-state padding, topbar hamburger size'] },
+  { token: '--spacing-2xl', value: '48px', usages: ['Empty-state large padding, design-system page padding-y'] },
+  { token: '--spacing-56',  value: '56px', usages: ['Swatch block height on design-system page'] },
 ]
 
 // ── Radius ──────────────────────────────────────────────────────────────────
@@ -418,6 +424,7 @@ export default function DesignSystemPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [expandedType, setExpandedType] = useState<string | null>(null)
   const [expandedColor, setExpandedColor] = useState<string | null>(null)
+  const [expandedSpacing, setExpandedSpacing] = useState<string | null>(null)
 
   return (
     <div className="page">
@@ -597,15 +604,41 @@ export default function DesignSystemPage() {
       {/* ── SECTION 3 — SPACING ── */}
       <div className="section" id="sec-spacing">
         <div className="sectionTitle">3 — Spacing</div>
-        {SPACING.map(({ token, value }) => (
-          <div key={token} className="spacingRow">
-            <div className="spacingMeta">
-              <div className="spacingToken">{token}</div>
-              <div className="spacingValue">{value}</div>
+        <p className="sectionNote">Click a row to see where the token is used. Empty usage = candidate for removal.</p>
+        {SPACING.map(({ token, value, usages }) => {
+          const isOpen = expandedSpacing === token
+          return (
+            <div key={token}>
+              <div
+                className="spacingRow typeRowExpandable"
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                onClick={() => setExpandedSpacing(isOpen ? null : token)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedSpacing(isOpen ? null : token) } }}
+              >
+                <div className="spacingMeta">
+                  <div className="spacingToken">{token}</div>
+                  <div className="spacingValue">{value}</div>
+                </div>
+                <div className="spacingBar" style={{ width: `var(${token})` }} />
+                <span className="typeExpandIcon" aria-hidden="true">{isOpen ? '−' : '+'}</span>
+              </div>
+              {isOpen && (
+                <div className="typeUsages">
+                  <div className="typeUsagesLabel">
+                    {usages.length > 0 ? 'Used by (' + usages.length + ')' : 'No tracked usage — candidate for removal'}
+                  </div>
+                  {usages.map((u, i) => (
+                    <div key={i} className="typeUsageItem">
+                      <span className="typeUsageExample">{u}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="spacingBar" style={{ width: `var(${token})` }} />
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* ── SECTION 4 — RADIUS, SHADOWS, Z-INDEX, TRANSITIONS ── */}

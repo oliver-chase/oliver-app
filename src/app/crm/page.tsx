@@ -1,12 +1,27 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRegisterOliver } from '@/components/shared/OliverContext'
+import type { OliverConfig } from '@/components/shared/OliverContext'
 
 export default function CrmPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   function toggleSidebar() { setSidebarOpen(o => !o) }
   function closeSidebar() { setSidebarOpen(false) }
+
+  const oliverConfig = useMemo<OliverConfig>(() => ({
+    pageLabel: 'CRM & Business Development',
+    placeholder: 'Ask about the CRM roadmap…',
+    greeting: "Hi, I'm Oliver. CRM & Business Development is in the backlog — ask what it will cover or when it's expected.",
+    actions: [],
+    quickConvos: [
+      'What will CRM include?',
+      'When does CRM ship?',
+    ],
+  }), [])
+
+  useRegisterOliver(oliverConfig)
 
   return (
     <div className="app show-hamburger">
