@@ -121,7 +121,7 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
                     </span>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-10)' }}>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
                   <input
                     className="form-input settings-input-sm"
                     placeholder="Add value..."
@@ -140,11 +140,11 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
 
       {tab === 'data' && (
         <div className="card" style={{ maxWidth: 520 }}>
-          <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Database</div>
+          <div className="settings-label" style={{ marginBottom: 'var(--spacing-sm)' }}>Database</div>
           <p className="modal-body-p" style={{ marginBottom: 'var(--spacing-lg)' }}>All data is stored in Supabase. Use the Export JSON button below to create a local backup.</p>
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20 }}>
-            <div className="settings-label" style={{ marginBottom: 'var(--spacing-6)' }}>Export JSON Backup</div>
-            <p className="modal-body-p" style={{ marginBottom: 'var(--spacing-12)' }}>Download a full backup of all your data.</p>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--spacing-lg)' }}>
+            <div className="settings-label" style={{ marginBottom: 'var(--spacing-sm)' }}>Export JSON Backup</div>
+            <p className="modal-body-p" style={{ marginBottom: 'var(--spacing-md)' }}>Download a full backup of all your data.</p>
             <button className="btn btn-secondary" onClick={exportData}>Export JSON</button>
           </div>
         </div>

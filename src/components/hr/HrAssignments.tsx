@@ -89,7 +89,7 @@ export default function HrAssignments({ db }: Props) {
           </thead>
           <tbody>
             {active.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--text3)' }}>No active assignments.</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--spacing-lg)', color: 'var(--text3)' }}>No active assignments.</td></tr>
             ) : active.map(a => {
               const emp = db.employees.find(e => e.id === a.employeeId) || { name: 'Unknown', id: '' }
               const dev = db.devices.find(d => d.id === a.deviceId) || { name: 'Unknown', serial: '', id: '' }

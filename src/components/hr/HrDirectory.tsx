@@ -431,7 +431,7 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text3)' }}>No employees match this filter.</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-lg)', color: 'var(--text3)' }}>No employees match this filter.</td></tr>
                 ) : filtered.map(e => (
                   <tr
                     key={e.id}
@@ -500,7 +500,7 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
                   {empDevices.length === 0 ? (
                     <div className="dir-no-devices">No devices assigned</div>
                   ) : empDevices.map(dv => dv && (
-                    <div key={dv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div key={dv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--spacing-sm) 0', borderBottom: '1px solid var(--border)' }}>
                       <span>{dv.name}</span>
                       <span className="pill pill-gray device-serial-val">{dv.serial}</span>
                     </div>

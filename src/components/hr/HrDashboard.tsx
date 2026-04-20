@@ -24,7 +24,7 @@ function SectionHdr({ title, nav, onNav }: { title: string; nav: string; onNav: 
   return (
     <div className="dash-section-hdr">
       <div>{title}</div>
-      <div className="dash-section-hdr-link" onClick={() => onNav(nav)}>View all &rarr;</div>
+      <button type="button" className="btn-link" onClick={() => onNav(nav)}>View all &rarr;</button>
     </div>
   )
 }
@@ -187,7 +187,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
           <SectionHdr title="Upcoming interviews" nav="hiring" onNav={onNav} />
           <div className="card">
             {upcomingIvs.length === 0 ? <EmptyRow msg="No upcoming interviews" /> : upcomingIvs.map(iv => (
-              <div key={iv.candId + iv.date} className="dash-row" style={{ gap: 'var(--spacing-10)', padding: '9px 0' }} onClick={() => onNav('hiring')}>
+              <div key={iv.candId + iv.date} className="dash-row hr-row-pad" style={{ gap: 'var(--spacing-10)' }} onClick={() => onNav('hiring')}>
                 <div className="dash-row-mid">
                   <div className="dash-row-name dash-row-ellipsis">{iv.candName}</div>
                   <div className="dash-row-sub dash-row-ellipsis">with {iv.interviewer || 'TBD'} &middot; {iv.role}</div>
@@ -204,7 +204,7 @@ export default function HrDashboard({ db, setDb, onNav, setSyncState }: Props) {
           <SectionHdr title="Recent candidates" nav="hiring" onNav={onNav} />
           <div className="card">
             {recentCands.length === 0 ? <EmptyRow msg="No candidates yet" /> : recentCands.map(c => (
-              <div key={c.id} className="dash-row" style={{ padding: '9px 0' }} onClick={() => onNav('hiring')}>
+              <div key={c.id} className="dash-row hr-row-pad" onClick={() => onNav('hiring')}>
                 <div className="dash-row-mid">
                   <div className="dash-row-name dash-row-ellipsis">{c.name}</div>
                   <div className="dash-row-sub dash-row-ellipsis">{c.role}{c.dept ? ' · ' + c.dept : ''}</div>

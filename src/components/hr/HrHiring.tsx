@@ -442,7 +442,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                         </div>
                       )
                     })}
-                    {col.length === 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text3)', padding: '8px 0' }}>Empty</div>}
+                    {col.length === 0 && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text3)', padding: 'var(--spacing-sm) 0' }}>Empty</div>}
                   </div>
                 )
               })}
@@ -469,7 +469,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                 </thead>
                 <tbody>
                   {sortedList.length === 0 ? (
-                    <tr><td colSpan={12} style={{ textAlign: 'center', padding: 24, color: 'var(--gray)' }}>No candidates match this filter.</td></tr>
+                    <tr><td colSpan={12} style={{ textAlign: 'center', padding: 'var(--spacing-lg)', color: 'var(--gray)' }}>No candidates match this filter.</td></tr>
                   ) : sortedList.map(c => {
                     const ivCount = db.interviews.filter(iv => iv.candidateId === c.id).length
                     return (
@@ -580,7 +580,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                       </button>
                     ))}
                   </div>
-                  {selected.rejectionReason && <div className="detail-row" style={{ marginTop: 'var(--spacing-10)' }}><span className="detail-key">Reason</span><span className="detail-val detail-rej-reason">{selected.rejectionReason}</span></div>}
+                  {selected.rejectionReason && <div className="detail-row hr-sub"><span className="detail-key">Reason</span><span className="detail-val detail-rej-reason">{selected.rejectionReason}</span></div>}
                 </div>
 
                 {(selected.stage === 'offer' || selected.stage === 'hired') && (selected.offerAmount || selected.offerDate || selected.offerStatus) && (

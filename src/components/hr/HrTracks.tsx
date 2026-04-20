@@ -261,7 +261,7 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
                 </div>
               </div>
               <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-14)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-md)' }}>
                   <div className="track-sidebar-label" style={{ marginBottom: 0, padding: 0 }}>Tasks ({trackTasks.length})</div>
                   <button className="btn btn-sm btn-secondary" onClick={openAddTask}>+ Add Task</button>
                 </div>

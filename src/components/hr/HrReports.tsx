@@ -71,7 +71,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 'var(--spacing-20)' }}>
+      <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
         <div className="report-card-label">Date Range</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-10)', flexWrap: 'wrap' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -87,7 +87,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       </div>
 
       <div className="section-sublabel">All-time</div>
-      <div className="stat-grid" style={{ marginBottom: 'var(--spacing-12)' }}>
+      <div className="stat-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
         <div className="stat-card"><div className="stat-label">Total Candidates</div><div className="stat-value">{total}</div></div>
         <div className="stat-card"><div className="stat-label">Hired</div><div className="stat-value stat-value-green">{hired}</div></div>
         <div className="stat-card"><div className="stat-label">Active Pipeline</div><div className="stat-value">{active}</div></div>
@@ -95,7 +95,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       </div>
 
       <div className="section-sublabel">Period ({pending.from} to {pending.to})</div>
-      <div className="stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 20 }}>
+      <div className="stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 'var(--spacing-lg)' }}>
         <div className="stat-card"><div className="stat-label">Added this period</div><div className="stat-value">{addedInPeriod}</div></div>
         <div className="stat-card"><div className="stat-label">Interviews this period</div><div className="stat-value">{ivsInPeriod}</div></div>
       </div>
@@ -146,7 +146,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
       </div>
 
       {depts.length > 0 && (
-        <div className="card" style={{ marginTop: 'var(--spacing-md)' }}>
+        <div className="card hr-card-group">
           <div className="card-section-hdr">By Department</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-10)' }}>
             {depts.map(sp => (
@@ -159,7 +159,7 @@ export default function HrReports({ db, setDb, setSyncState }: Props) {
         </div>
       )}
 
-      <div className="card" style={{ marginTop: 'var(--spacing-md)' }}>
+      <div className="card hr-card-group">
         <div className="card-section-hdr">
           Recent Activity
           {db.activities.length > 0 && (
