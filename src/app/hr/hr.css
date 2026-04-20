@@ -8,7 +8,7 @@ html,body{background:var(--bg);color:var(--text)}
 /* .app-sidebar provided by components.css — purple, fixed, 220px */
 .main{margin-left:var(--sidebar-w);display:flex;flex-direction:column;min-height:100vh}
 .topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 var(--spacing-20);gap:var(--spacing-10);z-index:40}
-.page{flex:1;overflow-y:auto;padding:calc(var(--topbar-h) + var(--spacing-md)) 28px 40px}
+.page{padding:calc(var(--topbar-h) + var(--spacing-md)) 28px 40px}
 .topbar-hamburger{display:none;width:32px;height:32px;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);background:none;border:none;border-radius:var(--radius)}
 .topbar-hamburger:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 /* nav icon sizing — HR-specific, used inside .app-sidebar-item */
@@ -35,7 +35,7 @@ html,body{background:var(--bg);color:var(--text)}
 .btn-active{background:var(--accent-light);color:var(--accent-text);border-color:var(--accent)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--spacing-md)}.card:hover{box-shadow:var(--shadow-card)}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--spacing-20);flex-wrap:wrap;gap:var(--spacing-sm)}
-.page--split{overflow:hidden!important;padding:0!important;display:flex;flex-direction:column}
+.page--split{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;bottom:0;overflow:hidden!important;padding:0!important;display:flex;flex-direction:column}
 .section-header{padding:var(--spacing-md) var(--spacing-lg) 0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
 .section-header .page-header{margin-bottom:var(--spacing-12)}
 .section-header .filter-bar{border-bottom:none;padding:0 0 var(--spacing-12);margin-bottom:0}
@@ -57,7 +57,7 @@ html,body{background:var(--bg);color:var(--text)}
 .view-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-left:auto}
 .view-btn{padding:var(--spacing-6) var(--spacing-10);font-size:var(--font-size-xs);color:var(--text2);cursor:pointer;background:var(--surface);border:none;font-family:var(--font);transition:all .12s}
 .view-btn.active{background:var(--accent-light);color:var(--accent-text);font-weight:var(--font-weight-medium)}
-.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow-x:auto;overflow-y:hidden}
 .table-toolbar{display:flex;align-items:center;gap:var(--spacing-10);padding:var(--spacing-14) var(--spacing-md);border-bottom:1px solid var(--border)}
 table{width:100%;border-collapse:collapse}
 th{font-size:var(--font-size-xs);font-weight:var(--font-weight-semibold);color:var(--text2);text-transform:uppercase;letter-spacing:.5px;padding:var(--spacing-10) var(--spacing-14);text-align:left;border-bottom:1px solid var(--border);background:var(--bg);cursor:pointer;white-space:nowrap;user-select:none}
@@ -224,7 +224,7 @@ tr.selected td{background:var(--accent-light)}
   .topbar-hamburger{display:flex!important;min-height:var(--touch-target)}
 
   /* Page */
-  .page{padding:var(--spacing-md);overflow-y:auto;flex:1}
+  .page{padding:var(--spacing-md)}
   /* Track sidebar stacks above content on mobile */
   .track-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);overflow-y:visible;max-height:200px;overflow-y:auto}
 
@@ -249,8 +249,8 @@ tr.selected td{background:var(--accent-light)}
   .filter-select{min-height:36px;flex-shrink:0}
   .view-toggle{margin-left:0;flex-shrink:0}
   .section-header{padding:var(--spacing-12) var(--spacing-md) 0}
-  /* Page-level split layout on mobile — keep overflow behavior */
-  .page--split{overflow:hidden!important;padding:0!important}
+  /* Page-level split layout on mobile — full width, above bottom-nav */
+  .page--split{left:0;bottom:60px;overflow:hidden!important;padding:0!important}
 
   /* Kanban — vertical stack */
   .kanban{flex-direction:column;overflow-x:hidden;gap:var(--spacing-12)}
