@@ -289,7 +289,9 @@ These are the ONLY places raw values appear outside tokens.css, and each is just
 4. **`login/page.tsx`** — Microsoft logo (fixed brand colors).
 5. **`OrgChart.tsx`** drag-ghost inline z-index `9999` — must sit above all app overlays, no token.
 6. **HR CP overlay** `z-index:400`, `padding-top:80px`, `max-height:calc(100vh - 160px)` — layout-internal magic numbers, not design tokens.
-7. **tokens.css** itself — raw values permitted (the definitions).
+7. **`hr.css:16` `:root{}` override** — sets `--bg`, `--text2`, `--text3` scoped to HR route segments. Legacy alias pattern, kept for back-compat; static export isolates per-route CSS so no leakage in practice. Migrate to `.hr-root` scope in a future pass if the cascade becomes a hazard.
+8. **`hr.css` filter/form-select carets (L67, L150)** — SVG `data:` URI with inline `%236b6a65` (= `--color-text-soft`). CSS vars cannot be used inside data URIs. Comment inline at L68.
+9. **tokens.css** itself — raw values permitted (the definitions).
 
 ---
 

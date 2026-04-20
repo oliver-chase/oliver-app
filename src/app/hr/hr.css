@@ -65,7 +65,7 @@ html,body{background:var(--bg);color:var(--text)}
 .filter-search input{background:none;border:none;outline:none;font-size:var(--font-size-xs);color:var(--text);width:100%}
 .filter-search input::placeholder{color:var(--text3)}
 .filter-select{padding:var(--spacing-6) 28px var(--spacing-6) var(--spacing-10);border:1px solid var(--border);border-radius:var(--radius);font-size:var(--font-size-xs);font-family:var(--font);background:var(--surface);color:var(--text);outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6a65' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
-/* Note: SVG data URI uses %236b6a65 (--text2 value) — CSS vars cannot be used inside data URIs */
+/* Note: SVG data URI uses %236b6a65 (= --color-text-soft) — CSS vars cannot be used inside data URIs. Same value reused in .form-select below. */
 .filter-select:focus{border-color:var(--accent)}
 .view-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-left:auto}
 .view-btn{padding:var(--spacing-6) var(--spacing-10);font-size:var(--font-size-xs);color:var(--text2);cursor:pointer;background:var(--surface);border:none;font-family:var(--font);transition:all .12s}
