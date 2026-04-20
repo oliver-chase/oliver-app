@@ -27,13 +27,13 @@ const BLANK: EmpForm = {
 
 function StatusPill({ s }: { s: string }) {
   const label = s ? s.charAt(0).toUpperCase() + s.slice(1) : '—'
-  if (!s) return <span className="pill pill--xs pill-gray">—</span>
-  if (['active', 'good', 'new', 'available'].includes(s)) return <span className="pill pill--xs pill-purple">{label}</span>
-  if (s === 'onboarding') return <span className="pill pill--xs pill-amber">{label}</span>
-  if (s === 'pending') return <span className="pill pill--xs pill-amber">{label}</span>
-  if (s === 'inactive') return <span className="pill pill--xs pill-gray">{label}</span>
-  if (s === 'lost') return <span className="pill pill--xs pill-red">{label}</span>
-  return <span className="pill pill--xs pill-gray">{label}</span>
+  if (!s) return <span className="pill pill-gray">—</span>
+  if (['active', 'good', 'new', 'available'].includes(s)) return <span className="pill pill-purple">{label}</span>
+  if (s === 'onboarding') return <span className="pill pill-amber">{label}</span>
+  if (s === 'pending') return <span className="pill pill-amber">{label}</span>
+  if (s === 'inactive') return <span className="pill pill-gray">{label}</span>
+  if (s === 'lost') return <span className="pill pill-red">{label}</span>
+  return <span className="pill pill-gray">{label}</span>
 }
 
 const COLS = ['name', 'role', 'dept', 'status', 'location', 'startDate', 'manager', 'buddy'] as const
