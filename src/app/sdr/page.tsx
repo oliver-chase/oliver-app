@@ -1,12 +1,15 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import SdrOverview from '@/components/sdr/SdrOverview'
 import SdrProspects from '@/components/sdr/SdrProspects'
 import SdrDrafts from '@/components/sdr/SdrDrafts'
 import SdrOutreach from '@/components/sdr/SdrOutreach'
 import SdrProspectDetail from '@/components/sdr/SdrProspectDetail'
+import { useRegisterOliver } from '@/components/shared/OliverContext'
+import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import type { SdrProspect, SdrApprovalItem, SdrSend, SdrTab, SdrFilters } from '@/components/sdr/types'
 
 const TABS: { id: SdrTab; label: string }[] = [
@@ -60,6 +63,44 @@ export default function SdrPage() {
     setTab(t)
     closeSidebar()
   }
+
+  const router = useRouter()
+  const prospectsRef = useRef(prospects);         prospectsRef.current = prospects
+  const approvalItemsRef = useRef(approvalItems); approvalItemsRef.current = approvalItems
+  const sendsRef = useRef(sends);                 sendsRef.current = sends
+  const tabRef = useRef(tab);                     tabRef.current = tab
+
+  const oliverConfig = useMemo<OliverConfig>(() => {
+    const actions: OliverAction[] = [
+      ...TABS.map<OliverAction>(t => ({ id: 'tab-' + t.id, label: 'Go to ' + t.label, group: 'Navigate', run: () => { setTab(t.id); setSidebarOpen(false) } })),
+      { id: 'nav-hub',      label: 'Back to Hub',            group: 'Navigate', run: () => router.push('/') },
+      { id: 'nav-accounts', label: 'Go to Account Planning', group: 'Navigate', run: () => router.push('/accounts') },
+      { id: 'nav-hr',       label: 'Go to HR & People Ops',  group: 'Navigate', run: () => router.push('/hr') },
+      { id: 'nav-admin',    label: 'Go to Admin',            group: 'Navigate', run: () => router.push('/admin') },
+    ]
+    return {
+      pageLabel: 'SDR & Outreach',
+      placeholder: 'What do you want to do?',
+      greeting: "Hi, I'm Oliver. Ask about the prospect pipeline, drafts, or outreach sends.",
+      actions,
+      quickConvos: [
+        'Which prospects are ready for outreach this week?',
+        'How many drafts are awaiting approval?',
+        'Summarise recent sends and reply rates.',
+      ],
+      contextPayload: () => ({
+        currentTab: tabRef.current,
+        summary: {
+          prospects: prospectsRef.current.length,
+          drafts_pending: approvalItemsRef.current.filter(a => a.status === 'pending').length,
+          sends_total: sendsRef.current.length,
+        },
+      }),
+      onChatRefresh: () => { loadData() },
+    }
+  }, [router, loadData])
+
+  useRegisterOliver(oliverConfig)
 
   function patchFilters(f: Partial<SdrFilters>) {
     setFilters(prev => ({ ...prev, ...f }))

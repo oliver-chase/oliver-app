@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/context/UserContext'
 import { UserManager } from '@/components/admin/UserManager'
 import { TokenEditor } from '@/components/admin/TokenEditor'
 import { ComponentLibrary } from '@/components/admin/ComponentLibrary'
+import { useRegisterOliver } from '@/components/shared/OliverContext'
+import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import styles from './admin.module.css'
 
 type Tab = 'users' | 'tokens' | 'components'
@@ -21,6 +23,29 @@ export default function AdminPage() {
       router.replace('/')
     }
   }, [isAdmin, appUser, router])
+
+  const oliverConfig = useMemo<OliverConfig>(() => {
+    const actions: OliverAction[] = [
+      { id: 'tab-users',      label: 'Open Users',        group: 'Navigate', run: () => setTab('users') },
+      { id: 'tab-tokens',     label: 'Open Design Tokens',group: 'Navigate', run: () => setTab('tokens') },
+      { id: 'tab-components', label: 'Open Components',   group: 'Navigate', run: () => setTab('components') },
+      { id: 'nav-ds',         label: 'Go to Design System', group: 'Navigate', run: () => router.push('/design-system') },
+      { id: 'nav-hub',        label: 'Back to Hub',        group: 'Navigate', run: () => router.push('/') },
+    ]
+    return {
+      pageLabel: 'Admin',
+      placeholder: 'What do you want to do?',
+      greeting: "Hi, I'm Oliver. Ask about admin actions — users, tokens, components.",
+      actions,
+      quickConvos: [
+        'How do I add a new admin user?',
+        'Which tokens control brand pink and purple?',
+      ],
+      contextPayload: () => ({ currentTab: tab }),
+    }
+  }, [router, tab])
+
+  useRegisterOliver(oliverConfig)
 
   if (!appUser || !isAdmin) return null
 
