@@ -375,6 +375,7 @@ export default function AccountsApp() {
                 actions={data.actions}
                 projects={data.projects}
                 onSelectAccount={handleSelectAccount}
+                onUpdateAccount={handleUpdateAccount}
               />
           )}
         </main>

@@ -8,6 +8,7 @@ interface Props {
   actions: Action[]
   projects: Project[]
   onSelectAccount: (id: string) => void
+  onUpdateAccount?: (account: Account) => void | Promise<void>
 }
 
 const TIER_CLASS: Record<string, string> = {
@@ -40,9 +41,10 @@ interface CardProps {
   projectCount: number
   isArchived: boolean
   onSelect: () => void
+  onUpdateCompany?: (value: string) => void | Promise<void>
 }
 
-function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount, isArchived, onSelect }: CardProps) {
+function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount, isArchived, onSelect, onUpdateCompany }: CardProps) {
   const tier = bg?.account_tier || 'Growth'
   const tierClass = TIER_CLASS[tier] || 'tier-growth'
   const lastUpdate = bg?.last_updated ? fmtDate(bg.last_updated) : 'Never'
@@ -70,7 +72,23 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
         </div>
         {isArchived && <span className="badge-archived">Archived</span>}
       </div>
-      <div className="account-card-company">
+      <div
+        className="account-card-company"
+        data-placeholder="Client company"
+        contentEditable={!!onUpdateCompany}
+        suppressContentEditableWarning
+        onClick={e => { if (onUpdateCompany) e.stopPropagation() }}
+        onKeyDown={e => {
+          if (!onUpdateCompany) return
+          e.stopPropagation()
+          if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLElement).blur() }
+        }}
+        onBlur={e => {
+          if (!onUpdateCompany) return
+          const v = e.currentTarget.textContent?.trim() ?? ''
+          if (v !== (account.client_company ?? '')) onUpdateCompany(v)
+        }}
+      >
         {account.client_company || ''}
       </div>
       <div className="account-card-stats">
@@ -84,7 +102,7 @@ function AccountCard({ account, bg, stakeholderCount, actionCount, projectCount,
   )
 }
 
-export default function PortfolioView({ accounts, background, stakeholders, actions, projects, onSelectAccount }: Props) {
+export default function PortfolioView({ accounts, background, stakeholders, actions, projects, onSelectAccount, onUpdateAccount }: Props) {
   const bgFor = (id: string) => background.find(b => b.account_id === id && !b.engagement_id)
 
   const active = accounts.filter(a => a.status !== 'Archived')
@@ -110,6 +128,7 @@ export default function PortfolioView({ accounts, background, stakeholders, acti
         projectCount={projects.filter(p => p.account_id === acct.account_id).length}
         isArchived={isArchived}
         onSelect={() => onSelectAccount(acct.account_id)}
+        onUpdateCompany={onUpdateAccount ? v => onUpdateAccount({ ...acct, client_company: v }) : undefined}
       />
     )
   }
