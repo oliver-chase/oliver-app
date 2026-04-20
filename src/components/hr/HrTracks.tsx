@@ -228,6 +228,14 @@ export default function HrTracks({ db, setDb, setSyncState }: Props) {
         </div>
       )}
 
+      <div className="section-header">
+        <div className="page-header">
+          <div>
+            <div className="page-title">Tracks</div>
+            <div className="page-subtitle">{db.tracks.length} template{db.tracks.length === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+      </div>
       <div className="split-layout">
         <div className="track-sidebar">
           <div className="track-sidebar-label">Track Templates</div>
