@@ -45,7 +45,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-popover);
-  max-height: 260px;
+  max-height: 400px;
   min-width: 180px;
   overflow: hidden;
   display: flex;
@@ -67,7 +67,7 @@
 
 .app-popover-list {
   overflow-y: auto;
-  max-height: 200px;
+  max-height: 360px;
   padding: var(--spacing-xs) 0;
 }
 .app-popover-item {
@@ -158,18 +158,18 @@
 .app-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal);
+  z-index: var(--z-modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-md);
+  padding: 80px var(--spacing-lg) var(--spacing-lg);
   background: var(--color-modal-overlay);
 }
 .app-modal {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
-  max-width: 560px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   display: flex;

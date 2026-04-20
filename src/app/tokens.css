@@ -191,13 +191,14 @@
   --shadow-chatbot-pink:  0 4px 12px rgba(230,0,117,.35);
 
   /* ── Z-index ─────────────────────────────────────────────────────────── */
-  --z-base:    1;
-  --z-org-svg: 0;
-  --z-sidebar: 50;
-  --z-topbar:  calc(var(--z-sidebar) - 10);
-  --z-popover: 100;
-  --z-modal:   200;
-  --z-toast:   300;
+  --z-base:           1;
+  --z-org-svg:        0;
+  --z-sidebar:        50;
+  --z-topbar:         calc(var(--z-sidebar) - 10);
+  --z-modal-backdrop: 999;
+  --z-modal:          1000;
+  --z-popover:        1001;
+  --z-toast:          1003;
 
   /* ── Motion ──────────────────────────────────────────────────────────── */
   --transition-quick: 180ms ease;

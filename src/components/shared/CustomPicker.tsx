@@ -62,7 +62,7 @@ export default function CustomPicker({
       position: 'fixed',
       left: rect.left,
       minWidth: Math.max(rect.width, 180),
-      zIndex: 9999,
+      zIndex: 1001,
     };
     if (window.innerHeight - rect.bottom < 280) {
       style.bottom = window.innerHeight - rect.top + 2;
