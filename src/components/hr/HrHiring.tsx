@@ -6,7 +6,6 @@ import CustomPicker from '@/components/shared/CustomPicker'
 import PromoteEmployeeModal from './PromoteEmployeeModal'
 import InterviewLogModal from './InterviewLogModal'
 import EditCandidateModal from './EditCandidateModal'
-import AIIntakeModal from './AIIntakeModal'
 import DeleteConfirmModal from '@/components/shared/DeleteConfirmModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Candidate, Employee, Interview } from './types'
@@ -70,7 +69,6 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   const [confirmDelIvId, setConfirmDelIvId] = useState<string | null>(null)
   const [editCand, setEditCand] = useState<Candidate | null>(null)
   const [confirmDelCand, setConfirmDelCand] = useState<Candidate | null>(null)
-  const [intakeOpen, setIntakeOpen] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -327,17 +325,6 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
           />
         )
       })()}
-      {intakeOpen && (
-        <AIIntakeModal
-          onCancel={() => setIntakeOpen(false)}
-          onConfirm={async records => {
-            setSyncState('syncing')
-            setDb(prev => ({ ...prev, candidates: [...records, ...prev.candidates] }))
-            setIntakeOpen(false)
-            try { await supabase.from('candidates').insert(records); setSyncState('ok') } catch { setSyncState('error') }
-          }}
-        />
-      )}
       {confirmDelIvId && (
         <DeleteConfirmModal
           title="Delete interview"
@@ -359,9 +346,6 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
             <div className="page-subtitle">{subtitle}</div>
           </div>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-            <button className="btn-dashed btn--compact" type="button" onClick={() => setIntakeOpen(true)}>
-              <span className="btn-ai-icon">{'\u2728'}</span> AI Intake
-            </button>
             <button className="btn btn-primary" onClick={async () => {
               const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputPlaceholder: 'Full name', confirmLabel: 'Add' })
               if (buttonValue !== 'confirm' || !inputValue.trim()) return

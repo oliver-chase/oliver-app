@@ -41,7 +41,7 @@ html,body{background:var(--bg);color:var(--text)}
 .btn-ghost{background:none;border:none;color:var(--text);padding:var(--spacing-6) var(--spacing-10)}.btn-ghost:hover:not(:disabled){background:var(--bg)}
 .btn-sm{padding:var(--spacing-5) var(--spacing-10);font-size:var(--font-size-xs)}
 /* btn-danger inherits from components.css (solid red bg, white text — matches accounts) */
-.btn-link{background:none;color:var(--accent);padding:0;font-size:var(--font-size-xs);text-decoration:underline;cursor:pointer;border:none;font-family:var(--font)}
+.btn-link{background:none;color:var(--accent);padding:0;font-size:var(--font-size-xs);text-decoration:none;cursor:pointer;border:none;font-family:var(--font)}
 .btn-active{background:var(--accent-light);color:var(--accent-text);border-color:var(--accent)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--spacing-md)}.card:hover{box-shadow:var(--shadow-card)}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--spacing-20);flex-wrap:wrap;gap:var(--spacing-sm)}
@@ -57,7 +57,8 @@ html,body{background:var(--bg);color:var(--text)}
 .stat-label{font-size:var(--font-size-xs);color:var(--text2);font-weight:var(--font-weight-medium);margin-bottom:var(--spacing-xs)}
 .stat-value{font-size:var(--font-size-display);font-weight:var(--font-weight-semibold);letter-spacing:-.8px;line-height:1}
 .stat-sub{font-size:var(--font-size-xs);color:var(--text3);margin-top:var(--spacing-xs)}
-.filter-bar{display:flex;align-items:center;gap:var(--spacing-sm);flex-wrap:wrap;padding:var(--spacing-12) 0;margin-bottom:var(--spacing-md);border-bottom:1px solid var(--border)}
+.filter-bar{display:flex;align-items:center;gap:var(--spacing-sm);flex-wrap:nowrap;overflow-x:auto;padding:var(--spacing-12) 0;margin-bottom:var(--spacing-md);border-bottom:1px solid var(--border)}
+.filter-bar .picker-wrap{width:auto;flex-shrink:0}
 .filter-search{display:flex;align-items:center;gap:var(--spacing-sm);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--spacing-6) var(--spacing-12);min-width:220px}
 .filter-search input{background:none;border:none;outline:none;font-size:var(--font-size-xs);color:var(--text);width:100%}
 .filter-search input::placeholder{color:var(--text3)}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useId } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 export type PickerOption = { value: string; label: string };
 
@@ -32,6 +32,7 @@ export default function CustomPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [popStyle, setPopStyle] = useState<React.CSSProperties>({});
 
   const wrapRef  = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -52,6 +53,24 @@ export default function CustomPicker({
     !query || unassignedLabel.toLowerCase().includes(query.toLowerCase())
   );
   const currentVal = Array.isArray(selected) ? (selected[0] ?? '') : (selected ?? '');
+
+  // ── Fixed positioning — escapes overflow:hidden ancestors (modals, split panels) ──
+  useEffect(() => {
+    if (!isOpen || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      left: rect.left,
+      minWidth: Math.max(rect.width, 180),
+      zIndex: 9999,
+    };
+    if (window.innerHeight - rect.bottom < 280) {
+      style.bottom = window.innerHeight - rect.top + 2;
+    } else {
+      style.top = rect.bottom + 2;
+    }
+    setPopStyle(style);
+  }, [isOpen]);
 
   // ── Click-outside — matches source: setTimeout + document.mousedown ───────
   useEffect(() => {
@@ -200,7 +219,7 @@ export default function CustomPicker({
       </button>
 
       {isOpen && (
-        <div className="app-popover" role="presentation">
+        <div className="app-popover" role="presentation" style={popStyle}>
 
           {/* Search input */}
           {searchable && (

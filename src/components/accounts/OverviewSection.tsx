@@ -296,9 +296,9 @@ export default function OverviewSection({ accountId, data, setData }: Props) {
         <div className="overview-stat" title="Date of the most recent note added for this account.">
           <div className="overview-stat-label">Last Activity</div>
           {lastNote ? (
-            <div className="overview-stat-val">{fmtDate(lastNote.date)}</div>
+            <div className="overview-stat-date">{fmtDate(lastNote.date)}</div>
           ) : (
-            <div className="overview-stat-val faded">No activity</div>
+            <div className="overview-stat-date" style={{ color: 'var(--gray)', fontStyle: 'italic' }}>No activity</div>
           )}
         </div>
 

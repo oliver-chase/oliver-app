@@ -16,6 +16,7 @@ import GlobalSearch from '@/components/hr/GlobalSearch'
 import CommandPalette from '@/components/hr/CommandPalette'
 import StepFlowRunner from '@/components/hr/StepFlowRunner'
 import HrAgentPanel from '@/components/hr/HrAgentPanel'
+import AIIntakeModal from '@/components/hr/AIIntakeModal'
 import { useAppModal } from '@/components/shared/AppModal'
 import type { Flow, EditTarget } from '@/components/hr/step-flow-types'
 import type { HrDB, HrPage, Candidate, Employee, Device } from '@/components/hr/types'
@@ -59,6 +60,7 @@ export default function HrPage() {
   const [cpOpen, setCpOpen]           = useState(false)
   const [activeFlow, setActiveFlow]   = useState<Flow<unknown> | null>(null)
   const [pendingEdit, setPendingEdit] = useState<{ target: EditTarget; id: string } | null>(null)
+  const [intakeOpen, setIntakeOpen]   = useState(false)
   const { modal, showModal }          = useAppModal()
 
   const requestEdit = useCallback((target: EditTarget, id: string) => {
@@ -196,6 +198,17 @@ export default function HrPage() {
   return (
     <div className="app show-hamburger">
       {modal}
+      {intakeOpen && (
+        <AIIntakeModal
+          onCancel={() => setIntakeOpen(false)}
+          onConfirm={async records => {
+            setSyncState('syncing')
+            setDb(prev => ({ ...prev, candidates: [...(records as Candidate[]), ...prev.candidates] }))
+            setIntakeOpen(false)
+            try { await supabase.from('candidates').insert(records); setSyncState('ok') } catch { setSyncState('error') }
+          }}
+        />
+      )}
       {activeFlow && (
         <StepFlowRunner
           flow={activeFlow}
@@ -286,7 +299,7 @@ export default function HrPage() {
           {renderPage()}
         </main>
 
-        <HrAgentPanel db={db} currentPage={page} />
+        <HrAgentPanel db={db} currentPage={page} onOpenIntake={() => setIntakeOpen(true)} />
 
         <nav className="bottom-nav" id="bottom-nav" aria-label="Bottom navigation">
           {([

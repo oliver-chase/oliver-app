@@ -14,9 +14,10 @@ type MsgItem =
 interface Props {
   db: HrDB
   currentPage: HrPage
+  onOpenIntake?: () => void
 }
 
-export default function HrAgentPanel({ db, currentPage }: Props) {
+export default function HrAgentPanel({ db, currentPage, onOpenIntake }: Props) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [items, setItems] = useState<MsgItem[]>([])
@@ -179,6 +180,17 @@ export default function HrAgentPanel({ db, currentPage }: Props) {
               </div>
             )}
           </div>
+
+          {onOpenIntake && currentPage === 'hiring' && (
+            <div className="chatbot-upload-zone">
+              <div className="chatbot-upload-row">
+                <button className="btn-dashed btn--compact" type="button" onClick={onOpenIntake}>
+                  <span className="btn-ai-icon">{'\u2728'}</span> AI Intake
+                </button>
+                <span className="chatbot-upload-hint">Import candidates from file or text</span>
+              </div>
+            </div>
+          )}
 
           <div className="chatbot-input-row">
             <textarea
