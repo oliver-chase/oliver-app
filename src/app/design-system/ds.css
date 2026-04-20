@@ -181,6 +181,13 @@
   padding: var(--spacing-2xs) 0;
 }
 
+.layoutUsage {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-2xs);
+  line-height: 1.4;
+}
+
 .swatchMeta {
   padding: var(--spacing-xs) var(--spacing-sm);
 }

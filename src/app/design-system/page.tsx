@@ -376,15 +376,24 @@ const PICKER_OPTIONS = [
 // ── Layout tokens ───────────────────────────────────────────────────────────
 
 const LAYOUT_BARS = [
-  { token: '--sidebar-w',          value: '220px',  label: 'Sidebar width',       color: 'var(--color-brand-purple)',      dir: 'h' as const },
-  { token: '--chatbot-drawer-w',   value: '360px',  label: 'Chatbot panel width', color: 'var(--color-status-active-bg)',  dir: 'h' as const },
-  { token: '--hub-card-max-w',     value: '420px',  label: 'Hub card max-width',  color: 'var(--color-purple-overlay)',    dir: 'h' as const },
-  { token: '--topbar-h',           value: '50px',   label: 'Topbar height',       color: 'var(--color-brand-pink)',       dir: 'v' as const },
-  { token: '--filterbar-h',        value: '52px',   label: 'Filterbar height',    color: 'var(--color-brand-pink-light)', dir: 'v' as const },
-  { token: '--touch-target',       value: '44px',   label: 'Touch target (WCAG)', color: 'var(--color-green)',             dir: 'v' as const },
-  { token: '--chatbot-trigger-size', value: '48px', label: 'Chatbot trigger',     color: 'var(--color-amber)',             dir: 'sq' as const },
-  { token: '--org-node-w',         value: '220px',  label: 'Org node width',      color: 'var(--color-tier-strategic)',   dir: 'h' as const },
-  { token: '--sync-dot-size',      value: '7px',    label: 'Sync dot',            color: 'var(--color-green)',             dir: 'sq' as const },
+  { token: '--sidebar-w',          value: '220px',  label: 'Sidebar width',       color: 'var(--color-brand-purple)',      dir: 'h' as const,
+    usages: ['app-sidebar width', 'topbar + main left offset on Accounts/HR/SDR/CRM'] },
+  { token: '--chatbot-drawer-w',   value: '360px',  label: 'Chatbot panel width', color: 'var(--color-status-active-bg)',  dir: 'h' as const,
+    usages: ['OliverDock .chatbot-panel width'] },
+  { token: '--hub-card-max-w',     value: '420px',  label: 'Hub card max-width',  color: 'var(--color-purple-overlay)',    dir: 'h' as const,
+    usages: ['ModuleCard max-width on hub page'] },
+  { token: '--topbar-h',           value: '50px',   label: 'Topbar height',       color: 'var(--color-brand-pink)',       dir: 'v' as const,
+    usages: ['Fixed topbar height across all modules', 'page-top math: topbar-h + spacing-md + spacing-20'] },
+  { token: '--filterbar-h',        value: '52px',   label: 'Filterbar height',    color: 'var(--color-brand-pink-light)', dir: 'v' as const,
+    usages: ['Accounts main-with-filterbar padding-top calc'] },
+  { token: '--touch-target',       value: '44px',   label: 'Touch target (WCAG)', color: 'var(--color-green)',             dir: 'v' as const,
+    usages: ['Mobile min-height on btn/input/detail-close', 'topbar-hamburger mobile'] },
+  { token: '--chatbot-trigger-size', value: '48px', label: 'Chatbot trigger',     color: 'var(--color-amber)',             dir: 'sq' as const,
+    usages: ['OliverDock trigger button size'] },
+  { token: '--org-node-w',         value: '220px',  label: 'Org node width',      color: 'var(--color-tier-strategic)',   dir: 'h' as const,
+    usages: ['Accounts org-chart node width'] },
+  { token: '--sync-dot-size',      value: '7px',    label: 'Sync dot',            color: 'var(--color-green)',             dir: 'sq' as const,
+    usages: ['Accounts SyncDot (sync-dot width/height)'] },
 ]
 
 // ── Component token table ───────────────────────────────────────────────────
@@ -880,7 +889,7 @@ export default function DesignSystemPage() {
 
         <div className="groupTitle">Dimension Tokens</div>
         <div className="layoutDiagrams">
-          {LAYOUT_BARS.map(({ token, value, label, color, dir }) => (
+          {LAYOUT_BARS.map(({ token, value, label, color, dir, usages }) => (
             <div key={token} className={'layoutItem layoutItem--' + dir}>
               <div
                 className={'layoutBar layoutBar--' + dir}
@@ -896,6 +905,9 @@ export default function DesignSystemPage() {
                 <div className="layoutToken">{token}</div>
                 <div className="layoutValue">{value}</div>
                 <div className="layoutLabel">{label}</div>
+                {usages.map((u, i) => (
+                  <div key={i} className="layoutUsage">{u}</div>
+                ))}
               </div>
             </div>
           ))}
