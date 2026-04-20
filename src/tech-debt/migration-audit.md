@@ -1,6 +1,27 @@
 # oliver-app Migration Audit
-**Last updated:** 2026-04-18
+**Last updated:** 2026-04-20
 **Scope:** 93 commits over 48 hours (Apr 16–18 2026). Full audit of all 92 original commits complete.
+
+## 2026-04-20 session — OliverDock unification + cleanup sweep
+
+Pushes on staging after the Apr 18 audit snapshot:
+- HR filter-bar height parity (pickers match search + btn-sm).
+- OliverDock + OliverContext scaffold — shared chatbot mounted once in root layout.
+- HR wiring + cp-fab / CommandPalette / HrAgentPanel removal.
+- Accounts wiring + ChatbotPanel removal.
+- Upload pipeline generalised (parse / dryRun / commit) + Accounts re-wired
+  against /api/parse-image, /api/parse-document, /api/confirm-write.
+- SDR / Hub / Admin Oliver configs (placeholder, greeting, nav, quickConvos).
+- sdr.css token sweep (radius-pill, spacing-6/7/2xs/xl).
+- Dead MSAL + guard scaffolding removed (−307 lines); UserContext reduced
+  to default-only hook (UserProvider re-added when app_users is seeded).
+- Design system page resolves swatch values at runtime from tokens.css.
+- Portfolio card client_company now editable with placeholder.
+- SDR detail panel: Queued-drafts badge + refresh button.
+
+All TODO commits from the original port list are now either shipped or
+confirmed absorbed during the rewrite (sdrPatchApprovalItem, isSent, and
+hiring closeModal no longer exist in the new codebase).
 
 ---
 
