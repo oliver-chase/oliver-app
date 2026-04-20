@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
@@ -55,6 +55,19 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
   const [form, setForm]               = useState<EmpForm>(BLANK)
   const [offTrackId, setOffTrackId]   = useState('')
   const [offDate, setOffDate]         = useState('')
+  const detailRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!selectedId) return
+    function onMouseDown(e: MouseEvent) {
+      const t = e.target as Element
+      if (detailRef.current?.contains(t)) return
+      if (t.closest('tr.clickable')) return
+      setSelectedId(null)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [selectedId])
 
   const { softDelete, toastEl } = useSoftDelete<Employee>()
 
@@ -461,7 +474,7 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
           </div>
         </div>
 
-        <div className={'split-detail' + (selected ? ' open' : '')} id="emp-detail">
+        <div ref={detailRef} className={'split-detail' + (selected ? ' open' : '')} id="emp-detail">
           {selected && (
             <>
               <div className="detail-header">
@@ -491,7 +504,11 @@ export default function HrDirectory({ db, setDb, setSyncState, pendingEditId, on
                   <div className="detail-row">
                     <span className="detail-key">Skills</span>
                     <div className="detail-val">
-                      {empSkills.length ? empSkills.map((s, i) => <span key={i} className="pill pill-gray" style={{ margin: 'var(--spacing-2xs)' }}>{s}</span>) : <span>—</span>}
+                      {empSkills.length ? (
+                        <div className="pill-list">
+                          {empSkills.map((s, i) => <span key={i} className="pill pill-gray">{s}</span>)}
+                        </div>
+                      ) : <span>—</span>}
                     </div>
                   </div>
                 </div>

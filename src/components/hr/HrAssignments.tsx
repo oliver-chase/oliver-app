@@ -8,14 +8,10 @@ interface Props {
   setSyncState: (s: 'ok' | 'syncing' | 'error') => void
 }
 
-function relTime(d: string) {
+function fmtDate(d: string) {
   if (!d) return '—'
-  const days = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return days + 'd ago'
-  if (days < 30) return Math.floor(days / 7) + 'w ago'
-  return Math.floor(days / 30) + 'mo ago'
+  const dt = new Date(d)
+  return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 type SortCol = 'name' | 'device' | 'assignedAt'
@@ -93,18 +89,12 @@ export default function HrAssignments({ db }: Props) {
             ) : active.map(a => {
               const emp = db.employees.find(e => e.id === a.employeeId) || { name: 'Unknown', id: '' }
               const dev = db.devices.find(d => d.id === a.deviceId) || { name: 'Unknown', serial: '', id: '' }
-              const ini = (emp.name.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase()
               return (
                 <tr key={a.id}>
-                  <td>
-                    <div className="person-cell">
-                      <div className="person-av" style={{ background: 'var(--accent-light)', color: 'var(--accent-text)' }}>{ini}</div>
-                      <div className="person-name">{emp.name}</div>
-                    </div>
-                  </td>
+                  <td><div className="person-name">{emp.name}</div></td>
                   <td>{dev.name}</td>
                   <td className="td-mono">{dev.serial || '—'}</td>
-                  <td>{relTime(a.assignedAt)}</td>
+                  <td>{fmtDate(a.assignedAt)}</td>
                   <td><span className="pill pill-purple">Active</span></td>
                   <td></td>
                 </tr>

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppModal } from '@/components/shared/AppModal'
 import CustomPicker from '@/components/shared/CustomPicker'
@@ -71,6 +71,19 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   const [editCand, setEditCand] = useState<Candidate | null>(null)
   const [confirmDelCand, setConfirmDelCand] = useState<Candidate | null>(null)
   const [intakeOpen, setIntakeOpen] = useState(false)
+  const detailRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!selectedId) return
+    function onMouseDown(e: MouseEvent) {
+      const t = e.target as Element
+      if (detailRef.current?.contains(t)) return
+      if (t.closest('.kanban-card') || t.closest('tr.clickable')) return
+      setSelectedId(null)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [selectedId])
 
   useEffect(() => {
     if (!pendingEditId) return
@@ -79,6 +92,15 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     onEditConsumed?.()
   }, [pendingEditId, db.candidates, onEditConsumed])
   const { modal, showModal }    = useAppModal()
+
+  async function requestMoveToHired(c: Candidate) {
+    const { buttonValue } = await showModal({
+      title: 'Move to Hired',
+      message: 'Move "' + c.name + '" to hired status?',
+      confirmLabel: 'Yes, Move to Hired',
+    })
+    if (buttonValue === 'confirm') setPromoteCand(c)
+  }
 
   const { softDelete, toastEl } = useSoftDelete<Candidate>()
 
@@ -121,7 +143,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   async function moveStage(id: string, newStage: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
-    if (newStage === 'hired' && !alreadyEmployee(c)) { setPromoteCand(c); return }
+    if (newStage === 'hired' && !alreadyEmployee(c)) { requestMoveToHired(c); return }
     const updated = { ...c, stage: newStage, updatedAt: new Date().toISOString() }
     await save(updated)
     if (selectedId === id) setSelectedId(id)
@@ -130,7 +152,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   async function setCandStatus(id: string, newStatus: string) {
     const c = db.candidates.find(x => x.id === id)
     if (!c) return
-    if (newStatus === 'Hired' && !alreadyEmployee(c)) { setPromoteCand(c); return }
+    if (newStatus === 'Hired' && !alreadyEmployee(c)) { requestMoveToHired(c); return }
     await save({ ...c, candStatus: newStatus, updatedAt: new Date().toISOString() })
   }
 
@@ -435,7 +457,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                           <div className="kanban-role">{c.role}</div>
                           <div className="kanban-meta">
                             <StatusPill status={c.candStatus} />
-                            {c.dept && <span className="pill pill-gray pill-xs">{c.dept}</span>}
+                            {c.dept && <span className="pill pill-gray">{c.dept}</span>}
                           </div>
                           <div className="kanban-footer">
                             <span className="kanban-meta-text">{locDisplay(c)}</span>
@@ -511,7 +533,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
         </div>
 
         {/* Candidate detail panel */}
-        <div className={'split-detail' + (selected ? ' open' : '')} id="cand-detail">
+        <div ref={detailRef} className={'split-detail' + (selected ? ' open' : '')} id="cand-detail">
           {selected && (
             <>
               <div className="detail-header">
