@@ -101,7 +101,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
   async function addDevice() {
     if (!form.make || !form.model) return
     const ts = new Date().toISOString()
-    const nd: Device = { id: crypto.randomUUID(), name: form.make + ' ' + form.model, make: form.make, model: form.model, modelNumber: form.modelNumber, serial: form.serial || 'N/A', type: form.type, status: 'available', assignedTo: '', condition: form.condition, purchaseDate: form.purchaseDate, purchaseStore: form.purchaseStore, orderNumber: form.orderNumber, specs: form.specs, location: '', notes: '', created_at: ts, updated_at: ts }
+    const nd: Device = { id: 'DEV-' + crypto.randomUUID(), name: form.make + ' ' + form.model, make: form.make, model: form.model, modelNumber: form.modelNumber, serial: form.serial || 'N/A', type: form.type, status: 'available', assignedTo: '', condition: form.condition, purchaseDate: form.purchaseDate, purchaseStore: form.purchaseStore, orderNumber: form.orderNumber, specs: form.specs, location: '', notes: '', created_at: ts, updated_at: ts }
     setDb(prev => ({ ...prev, devices: [...prev.devices, nd] }))
     closeModal()
     await dbMulti([() => supabase.from('devices').insert(nd)])

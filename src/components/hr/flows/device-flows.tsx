@@ -141,10 +141,15 @@ export const assignDeviceFlow: Flow<AssignDraft> = {
       devices: prev.devices.map(d => d.id === draft.id ? { ...d, status: 'assigned', assignedTo: draft.empId, updated_at: now } : d),
     }))
     try {
-      await supabase.from('assignments').insert(asg)
-      await supabase.from('devices').update({ status: 'assigned', assignedTo: draft.empId, updated_at: now }).eq('id', draft.id)
+      const asgRes = await supabase.from('assignments').insert(asg)
+      if (asgRes.error) throw asgRes.error
+      const devRes = await supabase.from('devices').update({ status: 'assigned', assignedTo: draft.empId, updated_at: now }).eq('id', draft.id)
+      if (devRes.error) throw devRes.error
       ctx.setSyncState('ok')
-    } catch { ctx.setSyncState('error') }
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }
 
@@ -192,9 +197,14 @@ export const returnDeviceFlow: Flow<ReturnDraft> = {
       devices: prev.devices.map(d => d.id === draft.id ? { ...d, status: draft.newStatus, assignedTo: '', updated_at: now } : d),
     }))
     try {
-      await supabase.from('assignments').update({ status: 'returned', returnedAt: now }).eq('deviceId', draft.id).eq('status', 'active')
-      await supabase.from('devices').update({ status: draft.newStatus, assignedTo: '', updated_at: now }).eq('id', draft.id)
+      const asgRes = await supabase.from('assignments').update({ status: 'returned', returnedAt: now }).eq('deviceId', draft.id).eq('status', 'active')
+      if (asgRes.error) throw asgRes.error
+      const devRes = await supabase.from('devices').update({ status: draft.newStatus, assignedTo: '', updated_at: now }).eq('id', draft.id)
+      if (devRes.error) throw devRes.error
       ctx.setSyncState('ok')
-    } catch { ctx.setSyncState('error') }
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }

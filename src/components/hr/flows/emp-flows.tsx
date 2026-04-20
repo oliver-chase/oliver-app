@@ -146,9 +146,14 @@ export const startOffboardingFlow: Flow<OffboardDraft> = {
       employees: prev.employees.map(e => e.id === draft.id ? { ...e, status: 'offboarding', endDate: draft.endDate, updated_at: now } : e),
     }))
     try {
-      await supabase.from('onboardingRuns').insert(run)
-      await supabase.from('employees').update({ status: 'offboarding', endDate: draft.endDate, updated_at: now }).eq('id', draft.id)
+      const runRes = await supabase.from('onboardingRuns').insert(run)
+      if (runRes.error) throw runRes.error
+      const empRes = await supabase.from('employees').update({ status: 'offboarding', endDate: draft.endDate, updated_at: now }).eq('id', draft.id)
+      if (empRes.error) throw empRes.error
       ctx.setSyncState('ok')
-    } catch { ctx.setSyncState('error') }
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }

@@ -138,7 +138,14 @@ export const setCandStatusFlow: Flow<StatusDraft> = {
     const now = new Date().toISOString()
     ctx.setSyncState('syncing')
     ctx.setDb(prev => ({ ...prev, candidates: prev.candidates.map(c => c.id === draft.id ? { ...c, candStatus: draft.status, updatedAt: now } : c) }))
-    try { await supabase.from('candidates').update({ candStatus: draft.status, updatedAt: now }).eq('id', draft.id); ctx.setSyncState('ok') } catch { ctx.setSyncState('error') }
+    try {
+      const res = await supabase.from('candidates').update({ candStatus: draft.status, updatedAt: now }).eq('id', draft.id)
+      if (res.error) throw res.error
+      ctx.setSyncState('ok')
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }
 
@@ -174,7 +181,14 @@ export const setCandStageFlow: Flow<StageDraft> = {
     const now = new Date().toISOString()
     ctx.setSyncState('syncing')
     ctx.setDb(prev => ({ ...prev, candidates: prev.candidates.map(c => c.id === draft.id ? { ...c, stage: draft.stage, updatedAt: now } : c) }))
-    try { await supabase.from('candidates').update({ stage: draft.stage, updatedAt: now }).eq('id', draft.id); ctx.setSyncState('ok') } catch { ctx.setSyncState('error') }
+    try {
+      const res = await supabase.from('candidates').update({ stage: draft.stage, updatedAt: now }).eq('id', draft.id)
+      if (res.error) throw res.error
+      ctx.setSyncState('ok')
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }
 
@@ -242,10 +256,15 @@ export const logInterviewFlow: Flow<IvDraft> = {
       candidates: prev.candidates.map(c => c.id === draft.id ? { ...c, updatedAt: now } : c),
     }))
     try {
-      await supabase.from('interviews').insert(iv)
-      await supabase.from('candidates').update({ updatedAt: now }).eq('id', draft.id)
+      const ivRes = await supabase.from('interviews').insert(iv)
+      if (ivRes.error) throw ivRes.error
+      const candRes = await supabase.from('candidates').update({ updatedAt: now }).eq('id', draft.id)
+      if (candRes.error) throw candRes.error
       ctx.setSyncState('ok')
-    } catch { ctx.setSyncState('error') }
+    } catch {
+      ctx.setSyncState('error')
+      ctx.refresh().catch(() => {})
+    }
   },
 }
 

@@ -70,6 +70,7 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
   const [confirming, setConfirming] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
 
   const handleClose = useCallback(() => {
     if (confirming) return
@@ -83,7 +84,7 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
     return () => document.removeEventListener('keydown', onKey)
   }, [handleClose])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort() }, [])
 
   async function handleFile(file: File) {
     setPhase('processing')
@@ -122,7 +123,7 @@ export default function AIIntakeModal({ onCancel, onConfirm }: Props) {
     try {
       await onConfirm(records)
     } finally {
-      setConfirming(false)
+      if (mountedRef.current) setConfirming(false)
     }
   }
 

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import type { Flow, FlowCtx } from './step-flow-types'
 
 interface Props<D> {
@@ -14,12 +14,14 @@ export default function StepFlowRunner<D>({ flow, ctx, onClose }: Props<D>) {
   const [stepIdx, setStepIdx] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(busy)
+  useEffect(() => { busyRef.current = busy }, [busy])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) { e.preventDefault(); onClose() } }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busyRef.current) { e.preventDefault(); onClose() } }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, busy])
+  }, [onClose])
 
   const step = flow.steps[stepIdx]
   const isFirst = stepIdx === 0

@@ -235,7 +235,7 @@ tr.selected td{background:var(--accent-light)}
   /* Page */
   .page{padding:var(--spacing-md)}
   /* Track sidebar stacks above content on mobile */
-  .track-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);overflow-y:visible;max-height:200px;overflow-y:auto}
+  .track-sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border);max-height:200px;overflow-y:auto}
 
   /* FAB clears bottom nav */
   #cp-fab{bottom:76px}
