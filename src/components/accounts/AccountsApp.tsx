@@ -207,7 +207,7 @@ export default function AccountsApp() {
       { id: 'nav-admin', label: 'Go to Admin',           group: 'Navigate', run: () => router.push('/admin') },
     ]
     const greeting = currentAccountId
-      ? "Hi, I'm Oliver. Ask about this account, upload a transcript or org chart, or pick a command."
+      ? "Hi, I'm Oliver! I can answer questions about your accounts, make updates, and add notes. Upload a meeting transcript or org chart screenshot and I'll update your account plan."
       : "Hi, I'm Oliver. Pick an account in the sidebar, or add a new one."
     const upload = currentAccountId ? {
       accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',

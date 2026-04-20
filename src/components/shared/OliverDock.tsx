@@ -205,6 +205,35 @@ export default function OliverDock() {
           </button>
         </div>
 
+        {config.upload && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={config.upload.accepts}
+            style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+            aria-label={config.upload.hint}
+            tabIndex={-1}
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) {
+                if (mode !== 'chat') enterChat()
+                ;(async () => {
+                  if (!config.upload) return
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Reading ' + file.name + '\u2026' }])
+                  try {
+                    const r = await config.upload.parse(file)
+                    setItems(prev => [...prev, { id: nextId(), kind: 'parse-result', title: r.title, summary: r.summary, model: r.model, payload: r.payload }])
+                  } catch (err) {
+                    console.error('[Oliver] parse failed', err)
+                    setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Parse error: ' + (err instanceof Error ? err.message : String(err)) }])
+                  }
+                })()
+              }
+              e.target.value = ''
+            }}
+          />
+        )}
+
         <div className="chatbot-body" aria-hidden={!open}>
           {mode === 'command' ? (
             <CommandMode
@@ -219,6 +248,7 @@ export default function OliverDock() {
               enterChat={enterChat}
               inputRef={cmdInputRef}
               onKey={onCmdKey}
+              onUploadClick={() => fileInputRef.current?.click()}
             />
           ) : (
             <ChatMode
@@ -229,20 +259,9 @@ export default function OliverDock() {
               setInput={setInput}
               send={sendChat}
               back={() => { setMode('command'); setQ('') }}
-              fileInputRef={fileInputRef}
+              onUploadClick={() => fileInputRef.current?.click()}
               chatInputRef={chatInputRef}
               messagesRef={messagesRef}
-              onFile={async file => {
-                if (!config.upload) return
-                setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Reading ' + file.name + '\u2026' }])
-                try {
-                  const r = await config.upload.parse(file)
-                  setItems(prev => [...prev, { id: nextId(), kind: 'parse-result', title: r.title, summary: r.summary, model: r.model, payload: r.payload }])
-                } catch (err) {
-                  console.error('[Oliver] parse failed', err)
-                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Parse error: ' + (err instanceof Error ? err.message : String(err)) }])
-                }
-              }}
               onReview={async (itemId, payload) => {
                 if (!config.upload) return
                 setItems(prev => prev.filter(it => it.id !== itemId))
@@ -301,9 +320,10 @@ interface CommandModeProps {
   enterChat: (seed?: string) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   onKey: (e: React.KeyboardEvent) => void
+  onUploadClick: () => void
 }
 
-function CommandMode({ config, q, setQ, filtered, grouped, activeIdx, setActiveIdx, execute, enterChat, inputRef, onKey }: CommandModeProps) {
+function CommandMode({ config, q, setQ, filtered, grouped, activeIdx, setActiveIdx, execute, enterChat, inputRef, onKey, onUploadClick }: CommandModeProps) {
   if (!config) return null
   const empty = filtered.length === 0
   return (
@@ -320,6 +340,19 @@ function CommandMode({ config, q, setQ, filtered, grouped, activeIdx, setActiveI
           aria-label="What do you want to do"
         />
       </div>
+      {config.upload && (
+        <div className="chatbot-upload-row">
+          <button
+            className="btn btn-primary btn--compact"
+            type="button"
+            title={config.upload.hint}
+            onClick={onUploadClick}
+          >
+            Upload
+          </button>
+          <span className="chatbot-upload-hint">{config.upload.hint}</span>
+        </div>
+      )}
       <div className="oliver-cmd-body" role="listbox">
         {empty ? (
           <div className="oliver-empty">
@@ -377,17 +410,16 @@ interface ChatModeProps {
   setInput: (v: string) => void
   send: () => void
   back: () => void
-  onFile: (file: File) => void
+  onUploadClick: () => void
   onReview: (itemId: number, payload: unknown) => void
   onDiscard: (itemId: number) => void
   onConfirmWrite: (itemId: number, payload: unknown) => void
   onQuickConvo: (preset: string) => void
-  fileInputRef: React.RefObject<HTMLInputElement | null>
   chatInputRef: React.RefObject<HTMLTextAreaElement | null>
   messagesRef: React.RefObject<HTMLDivElement | null>
 }
 
-function ChatMode({ config, items, busy, input, setInput, send, back, onFile, onReview, onDiscard, onConfirmWrite, onQuickConvo, fileInputRef, chatInputRef, messagesRef }: ChatModeProps) {
+function ChatMode({ config, items, busy, input, setInput, send, back, onUploadClick, onReview, onDiscard, onConfirmWrite, onQuickConvo, chatInputRef, messagesRef }: ChatModeProps) {
   return (
     <>
       <div className="oliver-chat-back">
@@ -459,25 +491,12 @@ function ChatMode({ config, items, busy, input, setInput, send, back, onFile, on
 
       {config.upload && (
         <div className="chatbot-upload-zone">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={config.upload.accepts}
-            style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-            aria-label={config.upload.hint}
-            tabIndex={-1}
-            onChange={e => {
-              const file = e.target.files?.[0]
-              if (file) onFile(file)
-              e.target.value = ''
-            }}
-          />
           <div className="chatbot-upload-row">
             <button
               className="btn btn-primary btn--compact"
               type="button"
               title={config.upload.hint}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={onUploadClick}
             >
               Upload
             </button>
@@ -502,7 +521,7 @@ function ChatMode({ config, items, busy, input, setInput, send, back, onFile, on
           className="chatbot-input"
           rows={1}
           aria-label="Message"
-          placeholder={config.placeholder}
+          placeholder="Type a message..."
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
