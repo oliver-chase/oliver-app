@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check-tokens": "node scripts/check-tokens.mjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.7.0",

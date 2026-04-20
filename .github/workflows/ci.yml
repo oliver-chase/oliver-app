@@ -29,6 +29,9 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      - name: CSS token-drift scan
+        run: npm run check-tokens
+
       - name: Next.js build (static export)
         run: npm run build
         env:
