@@ -62,34 +62,3 @@ export async function updateUserPermissions(userId: string, page_permissions: Pa
   const { error } = await supabase.from('app_users').update({ page_permissions }).eq('user_id', userId)
   if (error) throw new Error('updateUserPermissions: ' + error.message)
 }
-
-export async function getUserByEmail(email: string): Promise<AppUser | null> {
-  const { data, error } = await supabase
-    .from('app_users')
-    .select('*')
-    .eq('email', email)
-    .maybeSingle()
-  if (error) console.error('[users] getUserByEmail', error.message)
-  return data ?? null
-}
-
-export async function updateSecurityQuestions(
-  userId: string,
-  q1: string, a1Hash: string,
-  q2: string, a2Hash: string,
-  q3: string, a3Hash: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('app_users')
-    .update({
-      security_q1: q1 || null,
-      security_a1: a1Hash || null,
-      security_q2: q2 || null,
-      security_a2: a2Hash || null,
-      security_q3: q3 || null,
-      security_a3: a3Hash || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('user_id', userId)
-  if (error) throw new Error('updateSecurityQuestions: ' + error.message)
-}

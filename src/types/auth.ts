@@ -10,10 +10,4 @@ export interface AppUser {
   page_permissions: PagePermission[]
   created_at: string
   updated_at: string
-  security_q1?: string | null
-  security_a1?: string | null
-  security_q2?: string | null
-  security_a2?: string | null
-  security_q3?: string | null
-  security_a3?: string | null
 }

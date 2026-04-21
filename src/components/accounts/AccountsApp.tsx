@@ -204,7 +204,6 @@ export default function AccountsApp() {
         case 'import-transcript': run = () => triggerOliverUpload(); break
         case 'view-org-chart':    run = () => { document.querySelector('[data-section="people"]')?.scrollIntoView({ behavior: 'smooth' }) }; break
         case 'export-data':       run = () => setExportOpen(true); break
-        case 'change-pw':         run = () => { window.location.href = '/profile' }; break
         default:                  run = () => {}
       }
       return { ...c, run }
