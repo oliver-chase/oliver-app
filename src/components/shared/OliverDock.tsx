@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction } from './OliverContext'
 import { fuzzyFilter } from '@/lib/fuzzy'
+import TranscriptReviewModal from './TranscriptReviewModal'
 
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -21,6 +22,7 @@ export default function OliverDock() {
   const [input, setInput] = useState('')
   const [items, setItems] = useState<ChatItem[]>([])
   const [busy, setBusy] = useState(false)
+  const [reviewModal, setReviewModal] = useState<{ itemId: number; payload: unknown } | null>(null)
   const idRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -170,6 +172,14 @@ export default function OliverDock() {
       const res = await config.upload.commit(payload)
       setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: res.message }])
       config.onChatRefresh?.()
+      const actions = (payload as Record<string, unknown>).actions as Array<Record<string, string>> | undefined
+      if (actions?.length) {
+        const first = actions[0]
+        const task = first.task || 'an item'
+        const owner = first.owner ? ' for ' + first.owner : ''
+        const followUp = 'I see ' + actions.length + ' action item' + (actions.length > 1 ? 's' : '') + ' from this transcript. For example: "' + task + '"' + owner + '. Do you want me to create reminders or add calendar entries for any of these?'
+        setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: followUp }])
+      }
     } catch (err) {
       console.error('[Oliver] commit failed', err)
       setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Write failed: ' + (err instanceof Error ? err.message : String(err)) }])
@@ -300,7 +310,7 @@ export default function OliverDock() {
                     </div>
                     <pre className="chatbot-parse-pre">{it.summary}</pre>
                     <div className="chatbot-parse-actions">
-                      <button className="btn btn-primary btn--compact" onClick={() => handleReview(it.id, it.payload)}>Review &amp; Confirm</button>
+                      <button className="btn btn-primary btn--compact" onClick={() => setReviewModal({ itemId: it.id, payload: it.payload })}>Review &amp; Edit</button>
                       <button className="btn btn-ghost btn--compact" onClick={() => setItems(prev => prev.filter(x => x.id !== it.id))}>Discard</button>
                     </div>
                   </div>
@@ -392,6 +402,18 @@ export default function OliverDock() {
           </div>
         </div>
       </div>
+      {reviewModal && (
+        <TranscriptReviewModal
+          payload={reviewModal.payload}
+          onConfirm={edited => {
+            const id = reviewModal.itemId
+            setItems(prev => prev.filter(it => it.id !== id))
+            setReviewModal(null)
+            handleReview(id, edited)
+          }}
+          onCancel={() => setReviewModal(null)}
+        />
+      )}
     </>
   )
 }
