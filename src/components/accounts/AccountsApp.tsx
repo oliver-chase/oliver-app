@@ -213,6 +213,7 @@ export default function AccountsApp() {
     const upload = currentAccountId ? {
       accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',
       hint: 'Transcripts (.txt): parsed instantly, no AI call. Org charts (image): extracts people + titles. Docs (.docx/.pdf): AI-parsed.',
+      guidance: 'Import Transcript — upload .txt or .pdf. We\'ll extract speakers, timestamps, topics, and action items.',
       parse: async (file: File) => {
         const isImage = file.type.startsWith('image/')
         if (isImage) {

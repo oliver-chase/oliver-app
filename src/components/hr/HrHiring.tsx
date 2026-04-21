@@ -533,7 +533,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                   Upload Receipt
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, maxWidth: 220 }}>
-                  Best Buy receipts: plain text export (.txt). Extracts purchase date, serial number, device type, customer name. Images/PDFs: enter manually below.
+                  Upload Receipt/Device Info — upload a Best Buy receipt screenshot or PDF. We'll extract date, serial number, device type, and device name. Plain text (.txt) is parsed instantly; images/PDFs require manual entry below.
                 </div>
                 <input
                   ref={receiptFileRef}

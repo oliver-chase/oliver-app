@@ -32,6 +32,7 @@ export interface OliverDryRunResult {
 export interface OliverUpload {
   accepts: string
   hint: string
+  guidance?: string
   parse: (file: File) => Promise<OliverParseResult>
   dryRun: (payload: unknown) => Promise<OliverDryRunResult>
   commit: (payload: unknown) => Promise<{ message: string }>

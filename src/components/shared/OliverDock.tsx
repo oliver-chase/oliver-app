@@ -348,6 +348,11 @@ export default function OliverDock() {
             </div>
           )}
 
+          {/* Upload guidance */}
+          {config.upload?.guidance && (
+            <div className="oliver-upload-guidance">{config.upload.guidance}</div>
+          )}
+
           {/* Input bar */}
           <div className="chatbot-input-row">
             {config.upload && (
