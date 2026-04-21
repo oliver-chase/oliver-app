@@ -1,6 +1,6 @@
 # OliverApp — Current State
 
-**Snapshot:** 2026-04-20, branch `staging`, working tree tracked in git (nothing
+**Snapshot:** 2026-04-21, branch `staging`, working tree tracked in git (nothing
 untracked, nothing uncommitted after the commit containing this file).
 
 A brand-new task session should read this file end-to-end before touching code.
@@ -295,6 +295,8 @@ list is a pointer, not a replacement.
 
 | SHA       | Summary                                                           |
 |-----------|-------------------------------------------------------------------|
+| e645929   | feat: design-system state matrix + token editor live preview + remove MSAL |
+| 256c1a4   | docs(tech-debt): STATE.md current-state snapshot + archive stale QA |
 | 586d518   | feat(oliver): unified dock layout, per-page commands, fuzzy-to-chat fallback |
 | 3926fe5   | fix: modal/dropdown global positioning spec                        |
 | 12209aa   | docs(tech-debt): close P1 tokens + lock CI gate                    |
@@ -345,22 +347,15 @@ list is a pointer, not a replacement.
   3. Configure CF Access at network edge.
   4. Admin bypass in `/admin` flips from "render always" to real `isAdmin`.
 
-### Task #3 — Design-system Tesknota parity (partial shipped)
+### Task #3 — Design-system Tesknota parity (complete as of e645929)
 What's shipped: anchor nav, dead-token audit card, token usages for colors /
-typography / spacing / layout, button disabled state row, hover/focus note.
-What's left:
-- **Non-button state matrix**. Pickers / inputs / chips / badges / modals
-  rendered in default / hover / focus / disabled. Hover/focus require either
-  `.state-hover`/`.state-focus` modifier classes (duplicates pseudo-state
-  rules — decide if worth it) or JS pseudo-state simulation.
-- **Token editor live-preview overlay**. Tesknota has one; OliverApp's
-  `/admin` TokenEditor applies edits inline but no preview-before-publish.
-  Ship as a separate route or modal.
+typography / spacing / layout, button disabled state row, hover/focus note,
+non-button state matrix (inputs default/disabled/focus, CustomPicker disabled,
+AppChip focus note, AppBadge hover note), token editor live preview (CSS var
+applied on each keystroke, reverts on cancel, preview banner active while editing).
 
 ### Latent / minor
-- `@azure/msal-browser` is still in `package.json` `dependencies` — MSAL was
-  removed in `b37e602`. Requires explicit user sign-off to remove a dep.
-  Safe to remove when user confirms.
+- `@azure/msal-browser` removed from `package.json` in `e645929`.
 - Historical `qa-*.md` + `token-violations.md` already moved to
   `src/tech-debt/archive/` with a `README.md` explaining archival.
 - No tests. All verification is TSC + scanner + browser dogfood on staging.
