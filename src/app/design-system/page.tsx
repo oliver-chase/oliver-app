@@ -960,6 +960,65 @@ export default function DesignSystemPage() {
             2px outline in <code>--color-border-focus</code>, offset 1px.
           </div>
         </div>
+
+        <div className="groupTitle">Inputs</div>
+        <div className="componentRow">
+          <div className="componentLabel">Default</div>
+          <div className="componentDemo">
+            <input className="app-input" placeholder="Placeholder text" readOnly style={{ width: '200px' }} />
+          </div>
+        </div>
+        <div className="componentRow">
+          <div className="componentLabel">Disabled</div>
+          <div className="componentDemo">
+            <input className="app-input" placeholder="Disabled" disabled style={{ width: '200px' }} />
+          </div>
+        </div>
+        <div className="componentRow">
+          <div className="componentLabel">Focus</div>
+          <div className="componentDemo componentStatesNote">
+            Focus is a CSS pseudo-state — tab to the input above to trigger. Focus ring =
+            2px outline in <code>--color-border-focus</code>, border-color transparent.
+          </div>
+        </div>
+
+        <div className="groupTitle">CustomPicker</div>
+        <div className="componentRow">
+          <div className="componentLabel">Default (shown above)</div>
+          <div className="componentDemo componentStatesNote">
+            Single + multi pickers shown above. Focus ring via <code>.picker-trigger:focus-visible</code>.
+          </div>
+        </div>
+        <div className="componentRow">
+          <div className="componentLabel">Disabled</div>
+          <div className="componentDemo">
+            <CustomPicker
+              options={PICKER_OPTIONS}
+              selected=""
+              onChange={() => {}}
+              placeholder="Disabled picker"
+              disabled
+            />
+          </div>
+        </div>
+
+        <div className="groupTitle">AppChip</div>
+        <div className="componentRow">
+          <div className="componentLabel">Focus</div>
+          <div className="componentDemo componentStatesNote">
+            <code>.app-chip:focus-visible</code> inherits the global focus ring (2px <code>--color-border-focus</code>).
+            Tab to any chip above to trigger. No disabled state defined — chips are display-only or removable.
+          </div>
+        </div>
+
+        <div className="groupTitle">AppBadge</div>
+        <div className="componentRow">
+          <div className="componentLabel">Hover (clickable only)</div>
+          <div className="componentDemo componentStatesNote">
+            <code>.app-badge--clickable:hover</code> applies <code>opacity: 0.75</code>.
+            Mouse over the clickable row above to confirm. No disabled state defined.
+          </div>
+        </div>
       </div>
 
       {/* ── SECTION 6 — LAYOUT TOKENS ── */}

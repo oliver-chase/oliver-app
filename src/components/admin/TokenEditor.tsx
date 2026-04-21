@@ -39,6 +39,7 @@ export function TokenEditor() {
   const [overrides, setOverrides] = useState<Record<string, string>>({})
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [originalValue, setOriginalValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,6 +55,21 @@ export function TokenEditor() {
       })
       .catch(err => setError(err instanceof Error ? err.message : String(err)))
   }, [])
+
+  function startEditing(tokenName: string, currentValue: string) {
+    setOriginalValue(currentValue)
+    setDraft(currentValue)
+    setEditing(tokenName)
+  }
+
+  function cancelEditing(tokenName: string) {
+    document.documentElement.style.setProperty(tokenName, originalValue)
+    setEditing(null)
+  }
+
+  function applyPreview(tokenName: string, value: string) {
+    if (value.trim()) document.documentElement.style.setProperty(tokenName, value.trim())
+  }
 
   async function save(tokenName: string) {
     if (!draft.trim()) return
@@ -77,6 +93,11 @@ export function TokenEditor() {
   return (
     <div className={styles.tokenEditor}>
       {error && <div className={styles.errorBanner} role="alert">Token save failed: {error}</div>}
+      {editing && (
+        <div className={styles.previewBanner}>
+          Live preview active — changes apply to this page in real time. Save to persist or Cancel to revert.
+        </div>
+      )}
       {categories.map(cat => (
         <div key={cat} className={styles.tokenGroup}>
           <div className={styles.tokenGroupLabel}>{cat}</div>
@@ -84,44 +105,57 @@ export function TokenEditor() {
             const currentValue = overrides[token.name] ?? getCssVar(token.name)
             const isColor = token.name.startsWith('--color')
             const isEditing = editing === token.name
+            const displayValue = isEditing ? draft : currentValue
 
             return (
-              <div key={token.name} className={styles.tokenRow}>
+              <div key={token.name} className={styles.tokenRow + (isEditing ? ' ' + styles.tokenRowEditing : '')}>
                 <span className={styles.tokenName}>{token.name}</span>
                 <div className={styles.tokenValue}>
                   {isColor && (
                     <span
                       className={styles.colorSwatch}
-                      style={{ background: currentValue }}
+                      style={{ background: isEditing && draft.trim() ? draft.trim() : currentValue }}
                     />
                   )}
                   {isEditing ? (
                     <input
                       className={styles.tokenInput}
                       value={draft}
-                      onChange={e => setDraft(e.target.value)}
+                      onChange={e => {
+                        setDraft(e.target.value)
+                        applyPreview(token.name, e.target.value)
+                      }}
                       autoFocus
                       onKeyDown={e => {
                         if (e.key === 'Enter') save(token.name)
-                        if (e.key === 'Escape') setEditing(null)
+                        if (e.key === 'Escape') cancelEditing(token.name)
                       }}
                     />
                   ) : (
-                    <span className={styles.tokenValueText}>{currentValue || '-'}</span>
+                    <span className={styles.tokenValueText}>{displayValue || '-'}</span>
                   )}
                 </div>
                 {isEditing ? (
-                  <button
-                    className={styles.tokenSaveBtn}
-                    onClick={() => save(token.name)}
-                    disabled={saving}
-                  >
-                    Save
-                  </button>
+                  <div className={styles.tokenActions}>
+                    <button
+                      className={styles.tokenSaveBtn}
+                      onClick={() => save(token.name)}
+                      disabled={saving}
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      className={styles.tokenCancelBtn}
+                      onClick={() => cancelEditing(token.name)}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 ) : (
                   <button
                     className={styles.tokenEditBtn}
-                    onClick={() => { setDraft(currentValue); setEditing(token.name) }}
+                    onClick={() => startEditing(token.name, currentValue)}
                   >
                     Edit
                   </button>
