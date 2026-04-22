@@ -10,6 +10,7 @@ import SdrProspectDetail from '@/components/sdr/SdrProspectDetail'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import { SDR_COMMANDS } from '@/app/sdr/commands'
+import { buildSdrFlows } from '@/app/sdr/flows'
 import type { SdrProspect, SdrApprovalItem, SdrSend, SdrTab, SdrFilters } from '@/components/sdr/types'
 
 const TABS: { id: SdrTab; label: string }[] = [
@@ -81,11 +82,17 @@ export default function SdrPage() {
       }
       return { ...c, run }
     })
+    const flows = buildSdrFlows({
+      prospects: prospectsRef.current,
+      approvalItems: approvalItemsRef.current,
+      refetch: loadData,
+    })
     return {
       pageLabel: 'SDR & Outreach',
       placeholder: 'What do you want to do?',
       greeting: "Hi, I'm Oliver. You're viewing SDR. You can log a call, add an opportunity, view your pipeline, or ask me anything. What would you like to do?",
       actions,
+      flows,
       contextPayload: () => ({
         currentTab: tabRef.current,
         summary: {

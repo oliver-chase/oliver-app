@@ -21,6 +21,7 @@ import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import { triggerOliverUpload } from '@/components/shared/OliverDock'
 import { HR_COMMANDS } from '@/app/hr/commands'
+import { buildHrFlows } from '@/app/hr/flows'
 import { editCandidateFlow, deleteCandidateFlow, setCandStatusFlow, setCandStageFlow, logInterviewFlow } from '@/components/hr/flows/cand-flows'
 import { editEmployeeFlow, deleteEmployeeFlow, startOffboardingFlow } from '@/components/hr/flows/emp-flows'
 import { editDeviceFlow, deleteDeviceFlow, assignDeviceFlow, returnDeviceFlow } from '@/components/hr/flows/device-flows'
@@ -208,11 +209,16 @@ export default function HrPage() {
       }
       return { ...c, run }
     })
+    const flows = buildHrFlows({
+      candidates: dbRef.current.candidates,
+      refetch: loadData,
+    })
     return {
       pageLabel: 'HR & People Ops',
       placeholder: 'What do you want to do?',
       greeting: "Hi, I'm Oliver. You're viewing Hiring. You can add a candidate, upload a resume, view job postings, or ask me anything about hiring. What would you like to do?",
       actions,
+      flows,
       contextPayload: () => ({
         currentPage: pageRef.current,
         summary: {

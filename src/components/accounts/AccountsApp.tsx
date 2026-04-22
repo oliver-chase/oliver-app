@@ -14,6 +14,7 @@ import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import { triggerOliverUpload } from '@/components/shared/OliverDock'
 import { ACCOUNTS_COMMANDS } from '@/app/accounts/commands'
+import { buildAccountsFlows } from '@/app/accounts/flows'
 import type { Account } from '@/types'
 import { parseTranscript } from '@/lib/parsers/transcript-parser'
 
@@ -279,11 +280,26 @@ export default function AccountsApp() {
         return { message: d.message || 'Done. Data written.' }
       },
     } : undefined
+    const flows = buildAccountsFlows({
+      data: {
+        accounts: data.accounts,
+        stakeholders: data.stakeholders,
+        actions: data.actions,
+        notes: data.notes,
+        opportunities: data.opportunities,
+        projects: data.projects,
+      },
+      currentAccountId,
+      addAccount: async (name: string, clientCompany = '') => addAccount(name, clientCompany),
+      saveAccount,
+      refetch,
+    })
     return {
       pageLabel: 'Account Planning',
       placeholder: 'Type a message or pick a command...',
       greeting,
       actions,
+      flows,
       upload,
       quickConvos: currentAccountId ? [
         'Summarise recent activity on this account.',
