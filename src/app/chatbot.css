@@ -521,16 +521,14 @@
 .oliver-cmd .cp-item-title { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--text); }
 .oliver-cmd .cp-item-sub { font-size: var(--font-size-xs); color: var(--text3); margin-top: 1px; }
 
-/* FAB quick-command row — always visible above command list, horizontal scroll when overflowing. */
+/* FAB quick-command row — wraps with equal spacing. No horizontal scroll. */
 .oliver-fab-row {
   display: flex;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
-  overflow-x: auto;
-  scrollbar-width: thin;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: 1px solid var(--border);
 }
-.oliver-fab-row::-webkit-scrollbar { height: 4px; }
 .oliver-fab-chip {
   flex: 0 0 auto;
   padding: var(--spacing-2xs) var(--spacing-sm);

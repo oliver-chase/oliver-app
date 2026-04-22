@@ -70,8 +70,10 @@ export default function OliverDock() {
     if (open) setTimeout(() => inputRef.current?.focus(), 40)
   }, [open])
 
-  // Top 4 actions for quick command chips.
-  const fabActions = useMemo(() => config?.actions.slice(0, 4) ?? [], [config])
+  // Chip row: all non-granular actions (wraps to multiple lines).
+  // Granular per-entity actions (edit person X) stay hidden from chips and only
+  // surface via fuzzy typeahead.
+  const fabActions = useMemo(() => config?.actions.filter(a => !a.granular) ?? [], [config])
 
   // Fuzzy suggestions driven by input (top 3, ≤2 edits).
   const suggestions = useMemo(() => {

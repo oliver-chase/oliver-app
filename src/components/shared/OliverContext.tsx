@@ -5,8 +5,10 @@ import type { ReactNode } from 'react'
 export interface OliverAction {
   id: string
   label: string
-  group: 'Create' | 'Search' | 'Quick'
+  group: 'Create' | 'Search' | 'Quick' | 'Edit'
   hint?: string
+  /** If true, action is hidden from the chip row and only surfaces via fuzzy typeahead. */
+  granular?: boolean
   run: () => void | Promise<void>
 }
 
