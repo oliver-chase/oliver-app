@@ -17,7 +17,7 @@
 
 .wordmark {
   font-family: var(--font-family-base);
-  font-size: 48px;
+  font-size: var(--font-size-hero);
   font-weight: 700;
   color: var(--color-nav-text);
   letter-spacing: -0.02em;
@@ -26,7 +26,7 @@
 
 .subtitle {
   font-family: var(--font-family-mono);
-  font-size: 11px;
+  font-size: var(--font-size-2xs);
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--color-nav-text-faint);
@@ -43,7 +43,7 @@
   border-radius: var(--radius-md);
   color: var(--color-nav-text);
   font-family: var(--font-family-base);
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   padding: 12px 24px;
   cursor: pointer;
@@ -67,7 +67,7 @@
   right: 0;
   text-align: center;
   font-family: var(--font-family-mono);
-  font-size: 10px;
+  font-size: var(--font-size-3xs);
   color: var(--color-nav-text-faint);
   letter-spacing: 0.12em;
 }
