@@ -5,6 +5,7 @@ import { useSyncReport } from '@/lib/sync-context'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { Stakeholder, Background, AppState } from '@/types'
 import { Picker } from './Picker'
+import { Popover } from './Popover'
 import OrgChart from './OrgChart'
 
 const PAGE_SIZE = 6
@@ -76,7 +77,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
   const [view, setView] = useState<'cards' | 'orgchart'>('cards')
   const [page, setPage] = useState(0)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
-  const filterPanelRef = useRef<HTMLDivElement>(null)
+  const filterBtnRef = useRef<HTMLButtonElement>(null)
   const { softDelete, toastEl } = useSoftDelete<Stakeholder>()
 
   const acctProjs = data.projects.filter(p => p.account_id === accountId)
@@ -85,9 +86,10 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
   useEffect(() => {
     if (!filterPanelOpen) return
     const handler = (e: MouseEvent) => {
-      if (filterPanelRef.current && !filterPanelRef.current.closest('.people-filter-wrapper')?.contains(e.target as Node)) {
-        setFilterPanelOpen(false)
-      }
+      const t = e.target as Node
+      if (filterBtnRef.current?.contains(t)) return
+      if ((t as Element).closest?.('.app-popover')) return
+      setFilterPanelOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -150,6 +152,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
           <div className="section-actions">
             <div className="people-filter-wrapper">
               <button
+                ref={filterBtnRef}
                 className={'filter-chip' + (filtersOn ? ' on' : '')}
                 id="people-filter-btn"
                 aria-label="Open people filters"
@@ -157,8 +160,8 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                 aria-haspopup="dialog"
                 onClick={() => setFilterPanelOpen(o => !o)}
               >Filters</button>
-              {filterPanelOpen && (
-                <div ref={filterPanelRef} className="people-filter-panel app-popover" id="people-filter-panel" role="dialog">
+              <Popover anchorRef={filterBtnRef} open={filterPanelOpen} minWidth={220}>
+                <div className="people-filter-panel" id="people-filter-panel" role="dialog">
                   <div className="filter-checkbox-group">
                     <label><input type="checkbox" id="filter-exec-check" checked={filterExec} onChange={e => { onFilterExecChange(e.target.checked); setPage(0) }} /> Executive</label>
                     <label><input type="checkbox" id="filter-incomplete-check" checked={filterIncomplete} onChange={e => { onFilterIncompleteChange(e.target.checked); setPage(0) }} /> Incomplete</label>
@@ -173,7 +176,7 @@ export default function PeopleSection({ accountId, data, setData, filterSearch, 
                     </div>
                   )}
                 </div>
-              )}
+              </Popover>
             </div>
             <Picker
               value={PEOPLE_SORT_OPTS.find(([v]) => v === sortBy)?.[1] ?? PEOPLE_SORT_OPTS[0][1]}
@@ -455,11 +458,17 @@ function EngPicker({ ids, items, label, onChange }: {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery('') } }
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (ref.current?.contains(t)) return
+      if ((t as Element).closest?.('.app-popover')) return
+      setOpen(false); setQuery('')
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
@@ -477,41 +486,39 @@ function EngPicker({ ids, items, label, onChange }: {
 
   return (
     <div ref={ref} className="picker-wrap">
-      <button className="person-eng-pill" onClick={handleOpen} aria-haspopup="listbox">
+      <button ref={btnRef} className="person-eng-pill" onClick={handleOpen} aria-haspopup="listbox">
         {label}
       </button>
-      {open && (
-        <div className="app-popover" style={{ minWidth: 200 }}>
-          <input
-            ref={searchRef}
-            className="app-popover-search"
-            placeholder="Search…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
-          />
-          <div className="app-popover-list">
-            {visibleItems.map((item, i) =>
-              item.isHeader ? (
-                <div key={i} className="app-popover-section-label">{item.label}</div>
-              ) : (
-                <div
-                  key={item.value}
-                  className={'app-popover-item' + (item.value === '' ? (ids.length === 0 ? ' selected' : '') : (ids.includes(item.value) ? ' selected' : ''))}
-                  onMouseDown={e => {
-                    e.preventDefault()
-                    if (item.value === '') { onChange([]); setOpen(false); setQuery('') }
-                    else toggle(item.value)
-                  }}
-                >{item.label}</div>
-              )
-            )}
-            {visibleItems.filter(i => !i.isHeader).length === 0 && (
-              <div className="app-popover-empty">No matches</div>
-            )}
-          </div>
+      <Popover anchorRef={btnRef} open={open} minWidth={200}>
+        <input
+          ref={searchRef}
+          className="app-popover-search"
+          placeholder="Search…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery('') } }}
+        />
+        <div className="app-popover-list">
+          {visibleItems.map((item, i) =>
+            item.isHeader ? (
+              <div key={i} className="app-popover-section-label">{item.label}</div>
+            ) : (
+              <div
+                key={item.value}
+                className={'app-popover-item' + (item.value === '' ? (ids.length === 0 ? ' selected' : '') : (ids.includes(item.value) ? ' selected' : ''))}
+                onMouseDown={e => {
+                  e.preventDefault()
+                  if (item.value === '') { onChange([]); setOpen(false); setQuery('') }
+                  else toggle(item.value)
+                }}
+              >{item.label}</div>
+            )
+          )}
+          {visibleItems.filter(i => !i.isHeader).length === 0 && (
+            <div className="app-popover-empty">No matches</div>
+          )}
         </div>
-      )}
+      </Popover>
     </div>
   )
 }
