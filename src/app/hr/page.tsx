@@ -203,7 +203,7 @@ export default function HrPage() {
         case 'upload-resume': run = () => triggerOliverUpload(); break
         case 'view-postings': run = () => navTo('hiring'); break
         case 'upload-device': run = () => triggerOliverUpload(); break
-        case 'change-pw':     run = () => { window.location.href = '/profile' }; break
+        case 'change-pw':     run = () => { window.open('https://mysignins.microsoft.com/security-info', '_blank', 'noopener,noreferrer') }; break
         default:              run = () => {}
       }
       return { ...c, run }

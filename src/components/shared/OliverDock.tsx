@@ -245,6 +245,25 @@ export default function OliverDock() {
             onChange={e => {
               const file = e.target.files?.[0]
               if (file && config.upload) {
+                const MAX_BYTES = 10 * 1024 * 1024
+                const acceptList = (config.upload.accepts ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+                const nameLower = file.name.toLowerCase()
+                const mimeLower = (file.type ?? '').toLowerCase()
+                const okType = acceptList.length === 0 || acceptList.some(a =>
+                  a.startsWith('.') ? nameLower.endsWith(a) :
+                  a.endsWith('/*') ? mimeLower.startsWith(a.slice(0, -1)) :
+                  mimeLower === a
+                )
+                if (!okType) {
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Unsupported file type: ' + file.name }])
+                  e.target.value = ''
+                  return
+                }
+                if (file.size > MAX_BYTES) {
+                  setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'File too large (max 10 MB): ' + file.name }])
+                  e.target.value = ''
+                  return
+                }
                 ;(async () => {
                   setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Reading ' + file.name + '…' }])
                   try {

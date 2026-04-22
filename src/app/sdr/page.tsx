@@ -76,7 +76,7 @@ export default function SdrPage() {
         case 'log-call':      run = () => navTo('prospects'); break
         case 'add-opp':       run = () => navTo('prospects'); break
         case 'view-pipeline': run = () => navTo('prospects'); break
-        case 'change-pw':     run = () => { window.location.href = '/profile' }; break
+        case 'change-pw':     run = () => { window.open('https://mysignins.microsoft.com/security-info', '_blank', 'noopener,noreferrer') }; break
         default:              run = () => {}
       }
       return { ...c, run }

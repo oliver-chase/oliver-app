@@ -74,7 +74,7 @@ const DATE_PATTERNS = [
 function parseSpeakerLine(line: string): { speaker: string; text: string } | null {
   // HH:MM:SS format with optional name: "00:01:23 Speaker: text"
   const withTimestamp = line.match(/^(?:\[?(?:\d{1,2}:)?\d{2}:\d{2}(?:\.\d+)?\]?\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[:(]\s*(.+)/)
-  if (withTimestamp && withTimestamp[2].length > 2) {
+  if (withTimestamp && withTimestamp[1] && withTimestamp[2] && withTimestamp[2].length > 2) {
     return { speaker: withTimestamp[1].trim(), text: withTimestamp[2].trim() }
   }
   return null

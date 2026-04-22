@@ -33,25 +33,41 @@ export function useAccountsData() {
   }, [])
 
   const saveAccount = useCallback(async (account: Account) => {
+    let prevAccount: Account | undefined
     setSyncState('syncing')
-    setData(prev => ({ ...prev, accounts: prev.accounts.map(a => a.account_id === account.account_id ? account : a) }))
+    setData(prev => {
+      prevAccount = prev.accounts.find(a => a.account_id === account.account_id)
+      return { ...prev, accounts: prev.accounts.map(a => a.account_id === account.account_id ? account : a) }
+    })
     try {
       await upsertAccount(account)
       setSyncState('ok')
     } catch (e: unknown) {
       setSyncState('error')
+      if (prevAccount) {
+        const reverted = prevAccount
+        setData(prev => ({ ...prev, accounts: prev.accounts.map(a => a.account_id === reverted.account_id ? reverted : a) }))
+      }
       throw e
     }
   }, [])
 
   const saveBackground = useCallback(async (bg: Background) => {
+    let prevBg: Background | undefined
     setSyncState('syncing')
-    setData(prev => ({ ...prev, background: prev.background.map(b => b.background_id === bg.background_id ? bg : b) }))
+    setData(prev => {
+      prevBg = prev.background.find(b => b.background_id === bg.background_id)
+      return { ...prev, background: prev.background.map(b => b.background_id === bg.background_id ? bg : b) }
+    })
     try {
       await upsertBackground(bg)
       setSyncState('ok')
     } catch (e: unknown) {
       setSyncState('error')
+      if (prevBg) {
+        const reverted = prevBg
+        setData(prev => ({ ...prev, background: prev.background.map(b => b.background_id === reverted.background_id ? reverted : b) }))
+      }
       throw e
     }
   }, [])

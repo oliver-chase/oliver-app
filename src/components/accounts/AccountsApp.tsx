@@ -124,7 +124,11 @@ export default function AccountsApp() {
   }, [addAccount, showModal])
 
   const handleUpdateAccount = useCallback(async (account: Account) => {
-    await saveAccount(account)
+    try {
+      await saveAccount(account)
+    } catch (e) {
+      console.error('[accounts] saveAccount failed', e)
+    }
   }, [saveAccount])
 
   const handleArchive = useCallback(async () => {
