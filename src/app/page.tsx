@@ -6,6 +6,7 @@ import { useMemo } from 'react'
    An unstable array ref here = infinite render loop = Links stop working.
    Do not inline the filter into render body. */
 import Link from 'next/link'
+import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@/context/UserContext'
 import { ModuleCard } from '@/components/hub/ModuleCard'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
@@ -51,6 +52,7 @@ const ALL_MODULES: Module[] = [
 
 export default function HubPage() {
   const { appUser, isAdmin, hasPermission } = useUser()
+  const { account, logout } = useAuth()
 
   // TODO: remove bypass once app_users table is created in Supabase and permissions are configured.
   // Run: scripts/setup-app-users.sql, then seed the current user as admin via /admin.
@@ -84,6 +86,15 @@ export default function HubPage() {
 
   return (
     <>
+      {account && (
+        <div className={styles.sessionBar}>
+          <span className={styles.sessionEmail}>{account.username}</span>
+          <button type="button" className={styles.adminBtn} onClick={() => logout()}>
+            Sign out
+          </button>
+        </div>
+      )}
+
       <div className={styles.hub}>
         <div className={styles.brand}>
           <div className={styles.wordmark}>V.Two Ops</div>

@@ -111,6 +111,23 @@
   gap: var(--spacing-sm);
 }
 
+.sessionBar {
+  position: fixed;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  z-index: 10;
+}
+
+.sessionEmail {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-mid);
+  color: var(--color-nav-text-faint);
+}
+
 .adminBtn {
   background: var(--color-nav-bg-deep);
   border: 1px solid var(--color-nav-border);
