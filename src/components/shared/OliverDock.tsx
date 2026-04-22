@@ -4,6 +4,8 @@ import { useOliverContext } from './OliverContext'
 import type { OliverAction } from './OliverContext'
 import { fuzzyFilter } from '@/lib/fuzzy'
 import TranscriptReviewModal from './TranscriptReviewModal'
+import { ChatbotTopbar } from './ChatbotTopbar'
+import { ChatbotInputBar } from './ChatbotInputBar'
 
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -243,27 +245,12 @@ export default function OliverDock() {
         role="complementary"
         aria-label="Oliver"
       >
-        <div className="chatbot-header">
-          <span className="chatbot-header-label">Oliver &middot; {config.pageLabel}</span>
-          {items.some(it => it.kind === 'msg') && (
-            <button
-              className="chatbot-export-btn chatbot-tooltip-wrap"
-              aria-label="Export conversation"
-              data-tooltip="Export conversation"
-              onClick={exportConversation}
-            >
-              &#8595;
-            </button>
-          )}
-          <button
-            className="chatbot-close-btn"
-            aria-label="Close Oliver"
-            title="Close Oliver"
-            onClick={() => setOpen(false)}
-          >
-            &#215;
-          </button>
-        </div>
+        <ChatbotTopbar
+          title={`Oliver · ${config.pageLabel}`}
+          canExport={items.some(it => it.kind === 'msg')}
+          onExport={exportConversation}
+          onClose={() => setOpen(false)}
+        />
 
         {config.upload && (
           <input
@@ -413,58 +400,19 @@ export default function OliverDock() {
             <div className="oliver-upload-guidance">{config.upload.guidance}</div>
           )}
 
-          {/* Input bar */}
-          <div className="chatbot-input-row">
-            {config.upload && (
-              <button
-                type="button"
-                className="btn btn-ghost btn--compact"
-                title={config.upload.hint}
-                aria-label="Upload file"
-                onClick={() => fileInputRef.current?.click()}
-                style={{ flexShrink: 0 }}
-              >
-                &#128206;
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-ghost btn--compact"
-              title={listening ? 'Stop recording' : 'Start voice input'}
-              aria-label={listening ? 'Stop recording' : 'Start voice input'}
-              aria-pressed={listening}
-              onClick={toggleMic}
-              style={{ flexShrink: 0, color: listening ? 'var(--color-brand-primary)' : undefined }}
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="9" y="2" width="6" height="12" rx="3" />
-                <path d="M5 10v2a7 7 0 0 0 14 0v-2" />
-                <path d="M12 19v3" />
-              </svg>
-            </button>
-            <input
-              ref={inputRef}
-              type="text"
-              className="chatbot-input"
-              placeholder={config.placeholder}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
-                if (e.key === 'Escape') setInput('')
-              }}
-              aria-label="Message or command"
-              aria-autocomplete="list"
-            />
-            <button
-              className="btn btn-primary btn--compact chatbot-send"
-              aria-label="Send"
-              disabled={busy || !input.trim()}
-              onClick={send}
-            >
-              Send
-            </button>
-          </div>
+          <ChatbotInputBar
+            ref={inputRef}
+            value={input}
+            onChange={setInput}
+            onSend={send}
+            onUpload={config.upload ? () => fileInputRef.current?.click() : undefined}
+            uploadTitle={config.upload?.hint}
+            onMic={toggleMic}
+            listening={listening}
+            sendDisabled={busy || !input.trim()}
+            placeholder={config.placeholder}
+            onEscape={() => setInput('')}
+          />
         </div>
       </div>
       {reviewModal && (
