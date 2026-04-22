@@ -23,10 +23,13 @@ export default function OliverDock() {
   const [items, setItems] = useState<ChatItem[]>([])
   const [busy, setBusy] = useState(false)
   const [reviewModal, setReviewModal] = useState<{ itemId: number; payload: unknown } | null>(null)
+  const [listening, setListening] = useState(false)
   const idRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   const nextId = () => ++idRef.current
 
@@ -123,6 +126,32 @@ export default function OliverDock() {
       return
     }
     sendChat(text)
+  }
+
+  function toggleMic() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    const SR = typeof window !== 'undefined' && (w.SpeechRecognition || w.webkitSpeechRecognition)
+    if (!SR) {
+      setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: "Voice input isn't supported in this browser." }])
+      return
+    }
+    if (listening) { recognitionRef.current?.stop(); return }
+    const rec = new SR()
+    recognitionRef.current = rec
+    rec.lang = 'en-US'
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+    setListening(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript: string = e.results[0][0].transcript
+      setListening(false)
+      sendChat(transcript)
+    }
+    rec.onerror = () => setListening(false)
+    rec.onend = () => setListening(false)
+    rec.start()
   }
 
   function exportConversation() {
@@ -396,6 +425,21 @@ export default function OliverDock() {
                 &#128206;
               </button>
             )}
+            <button
+              type="button"
+              className="btn btn-ghost btn--compact"
+              title={listening ? 'Stop recording' : 'Start voice input'}
+              aria-label={listening ? 'Stop recording' : 'Start voice input'}
+              aria-pressed={listening}
+              onClick={toggleMic}
+              style={{ flexShrink: 0, color: listening ? 'var(--color-brand-primary)' : undefined }}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="12" rx="3" />
+                <path d="M5 10v2a7 7 0 0 0 14 0v-2" />
+                <path d="M12 19v3" />
+              </svg>
+            </button>
             <input
               ref={inputRef}
               type="text"
