@@ -29,7 +29,7 @@
   font-size: var(--font-size-2xs);
   letter-spacing: var(--letter-spacing-xwide);
   text-transform: uppercase;
-  color: var(--color-nav-text-faint);
+  color: var(--color-nav-text-muted);
   margin-top: var(--spacing-md);
 }
 
@@ -93,7 +93,7 @@
   text-align: center;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-2xs);
-  color: var(--color-nav-text-faint);
+  color: var(--color-nav-text-muted);
   letter-spacing: var(--letter-spacing-wide);
 }
 
@@ -125,14 +125,14 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-2xs);
   letter-spacing: var(--letter-spacing-mid);
-  color: var(--color-nav-text-faint);
+  color: var(--color-nav-text-muted);
 }
 
 .adminBtn {
   background: var(--color-nav-bg-deep);
-  border: 1px solid var(--color-nav-border);
+  border: 1px solid var(--color-nav-text-muted);
   border-radius: var(--radius-md);
-  color: var(--color-nav-text-faint);
+  color: var(--color-nav-text-muted);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-2xs);
   letter-spacing: var(--letter-spacing-mid);
