@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useOliverContext } from './OliverContext'
-import type { OliverAction } from './OliverContext'
+import type { OliverAction, OliverFlow } from './OliverContext'
 import { fuzzyFilter } from '@/lib/fuzzy'
 import TranscriptReviewModal from './TranscriptReviewModal'
 import { ChatbotTopbar } from './ChatbotTopbar'
@@ -26,6 +26,10 @@ export default function OliverDock() {
   const [busy, setBusy] = useState(false)
   const [reviewModal, setReviewModal] = useState<{ itemId: number; payload: unknown } | null>(null)
   const [listening, setListening] = useState(false)
+  // Active flow runtime. `answers` collects the stepper outputs keyed by step id.
+  const [flowState, setFlowState] = useState<{ flow: OliverFlow; stepIdx: number; answers: Record<string, unknown> } | null>(null)
+  const flowStateRef = useRef(flowState)
+  useEffect(() => { flowStateRef.current = flowState }, [flowState])
   const idRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const messagesRef = useRef<HTMLDivElement>(null)
@@ -87,7 +91,68 @@ export default function OliverDock() {
 
   async function executeAction(a: OliverAction) {
     setInput('')
+    // An action's id may match a registered flow id — if so, start the flow
+    // instead of running the action's side effect.
+    const flow = config?.flows?.find(f => f.id === a.id)
+    if (flow) { startFlow(flow); return }
     try { await a.run() } catch (err) { console.error('[Oliver] action failed', a.id, err) }
+  }
+
+  // ── Flow runtime ─────────────────────────────────────────────
+  // A flow is a list of steps. We walk step-by-step, collecting answers into
+  // answers[step.id]. Each step's UI renders inline as a chat card.
+
+  function startFlow(flow: OliverFlow) {
+    setFlowState({ flow, stepIdx: 0, answers: {} })
+    setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'user', text: flow.label }])
+    promptFlowStep(flow, 0, {})
+  }
+
+  function promptFlowStep(flow: OliverFlow, idx: number, answers: Record<string, unknown>) {
+    // Skip any steps the flow wants to skip.
+    let i = idx
+    while (i < flow.steps.length && flow.steps[i].skipIf?.(answers)) i++
+    if (i >= flow.steps.length) { void finishFlow(flow, answers); return }
+    const step = flow.steps[i]
+    const prompt = typeof step.prompt === 'function' ? step.prompt(answers) : step.prompt
+    setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: prompt }])
+    setFlowState({ flow, stepIdx: i, answers })
+    if (step.kind !== 'text' && step.kind !== 'number') {
+      // Choice/entity steps get their picker rendered below the last message
+      // via the same chatbot-messages container — see the JSX block.
+    } else {
+      setTimeout(() => inputRef.current?.focus(), 40)
+    }
+  }
+
+  function supplyFlowAnswer(value: string) {
+    const s = flowStateRef.current
+    if (!s) return
+    const step = s.flow.steps[s.stepIdx]
+    if (step.optional !== true && !value.trim() && step.kind !== 'choice' && step.kind !== 'entity') {
+      setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Need a value — type one or Cancel.' }])
+      return
+    }
+    setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'user', text: value || '(skipped)' }])
+    const nextAnswers = { ...s.answers, [step.id]: value }
+    promptFlowStep(s.flow, s.stepIdx + 1, nextAnswers)
+  }
+
+  async function finishFlow(flow: OliverFlow, answers: Record<string, unknown>) {
+    try {
+      const confirmation = await flow.run(answers)
+      setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: confirmation }])
+    } catch (err) {
+      console.error('[Oliver] flow run failed', flow.id, err)
+      setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Something went wrong — try again?' }])
+    } finally {
+      setFlowState(null)
+    }
+  }
+
+  function cancelFlow() {
+    setFlowState(null)
+    setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Cancelled.' }])
   }
 
   const sendChat = useCallback(async (text: string) => {
@@ -124,12 +189,24 @@ export default function OliverDock() {
     const text = input.trim()
     if (!text) return
     setInput('')
+    // If a flow step is awaiting typed input, route there first.
+    const s = flowStateRef.current
+    if (s) {
+      const step = s.flow.steps[s.stepIdx]
+      if (step.kind === 'text' || step.kind === 'number') { supplyFlowAnswer(text); return }
+    }
     // Execute top fuzzy match; fall through to chat if none found.
     if (suggestions.length > 0) {
       executeAction(suggestions[0])
       return
     }
     sendChat(text)
+  }
+
+  function resetOliver() {
+    setFlowState(null)
+    setItems([])
+    setInput('')
   }
 
   function toggleMic() {
@@ -249,6 +326,8 @@ export default function OliverDock() {
           title={`Oliver · ${config.pageLabel}`}
           canExport={items.some(it => it.kind === 'msg')}
           onExport={exportConversation}
+          canReset={items.length > 0 || !!flowState}
+          onReset={resetOliver}
           onClose={() => setOpen(false)}
         />
 
@@ -375,6 +454,41 @@ export default function OliverDock() {
                 <span className="chatbot-typing-dot" />
               </div>
             )}
+            {flowState && (() => {
+              const step = flowState.flow.steps[flowState.stepIdx]
+              if (step.kind === 'choice') {
+                return (
+                  <div className="oliver-fab-row" role="toolbar" aria-label={step.id}>
+                    {step.choices.map(c => (
+                      <button key={c.value} className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); supplyFlowAnswer(c.value) }}>{c.label}</button>
+                    ))}
+                    {step.optional && (
+                      <button className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); supplyFlowAnswer('') }}>Skip</button>
+                    )}
+                    <button className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); cancelFlow() }}>Cancel</button>
+                  </div>
+                )
+              }
+              if (step.kind === 'entity') {
+                return (
+                  <div className="oliver-fab-row" role="toolbar" aria-label={step.id}>
+                    {step.options().slice(0, 12).map(o => (
+                      <button key={o.value} className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); supplyFlowAnswer(o.value) }}>{o.label}</button>
+                    ))}
+                    <button className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); cancelFlow() }}>Cancel</button>
+                  </div>
+                )
+              }
+              // text / number — rendered inline-cancel only; typed value flows through send().
+              return (
+                <div className="oliver-fab-row" role="toolbar" aria-label={step.id}>
+                  {step.optional && (
+                    <button className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); supplyFlowAnswer('') }}>Skip</button>
+                  )}
+                  <button className="oliver-fab-chip" onMouseDown={e => { e.preventDefault(); cancelFlow() }}>Cancel</button>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Typeahead suggestions */}

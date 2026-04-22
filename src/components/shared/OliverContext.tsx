@@ -40,11 +40,64 @@ export interface OliverUpload {
   commit: (payload: unknown) => Promise<{ message: string }>
 }
 
+/**
+ * A single step in a chat-driven stepper.
+ * - 'choice' steps render a fixed list of picker buttons.
+ * - 'entity'  steps render a data-driven list (user's stakeholders, actions,
+ *             etc.) plus accept typed input as a fallback.
+ * - 'text'   | 'number' collect free-typed input.
+ */
+export type OliverFlowStep =
+  | {
+      id: string
+      prompt: string | ((answers: Record<string, unknown>) => string)
+      kind: 'choice'
+      choices: Array<{ label: string; value: string }>
+      optional?: boolean
+      skipIf?: (answers: Record<string, unknown>) => boolean
+    }
+  | {
+      id: string
+      prompt: string | ((answers: Record<string, unknown>) => string)
+      kind: 'entity'
+      /** Produces the option list from current state (live data). */
+      options: () => Array<{ label: string; value: string }>
+      placeholder?: string
+      optional?: boolean
+      skipIf?: (answers: Record<string, unknown>) => boolean
+    }
+  | {
+      id: string
+      prompt: string | ((answers: Record<string, unknown>) => string)
+      kind: 'text' | 'number'
+      placeholder?: string
+      optional?: boolean
+      skipIf?: (answers: Record<string, unknown>) => boolean
+    }
+
+export interface OliverFlow {
+  /** Stable id. Also used as the action id if triggered via a chip/alias. */
+  id: string
+  label: string
+  /** What the user sees as the "you picked this" echo. */
+  hint?: string
+  /** Synonyms so the fuzzy matcher can route typed intent. */
+  aliases?: string[]
+  /** Ordered list of steps. Each step writes into answers[step.id]. */
+  steps: OliverFlowStep[]
+  /** Invoked when all steps are answered. Return the bot's confirmation line. */
+  run: (answers: Record<string, unknown>) => Promise<string> | string
+  /** Optional undo — shown after run() resolves. */
+  undo?: (answers: Record<string, unknown>) => Promise<void> | void
+}
+
 export interface OliverConfig {
   pageLabel: string
   placeholder: string
   greeting?: string
   actions: OliverAction[]
+  /** Chat-driven stepper flows registered by the page/module. */
+  flows?: OliverFlow[]
   quickConvos?: string[]
   upload?: OliverUpload
   contextPayload?: () => unknown
