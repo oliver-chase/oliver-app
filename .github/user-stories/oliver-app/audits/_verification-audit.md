@@ -1,0 +1,294 @@
+# Oliver App Verification Audit
+
+This audit read the story index, all story files, coverage audit, traceability matrix, CI workflow, package scripts, and searched for test/spec files. No unit, integration, or e2e test suite is present in this repo. CI currently provides typecheck, CSS token scan, and static Next build only.
+
+## Verification Summary
+
+- Total stories: 121
+- Strong verification path: 6
+- Weak verification path: 109
+- No meaningful verification path: 6
+- Automated test files found: 0
+- CI commands: npm run typecheck, npm run check-tokens, npm run build
+
+| Story ID | Title | Status | Verification Path | Strength | Evidence | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| US-OLV-001 | Bootstrap app shell | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | Backdated from the initial Create Next App commit. |
+| US-OLV-002 | Configure static export | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | Cloudflare Pages Functions still provide API endpoints separately from the static app. |
+| US-OLV-003 | Wire Supabase browser client | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Client-side Supabase access is intentional for most module data. |
+| US-OLV-004 | Load shared design tokens | Code Present | Build/lint/typecheck | Strong | scripts/check-tokens.mjs; .github/workflows/ci.yml | Later milestones harden token enforcement with CI. |
+| US-OLV-005 | Document staging workflow | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | README was rewritten later to match current state. |
+| US-OLV-006 | Provide Microsoft login | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code is present in AuthProvider/AuthGuard/login; end-to-end Azure env behavior is not human-verified. |
+| US-OLV-007 | Preserve auth session | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Depends on configured Azure client and tenant environment variables. |
+| US-OLV-008 | Guard private routes | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code present; historical docs conflict with current MSAL reintroduction. |
+| US-OLV-009 | Model app users | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Schema and API code exist; UserProvider is not currently mounted. |
+| US-OLV-010 | Restrict module visibility | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | UserContext currently returns default null user and hasPermission false; hub bypass shows modules before permissions are ready. |
+| US-OLV-011 | Expose admin shortcuts | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | isAdmin comes from an unmounted/default UserContext, so these links are not expected to appear in normal current state. |
+| US-OLV-012 | Operate admin workspace | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | The route exists, but admin identity depends on the unmounted UserContext. |
+| US-OLV-013 | Proxy app user CRUD | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Direct client access is intentionally avoided in src/lib/users.ts. |
+| US-OLV-014 | Enforce app users RLS | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implementation exists in migration/API; database application was not verified here. |
+| US-OLV-015 | Show module directory | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | CRM exists as a stub route. |
+| US-OLV-016 | Render module cards | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Component is present under src/components/hub. |
+| US-OLV-017 | Show hub session controls | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Depends on MSAL being configured in the deployed environment. |
+| US-OLV-018 | Serve accounts route | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code present; data shape depends on Supabase tables. |
+| US-OLV-019 | Browse account portfolio | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Portfolio behavior was refined across Apr 16-20 commits. |
+| US-OLV-020 | Group account cards by tier | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Specific tier labels depend on current Supabase data. |
+| US-OLV-021 | Edit account client company on card | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Added after the initial portfolio migration. |
+| US-OLV-022 | Open account detail | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Rendered inside an ErrorBoundary that reports AccountView crashes. |
+| US-OLV-023 | Edit account overview | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Several follow-up commits fixed cadence, headings, and empty states. |
+| US-OLV-024 | Edit account name in topbar | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Topbar behavior was corrected across multiple visual QA commits. |
+| US-OLV-025 | Archive and unarchive accounts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented through AccountsApp account save flow. |
+| US-OLV-026 | Delete accounts cascade | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Failure is logged; there is no visible recovery toast for this path. |
+| US-OLV-027 | Navigate account sidebar | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Sidebar navigation was restored in follow-up commits. |
+| US-OLV-028 | Show shared topbar | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Topbar order and labels were repeatedly tuned to match source. |
+| US-OLV-029 | Filter account workspace | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Filter reset and propagation were corrected after initial implementation. |
+| US-OLV-030 | Manage account stakeholders | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Includes seniority, executive, incomplete, V.Two owner, and engagement filters. |
+| US-OLV-031 | Visualize org chart | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Touch behavior and circular guards were added in follow-up fixes. |
+| US-OLV-032 | Prevent invalid reporting loops | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from people/orgchart QA fixes. |
+| US-OLV-033 | Manage account actions | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Section header, filters, and body wrappers were refined after initial port. |
+| US-OLV-034 | Track account opportunities | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Promotion includes caveats for stakeholder data loss where applicable. |
+| US-OLV-035 | Promote opportunity to project | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Exact field mapping should be verified against live data. |
+| US-OLV-036 | Track account projects | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from initial project section plus later movement workflow. |
+| US-OLV-037 | Move project to opportunity | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented as a recovery/correction workflow. |
+| US-OLV-038 | Capture account notes | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Note parsing/markdown support was refined later. |
+| US-OLV-039 | Manage note attendees | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented inside NotesSection attendee controls. |
+| US-OLV-040 | Export account data | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Uses browser APIs rather than a server-side PDF renderer. |
+| US-OLV-041 | Choose export note scope | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code present in ExportPanel note toggles. |
+| US-OLV-042 | Add new accounts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Full client name was added on Apr 18. |
+| US-OLV-043 | Use custom pickers | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Native select replacement was a repeated migration theme. |
+| US-OLV-044 | Support picker portals | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from portal dropdown and pill style fixes. |
+| US-OLV-045 | Confirm destructive actions | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Replaced native prompt/confirm flows. |
+| US-OLV-046 | Undo soft deletes | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Used across selected account and HR deletion flows. |
+| US-OLV-047 | Sync account data | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Some individual save failures are console-only and should be verified. |
+| US-OLV-048 | Recover from AccountView crash | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Marked as temporary in commit history but still present. |
+| US-OLV-049 | Parse local transcripts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Parser output is designed to match /api/parse-document schema. |
+| US-OLV-050 | Parse uploaded documents | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Actual docx/pdf text extraction quality depends on browser readAsText and API behavior. |
+| US-OLV-051 | Parse org chart images | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Vision extraction requires configured AI provider keys. |
+| US-OLV-052 | Review parsed transcripts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Review modal is shared by the upload pipeline. |
+| US-OLV-053 | Detect import conflicts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Conflict detection is intentionally narrow. |
+| US-OLV-054 | Commit imported account data | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Uses anon key in confirm-write per current function implementation. |
+| US-OLV-055 | Handle import write failure | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | No automatic rollback is needed because writes are attempted as a batch of independent requests. |
+| US-OLV-056 | Answer contextual chat | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | AI provider must be configured in ai_config/env. |
+| US-OLV-057 | Handle chat provider failures | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Failure handling is user-visible inside OliverDock. |
+| US-OLV-058 | Open OliverDock | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Locked invariant says not to mount extra chatbot components. |
+| US-OLV-059 | Capture voice input | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Browser support varies. |
+| US-OLV-060 | Export Oliver conversation | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Parse cards and write prompts are not included as normal chat messages. |
+| US-OLV-061 | Reset Oliver conversation | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented in OliverDock resetOliver. |
+| US-OLV-062 | Show quick command chips | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Granular/fuzzy split was added on Apr 22. |
+| US-OLV-063 | Suggest fuzzy commands | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Uses a lightweight local fuzzy scorer. |
+| US-OLV-064 | Run Oliver step flows | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Separate from older HR StepFlowRunner modal flows. |
+| US-OLV-065 | Run accounts chat flows | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Specific flow list is derived from src/app/accounts/flows.ts. |
+| US-OLV-066 | Run HR chat flows | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Additional HR modal step flows also exist for richer entity operations. |
+| US-OLV-067 | Run SDR chat flows | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Specific flow behaviors should be verified against src/app/sdr/flows.ts. |
+| US-OLV-068 | Browse HR dashboard | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | HR data comes from multiple Supabase tables. |
+| US-OLV-069 | Navigate HR sections | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Responsive sidebar behavior was tuned later. |
+| US-OLV-070 | Search HR records globally | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented with GlobalSearch and GlobalSearchButton. |
+| US-OLV-071 | Quick add HR records | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Uses dbWrite to surface Supabase errors. |
+| US-OLV-072 | Manage hiring pipeline | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Detailed behavior spans HrHiring, EditCandidateModal, InterviewLogModal, and flow files. |
+| US-OLV-073 | Promote candidate to employee | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Promotion behavior should be browser-verified end to end. |
+| US-OLV-074 | Upload HR source files | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Receipt parsing is client-side; resume parsing behavior depends on configured flows. |
+| US-OLV-075 | Parse receipt uploads | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Parser is heuristic and should be tested with real receipts. |
+| US-OLV-076 | Manage employee directory | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Offboarding is handled as a separate workflow. |
+| US-OLV-077 | Start employee offboarding | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented in HrDirectory and emp flows. |
+| US-OLV-078 | Manage onboarding runs | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Exact task UI should be verified manually. |
+| US-OLV-079 | Manage device inventory | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Device deletion has both component and guided-flow variants. |
+| US-OLV-080 | Assign devices | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented in device-flows.tsx. |
+| US-OLV-081 | Return devices | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implemented in device-flows.tsx. |
+| US-OLV-082 | Browse device assignments | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Assignment page received date/avatar QA fixes. |
+| US-OLV-083 | Manage HR tracks and tasks | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Uses dbWriteMulti/dbWrite for Supabase writes. |
+| US-OLV-084 | View HR reports | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Activity section was removed during later reports cleanup. |
+| US-OLV-085 | Configure HR settings | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Exact list editing behavior should be verified in browser. |
+| US-OLV-086 | Run HR modal step flows | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Separate from OliverDock conversational flows. |
+| US-OLV-087 | Prevent HR double submits | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from HR review fixes. |
+| US-OLV-088 | Surface Supabase write errors | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Important because supabase-js v2 does not throw automatically. |
+| US-OLV-089 | Browse SDR workspace | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Initial SDR route was added with HR/CRM hub completion and refined later. |
+| US-OLV-090 | Inspect SDR overview | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Exact visual metrics should be manually verified. |
+| US-OLV-091 | Filter SDR prospects | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Prospect edit depth depends on current SdrProspects implementation. |
+| US-OLV-092 | Inspect SDR prospect detail | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Queued draft badge and refresh button were added later. |
+| US-OLV-093 | Show queued SDR drafts badge | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from sdr/detail queued-drafts commit. |
+| US-OLV-094 | Approve or reject SDR drafts | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Client calls /api/sdr-approve, but no matching function file was found in functions/api during inspection. |
+| US-OLV-095 | Review SDR outreach sends | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | No send mutation path was identified in current files. |
+| US-OLV-096 | Edit SDR pipeline | In Progress | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Read and inspect paths are clear; full mutation coverage was hard to confirm from current files. |
+| US-OLV-097 | Show CRM placeholder | Not Started | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | The placeholder exists; CRM feature implementation itself has not started. |
+| US-OLV-098 | Register CRM Oliver config | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Useful shell behavior even though CRM itself is not implemented. |
+| US-OLV-099 | Edit design token overrides | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Access to Admin depends on current auth/admin wiring. |
+| US-OLV-100 | Apply runtime token overrides | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Requires Supabase design_tokens data. |
+| US-OLV-101 | Browse design system reference | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Design system page grew across several token governance commits. |
+| US-OLV-102 | Audit dead design tokens | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implementation exists in page code; audit accuracy should be reviewed. |
+| US-OLV-103 | Preview component library | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Accessible through Admin tab once admin routing is available. |
+| US-OLV-104 | Store AI provider keys | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Function uses Supabase anon key per current implementation; admin gating should be verified. |
+| US-OLV-105 | Call Anthropic with fallback key | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Inferred from _shared/ai.js usage and tech-debt state notes. |
+| US-OLV-106 | Scan token drift | Code Present | Build/lint/typecheck | Strong | scripts/check-tokens.mjs; .github/workflows/ci.yml | CI also runs the scanner. |
+| US-OLV-107 | Run build and typecheck | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | No unit test script is present. |
+| US-OLV-108 | Pin Node runtime for builds | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | Backdated from build blocker fixes. |
+| US-OLV-109 | Persist chat history schema | In Progress | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Schema file exists, but current OliverDock stores conversation in local component state only. |
+| US-OLV-110 | Handle page-aware AI chat | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | CRM has no contextPayload beyond static config. |
+| US-OLV-111 | Refresh module data from Oliver | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Refresh behavior is callback-based per module. |
+| US-OLV-112 | Open password security settings | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Named change-pw in command registries. |
+| US-OLV-113 | Use responsive module shells | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from Apr 18 responsive audit commits. |
+| US-OLV-114 | Constrain modal and popover layout | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Later portal dropdown work further refined account pickers. |
+| US-OLV-115 | Lock HR page shell spacing | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Documented in locked.md and margin-scale.md. |
+| US-OLV-116 | Standardize pill styling | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Pill sizing was adjusted across Apr 20 and Apr 22 commits. |
+| US-OLV-117 | Maintain tech debt state docs | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | These docs can become stale and should be updated with code changes. |
+| US-OLV-118 | Backfill user stories | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | This story describes the backfill artifact itself. |
+| US-OLV-119 | Import HR candidate lists with AI intake | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Broken: AIIntakeModal currently sends FormData to /api/parse-image and text/plain to /api/parse-document, but those functions expect JSON bodies. |
+| US-OLV-120 | Copy operational values to clipboard | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Clipboard behavior is present in several components but has limited user-visible failure feedback. |
+| US-OLV-121 | Handle token override load failures | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Failure path is console-only; there is no in-app alert for token override load failures. |
+
+## Strong Verification
+
+These stories have a credible automated gate through CI build, TypeScript, or token scan. This is not equivalent to behavioral e2e coverage.
+
+- US-OLV-001 Bootstrap app shell: .github/workflows/ci.yml; package.json; next.config.ts
+- US-OLV-002 Configure static export: .github/workflows/ci.yml; package.json; next.config.ts
+- US-OLV-004 Load shared design tokens: scripts/check-tokens.mjs; .github/workflows/ci.yml
+- US-OLV-106 Scan token drift: scripts/check-tokens.mjs; .github/workflows/ci.yml
+- US-OLV-107 Run build and typecheck: .github/workflows/ci.yml; package.json; next.config.ts
+- US-OLV-108 Pin Node runtime for builds: .github/workflows/ci.yml; package.json; next.config.ts
+
+## Weak Verification
+
+These stories can currently be checked only by manual review/manual browser validation or inferred source inspection. They do not have dedicated tests.
+
+- US-OLV-003 Wire Supabase browser client: Manual review.
+- US-OLV-005 Document staging workflow: Manual review.
+- US-OLV-006 Provide Microsoft login: Manual review.
+- US-OLV-007 Preserve auth session: Manual review.
+- US-OLV-008 Guard private routes: Manual review.
+- US-OLV-009 Model app users: Manual review.
+- US-OLV-013 Proxy app user CRUD: Manual review.
+- US-OLV-014 Enforce app users RLS: Manual review.
+- US-OLV-015 Show module directory: Manual review.
+- US-OLV-016 Render module cards: Manual review.
+- US-OLV-017 Show hub session controls: Manual review.
+- US-OLV-018 Serve accounts route: Manual review.
+- US-OLV-019 Browse account portfolio: Manual review.
+- US-OLV-020 Group account cards by tier: Manual review.
+- US-OLV-021 Edit account client company on card: Manual review.
+- US-OLV-022 Open account detail: Manual review.
+- US-OLV-023 Edit account overview: Manual review.
+- US-OLV-024 Edit account name in topbar: Manual review.
+- US-OLV-025 Archive and unarchive accounts: Manual review.
+- US-OLV-026 Delete accounts cascade: Manual review.
+- US-OLV-027 Navigate account sidebar: Manual review.
+- US-OLV-028 Show shared topbar: Manual review.
+- US-OLV-029 Filter account workspace: Manual review.
+- US-OLV-030 Manage account stakeholders: Manual review.
+- US-OLV-031 Visualize org chart: Manual review.
+- US-OLV-032 Prevent invalid reporting loops: Manual review.
+- US-OLV-033 Manage account actions: Manual review.
+- US-OLV-034 Track account opportunities: Manual review.
+- US-OLV-035 Promote opportunity to project: Manual review.
+- US-OLV-036 Track account projects: Manual review.
+- US-OLV-037 Move project to opportunity: Manual review.
+- US-OLV-038 Capture account notes: Manual review.
+- US-OLV-039 Manage note attendees: Manual review.
+- US-OLV-040 Export account data: Manual review.
+- US-OLV-041 Choose export note scope: Manual review.
+- US-OLV-042 Add new accounts: Manual review.
+- US-OLV-043 Use custom pickers: Manual review.
+- US-OLV-044 Support picker portals: Manual review.
+- US-OLV-045 Confirm destructive actions: Manual review.
+- US-OLV-046 Undo soft deletes: Manual review.
+- US-OLV-047 Sync account data: Manual review.
+- US-OLV-048 Recover from AccountView crash: Manual review.
+- US-OLV-049 Parse local transcripts: Manual review.
+- US-OLV-050 Parse uploaded documents: Manual review.
+- US-OLV-051 Parse org chart images: Manual review.
+- US-OLV-052 Review parsed transcripts: Manual review.
+- US-OLV-053 Detect import conflicts: Manual review.
+- US-OLV-054 Commit imported account data: Manual review.
+- US-OLV-055 Handle import write failure: Manual review.
+- US-OLV-056 Answer contextual chat: Manual review.
+- US-OLV-057 Handle chat provider failures: Manual review.
+- US-OLV-058 Open OliverDock: Manual review.
+- US-OLV-059 Capture voice input: Manual review.
+- US-OLV-060 Export Oliver conversation: Manual review.
+- US-OLV-061 Reset Oliver conversation: Manual review.
+- US-OLV-062 Show quick command chips: Manual review.
+- US-OLV-063 Suggest fuzzy commands: Manual review.
+- US-OLV-064 Run Oliver step flows: Manual review.
+- US-OLV-065 Run accounts chat flows: Manual review.
+- US-OLV-066 Run HR chat flows: Manual review.
+- US-OLV-067 Run SDR chat flows: Manual review.
+- US-OLV-068 Browse HR dashboard: Manual review.
+- US-OLV-069 Navigate HR sections: Manual review.
+- US-OLV-070 Search HR records globally: Manual review.
+- US-OLV-071 Quick add HR records: Manual review.
+- US-OLV-072 Manage hiring pipeline: Manual review.
+- US-OLV-073 Promote candidate to employee: Manual review.
+- US-OLV-074 Upload HR source files: Manual review.
+- US-OLV-075 Parse receipt uploads: Manual review.
+- US-OLV-076 Manage employee directory: Manual review.
+- US-OLV-077 Start employee offboarding: Manual review.
+- US-OLV-078 Manage onboarding runs: Manual review.
+- US-OLV-079 Manage device inventory: Manual review.
+- US-OLV-080 Assign devices: Manual review.
+- US-OLV-081 Return devices: Manual review.
+- US-OLV-082 Browse device assignments: Manual review.
+- US-OLV-083 Manage HR tracks and tasks: Manual review.
+- US-OLV-084 View HR reports: Manual review.
+- US-OLV-085 Configure HR settings: Manual review.
+- US-OLV-086 Run HR modal step flows: Manual review.
+- US-OLV-087 Prevent HR double submits: Manual review.
+- US-OLV-088 Surface Supabase write errors: Manual review.
+- US-OLV-089 Browse SDR workspace: Manual review.
+- US-OLV-090 Inspect SDR overview: Manual review.
+- US-OLV-091 Filter SDR prospects: Manual review.
+- US-OLV-092 Inspect SDR prospect detail: Manual review.
+- US-OLV-093 Show queued SDR drafts badge: Manual review.
+- US-OLV-095 Review SDR outreach sends: Manual review.
+- US-OLV-096 Edit SDR pipeline: Manual review.
+- US-OLV-097 Show CRM placeholder: Manual review.
+- US-OLV-098 Register CRM Oliver config: Manual review.
+- US-OLV-099 Edit design token overrides: Manual review.
+- US-OLV-100 Apply runtime token overrides: Manual review.
+- US-OLV-101 Browse design system reference: Manual review.
+- US-OLV-102 Audit dead design tokens: Manual review.
+- US-OLV-103 Preview component library: Manual review.
+- US-OLV-104 Store AI provider keys: Manual review.
+- US-OLV-105 Call Anthropic with fallback key: Manual review.
+- US-OLV-110 Handle page-aware AI chat: Manual review.
+- US-OLV-111 Refresh module data from Oliver: Manual review.
+- US-OLV-112 Open password security settings: Manual review.
+- US-OLV-113 Use responsive module shells: Manual review.
+- US-OLV-114 Constrain modal and popover layout: Manual review.
+- US-OLV-115 Lock HR page shell spacing: Manual review.
+- US-OLV-116 Standardize pill styling: Manual review.
+- US-OLV-117 Maintain tech debt state docs: Manual review.
+- US-OLV-118 Backfill user stories: Manual review.
+- US-OLV-120 Copy operational values to clipboard: Manual review.
+- US-OLV-121 Handle token override load failures: Manual review.
+
+## No Verification Path
+
+These stories describe broken, incomplete, or schema-only behavior where no meaningful validation can pass until implementation work occurs.
+
+- US-OLV-010 Restrict module visibility: UserContext currently returns default null user and hasPermission false; hub bypass shows modules before permissions are ready.
+- US-OLV-011 Expose admin shortcuts: isAdmin comes from an unmounted/default UserContext, so these links are not expected to appear in normal current state.
+- US-OLV-012 Operate admin workspace: The route exists, but admin identity depends on the unmounted UserContext.
+- US-OLV-094 Approve or reject SDR drafts: Client calls /api/sdr-approve, but no matching function file was found in functions/api during inspection.
+- US-OLV-109 Persist chat history schema: Schema file exists, but current OliverDock stores conversation in local component state only.
+- US-OLV-119 Import HR candidate lists with AI intake: Broken: AIIntakeModal currently sends FormData to /api/parse-image and text/plain to /api/parse-document, but those functions expect JSON bodies.
+
+## Missing High-Risk Verification
+
+- Auth and permissions: MSAL login/session/guard behavior has no e2e test, and permission/admin stories are broken because UserContext is not wired to app_users.
+- Input validation: parse-document, parse-image, confirm-write, users, and admin keys endpoints have no API contract tests for invalid JSON, missing fields, size limits, unsupported media types, and service-role/env failures.
+- Config/secrets assumptions: Azure env, Supabase public env, Supabase service role, Anthropic ai_config, fallback key, and ANTHROPIC_API_KEY are not covered by runtime config tests.
+- Error/retry paths: Anthropic fallback retry, OliverDock network errors, token override load failures, Supabase write failures, soft-delete expiry failures, and clipboard failures lack automated assertions.
+- Loading/empty/fallback states: Accounts, HR, SDR, design-system, CRM placeholder, empty module list, and no-data tables are mostly manual-only.
+- Imports/exports: account transcript/document/image import, conflict dry-run, commit-write side effects, ExportPanel print blob, Oliver conversation export, HR Candidate Intake, and receipt parsing have no automated tests.
+- Syncs and data mutation side effects: account cascade delete, opportunity/project promotion, HR offboarding run creation, device assignment/return, candidate promotion/rejection, SDR prospect edits, and token override writes are manual-only.
+- Webhooks/background jobs: none implemented; absence is documented but not enforced by tests.
+- Edge inputs: large documents, malformed AI JSON, circular org relationships, duplicate imports, missing Supabase rows, and unsupported browser APIs are not covered by automated tests.
+
+## Recommended Next Tests
+
+1. Add Playwright smoke tests for login guard redirects, hub navigation, Accounts portfolio/detail, HR navigation/search, SDR tabs/detail, Admin/design-system access, and CRM placeholder.
+2. Add API contract tests for Cloudflare functions: /api/chat, /api/parse-document, /api/parse-image, /api/confirm-write, /api/users, and /api/admin/keys with valid and invalid payloads.
+3. Add unit tests for transcript-parser, receipt-parser, fuzzy scoring, check-tokens, dbWrite/dbWriteMulti, and conflict detection/write summary logic extracted from confirm-write.
+4. Add mutation integration tests with mocked Supabase for account cascade delete, opportunity/project promotion, HR quick-add rollback, device assignment/return, candidate stage changes, token overrides, and app_users service-role proxy.
+5. Add e2e import/export tests for account transcript import review/dry-run/commit, org-chart image rejection paths, ExportPanel print blob creation, Oliver conversation export, and HR Candidate Intake after its API contract is fixed.
+6. Add browser capability tests/mocks for SpeechRecognition unsupported state and clipboard success/failure states.
+7. Add a lint/test guard for story support files so audit docs do not conflict with prompt-lint story-file validation.

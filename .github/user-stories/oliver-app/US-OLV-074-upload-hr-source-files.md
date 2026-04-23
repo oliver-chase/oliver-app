@@ -14,6 +14,7 @@ Acceptance Criteria:
 - [ ] HR Oliver commands can trigger the shared file picker.
 - [ ] Upload guidance reflects the current HR context.
 - [ ] Resume/device upload commands are available from HR command metadata.
+- [ ] Candidate Intake displays Processing, Review, and Error phases for uploaded source files.
 - [ ] Parse failures remain in the dock without mutating HR data.
 
 Notes: Receipt parsing is client-side; resume parsing behavior depends on configured flows.

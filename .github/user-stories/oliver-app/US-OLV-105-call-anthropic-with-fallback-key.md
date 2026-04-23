@@ -11,7 +11,8 @@ I want AI calls to retry with fallback credentials when needed
 So that temporary provider limits do not immediately break workflows
 
 Acceptance Criteria:
-- [ ] Shared AI helper loads active AI config.
+- [ ] Shared AI helper loads the newest active ai_config row from Supabase when SUPABASE_URL and SUPABASE_ANON_KEY are configured.
+- [ ] Shared AI helper falls back to ANTHROPIC_API_KEY and the default Haiku model when no active ai_config row is available.
 - [ ] callAnthropic sends the configured model and messages.
 - [ ] 401 or 429 responses can retry with fallbackKey when present.
 - [ ] Errors are returned as structured API responses.

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "lint": "npm run check-tokens",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check-tokens": "node scripts/check-tokens.mjs"

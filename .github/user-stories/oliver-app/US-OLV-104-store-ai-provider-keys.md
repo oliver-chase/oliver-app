@@ -16,6 +16,8 @@ Acceptance Criteria:
 - [ ] PATCH updates an existing ai_config row.
 - [ ] DELETE removes a selected ai_config row.
 - [ ] Missing Supabase config returns 503.
+- [ ] GET masks api_key and fallback_key values before returning rows to the browser.
+- [ ] PATCH refuses to update api_key by deleting that field from the patch payload before forwarding to Supabase.
 
 Notes: Function uses Supabase anon key per current implementation; admin gating should be verified.
 ---

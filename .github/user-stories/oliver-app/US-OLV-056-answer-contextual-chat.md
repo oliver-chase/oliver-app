@@ -14,7 +14,9 @@ Acceptance Criteria:
 - [ ] OliverDock sends recent message history and pageContext to /api/chat.
 - [ ] Page context payload is included when configured.
 - [ ] The API constrains the system prompt to the current page context.
-- [ ] Responses display the model tag when available.
+- [ ] Responses display the model tag returned by /api/chat when available.
+- [ ] The request body limits sent message history to the last 20 chat messages.
+- [ ] The chat API includes at most the first 4,000 characters of serialized page context in the system prompt.
 
 Notes: AI provider must be configured in ai_config/env.
 ---
