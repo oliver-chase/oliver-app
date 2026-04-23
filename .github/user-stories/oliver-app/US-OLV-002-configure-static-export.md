@@ -4,15 +4,16 @@ Title: Configure static export
 Status: Code Present
 Verified: false
 Backdated: 2026-04-16
-Milestone: Next.js scaffold + static export + Supabase wiring
+Milestone: Bootstrap static Next app and Accounts foundation
 
-As a deployment owner
-I want the app to build as a static export for Cloudflare Pages
-So that staging and production can ship without a Node server
+As a release operator
+I want the app configured for static export
+So that Cloudflare Pages can deploy the generated out/ directory
 
 Acceptance Criteria:
-- [ ] The Next.js config sets static export behavior.
-- [ ] Build output is compatible with Cloudflare Pages routing conventions.
+- [ ] next.config.ts sets output to export.
+- [ ] The build produces static assets without requiring a Next.js runtime server.
+- [ ] Route paths work with trailing slash behavior on Cloudflare Pages.
 
-Notes: The current config sets `output: export` and `trailingSlash: true`; deployment was not exercised here.
+Notes: Cloudflare Pages Functions still provide API endpoints separately from the static app.
 ---

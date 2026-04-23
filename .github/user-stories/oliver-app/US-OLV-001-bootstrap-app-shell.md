@@ -4,15 +4,16 @@ Title: Bootstrap app shell
 Status: Code Present
 Verified: false
 Backdated: 2026-04-16
-Milestone: Next.js scaffold + static export + Supabase wiring
+Milestone: Bootstrap static Next app and Accounts foundation
 
-As a ops user
-I want a Next.js app shell with shared layout and app metadata
-So that the rewrite has a stable starting point for every module
+As a operator
+I want a Next.js App Router shell for the internal ops app
+So that the team can migrate the dashboard into a typed React app
 
 Acceptance Criteria:
-- [ ] The root layout renders the application shell for all routes.
-- [ ] The app metadata and global entrypoints are defined in the Next.js project.
+- [ ] The root layout renders shared global styles and metadata.
+- [ ] The app builds with TypeScript strict settings enabled.
+- [ ] Static assets and favicon load from the public and app directories.
 
-Notes: Implemented in the current codebase, but not runtime-verified in this pass.
+Notes: Backdated from the initial Create Next App commit.
 ---

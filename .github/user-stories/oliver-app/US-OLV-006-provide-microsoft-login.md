@@ -4,15 +4,16 @@ Title: Provide Microsoft login
 Status: Code Present
 Verified: false
 Backdated: 2026-04-17
-Milestone: Auth strategy changes
+Milestone: Add auth, permissions, admin, and HR migration
 
 As a employee
-I want a dedicated Microsoft sign-in page
-So that I can enter the app through the expected enterprise auth flow
+I want to sign in with Microsoft
+So that internal routes are protected by enterprise identity
 
 Acceptance Criteria:
-- [ ] The login route renders a Microsoft-branded sign-in action.
-- [ ] The sign-in button is disabled until the auth client is ready.
+- [ ] The /login route renders a Microsoft sign-in button.
+- [ ] Clicking the button starts an MSAL redirect login with openid, profile, email, and User.Read scopes.
+- [ ] After login, authenticated users are redirected away from /login.
 
-Notes: The page exists and is wired to `login()`, but the live Microsoft flow was not verified.
+Notes: Code is present in AuthProvider/AuthGuard/login; end-to-end Azure env behavior is not human-verified.
 ---

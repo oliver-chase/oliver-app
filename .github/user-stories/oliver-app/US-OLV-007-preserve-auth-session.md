@@ -4,15 +4,16 @@ Title: Preserve auth session
 Status: Code Present
 Verified: false
 Backdated: 2026-04-17
-Milestone: Auth strategy changes
+Milestone: Add auth, permissions, admin, and HR migration
 
-As a signed-in employee
-I want my Microsoft session to be restored and logged out cleanly
-So that I can move through the app without reauth glitches
+As a employee
+I want my Microsoft session restored on page reload
+So that I do not have to sign in repeatedly during work
 
 Acceptance Criteria:
-- [ ] The auth provider initializes MSAL and restores or sets the active account.
-- [ ] The app exposes login and logout actions through shared auth context.
+- [ ] AuthProvider initializes MSAL in the browser.
+- [ ] Redirect responses set the active account.
+- [ ] Existing MSAL accounts are restored from localStorage cache.
 
-Notes: Session restore logic is present in `AuthContext`, but browser-level behavior was not verified.
+Notes: Depends on configured Azure client and tenant environment variables.
 ---
