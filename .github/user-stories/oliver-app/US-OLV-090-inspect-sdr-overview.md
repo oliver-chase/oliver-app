@@ -14,7 +14,7 @@ Acceptance Criteria:
 - [ ] SdrOverview receives prospects, approvalItems, and sends.
 - [ ] Pending draft counts are visible or actionable.
 - [ ] Overview can navigate to Drafts where supported.
-- [ ] Empty input arrays render a useful state.
+- [ ] When prospects, approvalItems, and sends are empty arrays, the overview renders zero counts and does not throw a runtime error.
 
 Notes: Exact visual metrics should be manually verified.
 ---

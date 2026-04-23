@@ -12,7 +12,7 @@ So that regressions are caught before deploy
 
 Acceptance Criteria:
 - [ ] .github/workflows/ci.yml runs on push and pull_request for staging/main.
-- [ ] CI runs npm ci.
+- [ ] The CI workflow installs dependencies with npm ci before running validation commands.
 - [ ] CI runs npm run typecheck.
 - [ ] CI runs npm run check-tokens.
 - [ ] CI runs npm run build with dummy public Supabase env vars.

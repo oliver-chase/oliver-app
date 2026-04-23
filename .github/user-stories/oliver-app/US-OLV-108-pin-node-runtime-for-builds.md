@@ -12,7 +12,7 @@ So that build behavior is stable across machines
 
 Acceptance Criteria:
 - [ ] The repo includes .nvmrc.
-- [ ] CI uses Node 20.
+- [ ] The CI workflow configures Node 20 before installing dependencies or running the build.
 - [ ] README or state docs identify the expected runtime.
 - [ ] Build scripts do not require a local runtime server.
 
