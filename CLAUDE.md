@@ -45,3 +45,9 @@ Always confirm the user means to ship to production before running "merge stagin
 - Same design system as ops-dashboard: tokens.css, components*.css, accounts.css — no new CSS values
 - No nested template literals
 - TypeScript strict — no `any` unless unavoidable
+
+## Commit Rules
+- Do not auto-commit after every change.
+- Only commit when explicitly asked, or when a named milestone is complete.
+- When committing, group all related changes into a single commit with a message matching the active milestone name.
+- Never create more than one commit per working session unless explicitly told to start a new milestone.

@@ -47,14 +47,6 @@ export default function AccountView({
   const acct = data.accounts.find(a => a.account_id === accountId)
   const acctRef = useRef(acct)
   acctRef.current = acct
-  const [bttVisible, setBttVisible] = useState(false)
-
-  useEffect(() => {
-    const onScroll = () => setBttVisible(window.scrollY > 300)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
   if (!acct) return null
 
   const isArchived = acct.status === 'Archived'
@@ -134,16 +126,6 @@ export default function AccountView({
         />
       </div>
 
-      <button
-        id="btt"
-        className={'btn btn-ghost' + (bttVisible ? '' : ' hidden')}
-        aria-label="Back to top"
-        title="Back to top"
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        style={{ position: 'fixed', bottom: 'var(--spacing-20)', right: 'var(--spacing-20)', display: bttVisible ? 'inline-flex' : 'none' }}
-      >
-        {'\u2191'}
-      </button>
     </div>
   )
 }

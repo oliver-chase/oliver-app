@@ -9,8 +9,6 @@ import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@/context/UserContext'
 import { ModuleCard } from '@/components/hub/ModuleCard'
-import { useRegisterOliver } from '@/components/shared/OliverContext'
-import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import type { PagePermission } from '@/types/auth'
 import styles from './hub.module.css'
 
@@ -66,23 +64,9 @@ export default function HubPage() {
     [isAdmin, permissionsReady, hasPermission],
   )
 
-  const oliverConfig = useMemo<OliverConfig>(() => {
-    const actions: OliverAction[] = []
-    return {
-      pageLabel: 'Hub',
-      placeholder: 'Where do you want to go?',
-      greeting: "Hi, I'm Oliver. Pick a module below, or ask which one fits your task.",
-      actions,
-      quickConvos: [
-        'Which module should I use for client meeting notes?',
-        'What can HR & People Ops do?',
-        'Summarise what ships this week across modules.',
-      ],
-      contextPayload: () => ({ visibleModules: visibleModules.map(m => m.id), isAdmin }),
-    }
-  }, [isAdmin, visibleModules])
-
-  useRegisterOliver(oliverConfig)
+  // Hub intentionally does not register an Oliver config. The dock only
+  // lives inside each module (Accounts, HR, SDR, …). The hub is pure nav.
+  void visibleModules
 
   return (
     <>
