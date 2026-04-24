@@ -105,15 +105,6 @@
   pointer-events: none;
 }
 
-.adminLinks {
-  position: fixed;
-  bottom: var(--spacing-lg);
-  right: var(--spacing-lg);
-  display: flex;
-  gap: var(--spacing-sm);
-  z-index: 2;
-}
-
 .sessionBar {
   position: fixed;
   top: var(--spacing-lg);
@@ -129,6 +120,12 @@
   font-size: var(--font-size-2xs);
   letter-spacing: var(--letter-spacing-mid);
   color: var(--color-nav-text-muted);
+}
+
+.sessionActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .adminBtn {

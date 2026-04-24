@@ -488,6 +488,17 @@ const DESIGN_SECTIONS = [
   { id: 'sec-layout',     label: 'Layout Tokens' },
 ]
 
+const COMPONENT_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'buttons', label: 'Buttons' },
+  { id: 'inputs', label: 'Inputs & Pickers' },
+  { id: 'chips', label: 'Chips & Badges' },
+  { id: 'feedback', label: 'Feedback' },
+  { id: 'overlays', label: 'Modals' },
+] as const
+
+type ComponentFilter = typeof COMPONENT_FILTERS[number]['id']
+
 export default function DesignSystemPage() {
   const { modal, showModal } = useAppModal()
   const [pickerVal, setPickerVal] = useState('')
@@ -496,6 +507,11 @@ export default function DesignSystemPage() {
   const [expandedType, setExpandedType] = useState<string | null>(null)
   const [expandedColor, setExpandedColor] = useState<string | null>(null)
   const [expandedSpacing, setExpandedSpacing] = useState<string | null>(null)
+  const [componentFilter, setComponentFilter] = useState<ComponentFilter>('all')
+
+  function showComponentGroup(...groups: ComponentFilter[]) {
+    return componentFilter === 'all' || groups.includes(componentFilter)
+  }
 
   return (
     <div className="page">
@@ -795,231 +811,255 @@ export default function DesignSystemPage() {
       {/* ── SECTION 5 — COMPONENTS ── */}
       <div className="section" id="sec-components">
         <div className="sectionTitle">5 — Components</div>
+        <p className="sectionNote">Use filters to group component families. Buttons are listed first for quick checks.</p>
 
-        <div className="groupTitle">AppChip</div>
-        <div className="componentRow">
-          <div className="componentLabel">Static and removable</div>
-          <div className="componentDemo">
-            <AppChip label="Engineering" />
-            <AppChip label="Sales" onRemove={() => {}} />
-            <AppChip label="Marketing" onRemove={() => {}} />
-            <AppChip label="Product" />
-          </div>
+        <div className="componentFilters" role="tablist" aria-label="Filter components">
+          {COMPONENT_FILTERS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={componentFilter === id}
+              className={'componentFilterBtn' + (componentFilter === id ? ' componentFilterBtn--active' : '')}
+              onClick={() => setComponentFilter(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <div className="groupTitle">AppBadge</div>
-        <div className="componentRow">
-          <div className="componentLabel">All variants — static</div>
-          <div className="componentDemo">
-            {BADGE_VARIANTS.map(v => (
-              <AppBadge
-                key={v}
-                label={v.charAt(0).toUpperCase() + v.slice(1).replace('-', ' ')}
-                variant={v}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">All variants — clickable</div>
-          <div className="componentDemo">
-            {BADGE_VARIANTS.map(v => (
-              <AppBadge
-                key={v}
-                label={v.charAt(0).toUpperCase() + v.slice(1).replace('-', ' ')}
-                variant={v}
-                clickable
-                onClick={() => {}}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="groupTitle">SyncDot</div>
-        <div className="componentRow">
-          <div className="componentLabel">All three states</div>
-          <div className="componentDemo">
-            {(['syncing', 'ok', 'err'] as const).map(s => (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                <SyncDot status={s} />
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-                  {s === 'err' ? 'Error' : s.charAt(0).toUpperCase() + s.slice(1)}
-                </span>
+        {showComponentGroup('buttons') && (
+          <>
+            <div className="groupTitle">Buttons</div>
+            <div className="componentRow">
+              <div className="componentLabel">Standard sizes</div>
+              <div className="componentDemo">
+                <button className="btn btn-primary">Primary</button>
+                <button className="btn btn-secondary">Secondary</button>
+                <button className="btn btn-ghost">Ghost</button>
+                <button className="btn btn-danger">Danger</button>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Compact modifier</div>
+              <div className="componentDemo">
+                <button className="btn btn-primary btn--compact">Primary</button>
+                <button className="btn btn-secondary btn--compact">Secondary</button>
+                <button className="btn btn-ghost btn--compact">Ghost</button>
+                <button className="btn btn-danger btn--compact">Danger</button>
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Inline variants</div>
+              <div className="componentDemo">
+                <button className="btn-link">btn-link</button>
+                <button className="btn-dashed btn--compact">btn-dashed</button>
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Disabled state</div>
+              <div className="componentDemo">
+                <button className="btn btn-primary" disabled>Primary</button>
+                <button className="btn btn-secondary" disabled>Secondary</button>
+                <button className="btn btn-ghost" disabled>Ghost</button>
+                <button className="btn btn-danger" disabled>Danger</button>
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Hover &amp; focus</div>
+              <div className="componentDemo componentStatesNote">
+                Hover and focus-visible are CSS pseudo-states — trigger them live by
+                mousing over or tabbing to the default buttons above. Focus ring =
+                2px outline in <code>--color-border-focus</code>, offset 1px.
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="groupTitle">CustomPicker</div>
-        <div className="componentRow">
-          <div className="componentLabel">Single select, searchable</div>
-          <div className="componentDemo">
-            <CustomPicker
-              options={PICKER_OPTIONS}
-              selected={pickerVal}
-              onChange={v => setPickerVal(Array.isArray(v) ? (v[0] ?? '') : v)}
-              searchable
-              placeholder="Select color…"
-            />
-            {pickerVal && (
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                Selected: {pickerVal}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Multi-select, searchable</div>
-          <div className="componentDemo">
-            <CustomPicker
-              options={PICKER_OPTIONS}
-              selected={multiVal}
-              onChange={v => setMultiVal(Array.isArray(v) ? v : [v])}
-              multiSelect
-              searchable
-              placeholder="Select colors…"
-            />
-            {multiVal.length > 0 && (
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                Selected: {multiVal.join(', ')}
-              </span>
-            )}
-          </div>
-        </div>
+        {showComponentGroup('inputs') && (
+          <>
+            <div className="groupTitle">Inputs</div>
+            <div className="componentRow">
+              <div className="componentLabel">Default</div>
+              <div className="componentDemo">
+                <input className="app-input" placeholder="Placeholder text" readOnly style={{ width: '200px' }} />
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Disabled</div>
+              <div className="componentDemo">
+                <input className="app-input" placeholder="Disabled" disabled style={{ width: '200px' }} />
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Focus</div>
+              <div className="componentDemo componentStatesNote">
+                Focus is a CSS pseudo-state — tab to the input above to trigger. Focus ring =
+                2px outline in <code>--color-border-focus</code>, border-color transparent.
+              </div>
+            </div>
 
-        <div className="groupTitle">AppModal</div>
-        <div className="componentRow">
-          <div className="componentLabel">ConfirmModal — danger variant</div>
-          <div className="componentDemo">
-            <button className="btn btn-primary btn--compact" onClick={() => setShowConfirm(true)}>
-              Open ConfirmModal
-            </button>
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">useAppModal — input prompt / danger</div>
-          <div className="componentDemo">
-            <button
-              className="btn btn-secondary btn--compact"
-              onClick={async () => {
-                await showModal({ title: 'Add Item', inputPlaceholder: 'Item name', confirmLabel: 'Add', cancelLabel: 'Cancel' })
-              }}
-            >
-              Input prompt
-            </button>
-            <button
-              className="btn btn-secondary btn--compact"
-              onClick={async () => {
-                await showModal({ title: 'Delete?', message: 'This cannot be undone.', confirmLabel: 'Delete', cancelLabel: 'Cancel', dangerConfirm: true })
-              }}
-            >
-              Danger confirm
-            </button>
-          </div>
-        </div>
+            <div className="groupTitle">CustomPicker</div>
+            <div className="componentRow">
+              <div className="componentLabel">Single select, searchable</div>
+              <div className="componentDemo">
+                <CustomPicker
+                  options={PICKER_OPTIONS}
+                  selected={pickerVal}
+                  onChange={v => setPickerVal(Array.isArray(v) ? (v[0] ?? '') : v)}
+                  searchable
+                  placeholder="Select color…"
+                />
+                {pickerVal && (
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
+                    Selected: {pickerVal}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Multi-select, searchable</div>
+              <div className="componentDemo">
+                <CustomPicker
+                  options={PICKER_OPTIONS}
+                  selected={multiVal}
+                  onChange={v => setMultiVal(Array.isArray(v) ? v : [v])}
+                  multiSelect
+                  searchable
+                  placeholder="Select colors…"
+                />
+                {multiVal.length > 0 && (
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
+                    Selected: {multiVal.join(', ')}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Disabled</div>
+              <div className="componentDemo">
+                <CustomPicker
+                  options={PICKER_OPTIONS}
+                  selected=""
+                  onChange={() => {}}
+                  placeholder="Disabled picker"
+                  disabled
+                />
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="groupTitle">Buttons</div>
-        <div className="componentRow">
-          <div className="componentLabel">Standard sizes</div>
-          <div className="componentDemo">
-            <button className="btn btn-primary">Primary</button>
-            <button className="btn btn-secondary">Secondary</button>
-            <button className="btn btn-ghost">Ghost</button>
-            <button className="btn btn-danger">Danger</button>
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Compact modifier</div>
-          <div className="componentDemo">
-            <button className="btn btn-primary btn--compact">Primary</button>
-            <button className="btn btn-secondary btn--compact">Secondary</button>
-            <button className="btn btn-ghost btn--compact">Ghost</button>
-            <button className="btn btn-danger btn--compact">Danger</button>
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Inline variants</div>
-          <div className="componentDemo">
-            <button className="btn-link">btn-link</button>
-            <button className="btn-dashed btn--compact">btn-dashed</button>
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Disabled state</div>
-          <div className="componentDemo">
-            <button className="btn btn-primary" disabled>Primary</button>
-            <button className="btn btn-secondary" disabled>Secondary</button>
-            <button className="btn btn-ghost" disabled>Ghost</button>
-            <button className="btn btn-danger" disabled>Danger</button>
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Hover &amp; focus</div>
-          <div className="componentDemo componentStatesNote">
-            Hover and focus-visible are CSS pseudo-states — trigger them live by
-            mousing over or tabbing to the default buttons above. Focus ring =
-            2px outline in <code>--color-border-focus</code>, offset 1px.
-          </div>
-        </div>
+        {showComponentGroup('chips') && (
+          <>
+            <div className="groupTitle">AppChip</div>
+            <div className="componentRow">
+              <div className="componentLabel">Static and removable</div>
+              <div className="componentDemo">
+                <AppChip label="Engineering" />
+                <AppChip label="Sales" onRemove={() => {}} />
+                <AppChip label="Marketing" onRemove={() => {}} />
+                <AppChip label="Product" />
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Focus</div>
+              <div className="componentDemo componentStatesNote">
+                <code>.app-chip:focus-visible</code> inherits the global focus ring (2px <code>--color-border-focus</code>).
+                Tab to any chip above to trigger. No disabled state defined — chips are display-only or removable.
+              </div>
+            </div>
 
-        <div className="groupTitle">Inputs</div>
-        <div className="componentRow">
-          <div className="componentLabel">Default</div>
-          <div className="componentDemo">
-            <input className="app-input" placeholder="Placeholder text" readOnly style={{ width: '200px' }} />
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Disabled</div>
-          <div className="componentDemo">
-            <input className="app-input" placeholder="Disabled" disabled style={{ width: '200px' }} />
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Focus</div>
-          <div className="componentDemo componentStatesNote">
-            Focus is a CSS pseudo-state — tab to the input above to trigger. Focus ring =
-            2px outline in <code>--color-border-focus</code>, border-color transparent.
-          </div>
-        </div>
+            <div className="groupTitle">AppBadge</div>
+            <div className="componentRow">
+              <div className="componentLabel">All variants — static</div>
+              <div className="componentDemo">
+                {BADGE_VARIANTS.map(v => (
+                  <AppBadge
+                    key={v}
+                    label={v.charAt(0).toUpperCase() + v.slice(1).replace('-', ' ')}
+                    variant={v}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">All variants — clickable</div>
+              <div className="componentDemo">
+                {BADGE_VARIANTS.map(v => (
+                  <AppBadge
+                    key={v}
+                    label={v.charAt(0).toUpperCase() + v.slice(1).replace('-', ' ')}
+                    variant={v}
+                    clickable
+                    onClick={() => {}}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">Hover (clickable only)</div>
+              <div className="componentDemo componentStatesNote">
+                <code>.app-badge--clickable:hover</code> applies <code>opacity: 0.75</code>.
+                Mouse over the clickable row above to confirm. No disabled state defined.
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="groupTitle">CustomPicker</div>
-        <div className="componentRow">
-          <div className="componentLabel">Default (shown above)</div>
-          <div className="componentDemo componentStatesNote">
-            Single + multi pickers shown above. Focus ring via <code>.picker-trigger:focus-visible</code>.
-          </div>
-        </div>
-        <div className="componentRow">
-          <div className="componentLabel">Disabled</div>
-          <div className="componentDemo">
-            <CustomPicker
-              options={PICKER_OPTIONS}
-              selected=""
-              onChange={() => {}}
-              placeholder="Disabled picker"
-              disabled
-            />
-          </div>
-        </div>
+        {showComponentGroup('feedback') && (
+          <>
+            <div className="groupTitle">SyncDot</div>
+            <div className="componentRow">
+              <div className="componentLabel">All three states</div>
+              <div className="componentDemo">
+                {(['syncing', 'ok', 'err'] as const).map(s => (
+                  <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                    <SyncDot status={s} />
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+                      {s === 'err' ? 'Error' : s.charAt(0).toUpperCase() + s.slice(1)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="groupTitle">AppChip</div>
-        <div className="componentRow">
-          <div className="componentLabel">Focus</div>
-          <div className="componentDemo componentStatesNote">
-            <code>.app-chip:focus-visible</code> inherits the global focus ring (2px <code>--color-border-focus</code>).
-            Tab to any chip above to trigger. No disabled state defined — chips are display-only or removable.
-          </div>
-        </div>
-
-        <div className="groupTitle">AppBadge</div>
-        <div className="componentRow">
-          <div className="componentLabel">Hover (clickable only)</div>
-          <div className="componentDemo componentStatesNote">
-            <code>.app-badge--clickable:hover</code> applies <code>opacity: 0.75</code>.
-            Mouse over the clickable row above to confirm. No disabled state defined.
-          </div>
-        </div>
+        {showComponentGroup('overlays') && (
+          <>
+            <div className="groupTitle">AppModal</div>
+            <div className="componentRow">
+              <div className="componentLabel">ConfirmModal — danger variant</div>
+              <div className="componentDemo">
+                <button className="btn btn-primary btn--compact" onClick={() => setShowConfirm(true)}>
+                  Open ConfirmModal
+                </button>
+              </div>
+            </div>
+            <div className="componentRow">
+              <div className="componentLabel">useAppModal — input prompt / danger</div>
+              <div className="componentDemo">
+                <button
+                  className="btn btn-secondary btn--compact"
+                  onClick={async () => {
+                    await showModal({ title: 'Add Item', inputPlaceholder: 'Item name', confirmLabel: 'Add', cancelLabel: 'Cancel' })
+                  }}
+                >
+                  Input prompt
+                </button>
+                <button
+                  className="btn btn-secondary btn--compact"
+                  onClick={async () => {
+                    await showModal({ title: 'Delete?', message: 'This cannot be undone.', confirmLabel: 'Delete', cancelLabel: 'Cancel', dangerConfirm: true })
+                  }}
+                >
+                  Danger confirm
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── SECTION 6 — LAYOUT TOKENS ── */}

@@ -16,4 +16,5 @@ Acceptance Criteria:
 - [ ] Admin link styling matches the hub action buttons.
 
 Notes: Admin links now depend on the mounted `UserProvider` resolving an admin role from `app_users`.
+Current placement is in the hub session bar next to email/sign-out (not as a standalone hub module card).
 ---

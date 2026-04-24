@@ -185,6 +185,15 @@ test.describe('frontend smoke', () => {
     await page.getByRole('button', { name: 'Open ConfirmModal' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
+    await page.getByRole('button', { name: 'Delete' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    await page.getByRole('tab', { name: 'Buttons' }).click()
+    await expect(page.getByText('Standard sizes')).toBeVisible()
+    await expect(page.getByText('All variants — static')).toHaveCount(0)
+
+    await page.getByRole('tab', { name: 'Chips & Badges' }).click()
+    await expect(page.getByText('All variants — static')).toBeVisible()
   })
 
   test('non-admin user cannot access admin and does not see admin links', async ({ browser }) => {

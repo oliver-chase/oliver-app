@@ -71,9 +71,17 @@ export default function HubPage() {
       {account && (
         <div className={styles.sessionBar}>
           <span className={styles.sessionEmail}>{account.username}</span>
-          <button type="button" className={styles.adminBtn} onClick={() => logout()}>
-            Sign out
-          </button>
+          <div className={styles.sessionActions}>
+            {isAdmin && (
+              <>
+                <Link href="/design-system" className={styles.adminBtn}>Design System</Link>
+                <Link href="/admin" className={styles.adminBtn}>Admin</Link>
+              </>
+            )}
+            <button type="button" className={styles.adminBtn} onClick={() => logout()}>
+              Sign out
+            </button>
+          </div>
         </div>
       )}
 
@@ -106,14 +114,6 @@ export default function HubPage() {
           )}
         </div>
       </div>
-
-      {isAdmin && (
-        <div className={styles.adminLinks}>
-          <Link href="/design-system" className={styles.adminBtn}>Design System</Link>
-          <Link href="/admin" className={styles.adminBtn}>Admin</Link>
-        </div>
-      )}
-
       <div className={styles.footer}>V.TWO &middot; 2026</div>
     </>
   )
