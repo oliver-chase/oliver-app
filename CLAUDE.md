@@ -51,3 +51,6 @@ Always confirm the user means to ship to production before running "merge stagin
 - Only commit when explicitly asked, or when a named milestone is complete.
 - When committing, group all related changes into a single commit with a message matching the active milestone name.
 - Never create more than one commit per working session unless explicitly told to start a new milestone.
+- Commit grouping standard (required): group by Epic, with Ticket IDs listed in commit body.
+- Commit format standard (required): `<type>(epic-<name>): <summary>` plus `Tickets:` and `Scope:` lines.
+- QA evidence standard (required): document `typecheck`, `lint`, `build`, and test gate status in PR/release notes.
