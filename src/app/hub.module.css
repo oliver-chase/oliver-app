@@ -107,6 +107,35 @@
   text-align: left;
 }
 
+.statusActions {
+  margin-top: var(--spacing-sm);
+  display: flex;
+  justify-content: flex-start;
+}
+
+.statusBtn {
+  background: var(--color-nav-bg-deep);
+  border: 1px solid var(--color-nav-text-muted);
+  border-radius: var(--radius-md);
+  color: var(--color-nav-text-muted);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-mid);
+  text-transform: uppercase;
+  padding: var(--spacing-xs) var(--spacing-md);
+  transition: var(--transition-quick);
+}
+
+.statusBtn:hover:enabled {
+  color: var(--color-nav-text);
+  border-color: var(--color-overlay-border);
+}
+
+.statusBtn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 .empty {
   font-size: var(--font-size-xs);
   color: var(--color-nav-text-muted);

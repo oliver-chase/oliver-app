@@ -2,7 +2,7 @@
 ID: US-O9
 Title: Candidate Resume Versioning and File/Link Management
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

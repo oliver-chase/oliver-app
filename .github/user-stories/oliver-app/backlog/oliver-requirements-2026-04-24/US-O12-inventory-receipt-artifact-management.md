@@ -2,7 +2,7 @@
 ID: US-O12
 Title: Inventory Receipt Artifact Save, Download, Link, Delete
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

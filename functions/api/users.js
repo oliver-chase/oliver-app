@@ -11,10 +11,18 @@
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
 
+function resolveServiceKey(env) {
+  return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
+}
+
+function resolveSupabaseUrl(env) {
+  return env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || null;
+}
+
 const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides']);
 
 function serviceHeaders(env) {
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = resolveServiceKey(env);
   return {
     apikey: key,
     Authorization: 'Bearer ' + key,
@@ -23,8 +31,11 @@ function serviceHeaders(env) {
 }
 
 function assertConfigured(env) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    return errorResponse('Supabase service role not configured', 503);
+  if (!resolveSupabaseUrl(env)) {
+    return errorResponse('Supabase URL not configured for /api/users. Set SUPABASE_URL (preferred) or NEXT_PUBLIC_SUPABASE_URL.', 503);
+  }
+  if (!resolveServiceKey(env)) {
+    return errorResponse('Supabase admin key not configured for /api/users. Set SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_SERVICE_KEY.', 503);
   }
   return null;
 }
@@ -33,6 +44,7 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   const url = new URL(request.url);
   const userId = url.searchParams.get('user_id');
@@ -42,8 +54,11 @@ export async function onRequestGet(context) {
   if (userId) path = '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(userId);
   else if (email) path = '/rest/v1/app_users?email=eq.' + encodeURIComponent(email);
 
-  const res = await fetch(env.SUPABASE_URL + path, { headers: serviceHeaders(env) });
-  if (!res.ok) return errorResponse('Fetch failed', res.status);
+  const res = await fetch(supabaseUrl + path, { headers: serviceHeaders(env) });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return errorResponse('Fetch failed: ' + text, res.status);
+  }
   const rows = await res.json();
 
   if (userId || email) return jsonResponse(rows[0] || null);
@@ -54,23 +69,27 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   let body;
   try { body = await request.json(); } catch (_) { return errorResponse('Invalid JSON', 400); }
   if (!body.user_id || !body.email) return errorResponse('user_id and email required', 400);
 
   const existingRes = await fetch(
-    env.SUPABASE_URL + '/rest/v1/app_users?or=(user_id.eq.' +
+    supabaseUrl + '/rest/v1/app_users?or=(user_id.eq.' +
       encodeURIComponent(body.user_id) + ',email.eq.' + encodeURIComponent(body.email) + ')',
     { headers: serviceHeaders(env) },
   );
-  if (!existingRes.ok) return errorResponse('Lookup failed', 500);
+  if (!existingRes.ok) {
+    const text = await existingRes.text().catch(() => '');
+    return errorResponse('Lookup failed: ' + text, existingRes.status);
+  }
   const existing = await existingRes.json();
 
   if (existing.length > 0) {
     const row = existing[0];
     const updateRes = await fetch(
-      env.SUPABASE_URL + '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(row.user_id),
+      supabaseUrl + '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(row.user_id),
       {
         method: 'PATCH',
         headers: { ...serviceHeaders(env), Prefer: 'return=representation' },
@@ -81,12 +100,15 @@ export async function onRequestPost(context) {
         }),
       },
     );
-    if (!updateRes.ok) return errorResponse('Update failed', 500);
+    if (!updateRes.ok) {
+      const text = await updateRes.text().catch(() => '');
+      return errorResponse('Update failed: ' + text, updateRes.status);
+    }
     const updated = await updateRes.json();
     return jsonResponse(updated[0] || null);
   }
 
-  const insertRes = await fetch(env.SUPABASE_URL + '/rest/v1/app_users', {
+  const insertRes = await fetch(supabaseUrl + '/rest/v1/app_users', {
     method: 'POST',
     headers: { ...serviceHeaders(env), Prefer: 'return=representation' },
     body: JSON.stringify({
@@ -95,7 +117,10 @@ export async function onRequestPost(context) {
       name: body.name || '',
     }),
   });
-  if (!insertRes.ok) return errorResponse('Insert failed', 500);
+  if (!insertRes.ok) {
+    const text = await insertRes.text().catch(() => '');
+    return errorResponse('Insert failed: ' + text, insertRes.status);
+  }
   const inserted = await insertRes.json();
   return jsonResponse(inserted[0] || null, 201);
 }
@@ -104,6 +129,7 @@ export async function onRequestPatch(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   let body;
   try { body = await request.json(); } catch (_) { return errorResponse('Invalid JSON', 400); }
@@ -123,7 +149,7 @@ export async function onRequestPatch(context) {
   if (Object.keys(fields).length === 0) return errorResponse('no updatable fields', 400);
 
   const res = await fetch(
-    env.SUPABASE_URL + '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(body.user_id),
+    supabaseUrl + '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(body.user_id),
     {
       method: 'PATCH',
       headers: { ...serviceHeaders(env), Prefer: 'return=minimal' },

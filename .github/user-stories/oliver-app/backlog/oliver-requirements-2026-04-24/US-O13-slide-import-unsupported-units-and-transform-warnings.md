@@ -2,7 +2,7 @@
 ID: US-O13
 Title: Slide Import Warnings for Unsupported Units and Transform Features
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

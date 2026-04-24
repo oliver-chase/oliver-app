@@ -23,7 +23,7 @@ Purpose: capture validated net-new work without duplicating already-shipped stor
 | US-O14 | Slide Import Canvas Normalization to 1920x1080 | Code Present | Extends `US-114` normalization intent |
 | US-O15 | Slide Import Sanitization Hardening for Unsafe Markup | Code Present | Extends `US-112` security baseline |
 | US-O16 | Slide Import Edge-Case Regression Coverage | Code Present | Extends `US-171` parser test coverage |
-| US-O17 | Epic/Ticket Commit Grouping with Mandatory QA Gates | Missing | New process governance requirement |
+| US-O17 | Epic/Ticket Commit Grouping with Mandatory QA Gates | Code Present | New process governance requirement |
 
 ## Requirement To Story Traceability
 
@@ -37,3 +37,10 @@ Purpose: capture validated net-new work without duplicating already-shipped stor
 | Account Strategy topbar account name removed; in-page short/long names editable | `US-O10` |
 | Chatbot profile/personal-info actions route to profile page instead of changing in-chat | `US-O11` |
 | HR data export includes resume/receipt metadata as part of persisted records | `US-O9`, `US-O12` |
+
+## QA Verification Evidence (2026-04-24)
+
+- `npm run typecheck` passed
+- `npm run lint` passed (`check-tokens` + `check-stories`)
+- `npm run build` passed
+- `npm run test:smoke` passed (24/24)

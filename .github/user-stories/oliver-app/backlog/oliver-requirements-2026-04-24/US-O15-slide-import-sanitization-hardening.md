@@ -2,7 +2,7 @@
 ID: US-O15
 Title: Slide Import Sanitization Hardening for Unsafe Markup
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

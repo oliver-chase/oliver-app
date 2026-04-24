@@ -35,6 +35,16 @@ NEXT_PUBLIC_DISABLED_MODULES=crm,slides   # optional CSV of hub modules to hide
 
 Never commit `.env.local`.
 
+Cloudflare Pages Function env vars (set in Pages project settings for each environment):
+
+```
+SUPABASE_URL=https://tjaowjiccowofzisdfhr.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service role key>   # preferred
+# SUPABASE_SERVICE_KEY can be used as an alias if your environment already uses that name.
+```
+
+If these server-side vars are missing, the hub will show a permissions-service warning and fall back to unrestricted module visibility.
+
 ## Branch workflow
 
 Day-to-day work happens on `staging`. `main` is the production branch.
@@ -55,12 +65,23 @@ git checkout staging
 CI verifies on every push. Local QA should use `npm run typecheck`, `npm run lint`,
 `npm run build`, and `npm run test:smoke` for browser smoke coverage.
 
+## Commit and PR traceability
+
+Use grouped commits tied to story IDs and include QA gate outcomes.
+
+- Policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
+- Commit template: `.gitmessage` (optional setup: `git config commit.template .gitmessage`)
+- PR template: `.github/pull_request_template.md`
+- Release mapping: `src/tech-debt/release-traceability.md`
+
 ## QA workflow
 
 - Static gates: `npm run typecheck`, `npm run lint`, `npm run build`
 - Browser smoke: `npm run test:smoke` (Playwright manages the local server on `127.0.0.1:3001`)
 - Current smoke spec: `tests/e2e/frontend-smoke.spec.ts`
 - Deep-pass checklist: `src/tech-debt/deep-qa-workflow.md`
+- Commit grouping policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
+- Release traceability log: `src/tech-debt/release-traceability.md`
 - Generated browser artifacts must stay uncommitted: `test-results/`, `playwright-report/`
 
 ## Layout

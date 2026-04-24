@@ -1,0 +1,8 @@
+<type>(<area>): <scope summary> [US-XXX]
+
+Stories: US-XXX
+Scope: 
+Modules: 
+QA: typecheck=<pass|fail>; lint=<pass|fail>; build=<pass|fail>; smoke=<pass|fail>
+
+Traceability: src/tech-debt/release-traceability.md updated=<yes|no>

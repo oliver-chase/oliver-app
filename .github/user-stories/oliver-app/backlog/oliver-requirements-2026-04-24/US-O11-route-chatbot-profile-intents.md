@@ -2,7 +2,7 @@
 ID: US-O11
 Title: Route HR/SDR Chatbot Personal-Info Intents to Profile Page
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

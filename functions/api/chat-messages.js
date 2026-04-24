@@ -6,8 +6,16 @@
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
 
+function resolveServiceKey(env) {
+  return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
+}
+
+function resolveSupabaseUrl(env) {
+  return env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || null;
+}
+
 function serviceHeaders(env) {
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = resolveServiceKey(env);
   return {
     apikey: key,
     Authorization: 'Bearer ' + key,
@@ -16,8 +24,11 @@ function serviceHeaders(env) {
 }
 
 function assertConfigured(env) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    return errorResponse('Supabase service role not configured', 503);
+  if (!resolveSupabaseUrl(env)) {
+    return errorResponse('Supabase URL not configured for /api/chat-messages. Set SUPABASE_URL (preferred) or NEXT_PUBLIC_SUPABASE_URL.', 503);
+  }
+  if (!resolveServiceKey(env)) {
+    return errorResponse('Supabase admin key not configured for /api/chat-messages. Set SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_SERVICE_KEY.', 503);
   }
   return null;
 }
@@ -37,12 +48,13 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   const url = new URL(request.url);
   const query = buildQuery(url);
   if (!query) return errorResponse('user_id and page_label required', 400);
 
-  const res = await fetch(env.SUPABASE_URL + query, { headers: serviceHeaders(env) });
+  const res = await fetch(supabaseUrl + query, { headers: serviceHeaders(env) });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     return errorResponse('Fetch failed: ' + text, res.status);
@@ -56,12 +68,13 @@ export async function onRequestDelete(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   const url = new URL(request.url);
   const query = buildQuery(url);
   if (!query) return errorResponse('user_id and page_label required', 400);
 
-  const res = await fetch(env.SUPABASE_URL + query, {
+  const res = await fetch(supabaseUrl + query, {
     method: 'DELETE',
     headers: { ...serviceHeaders(env), Prefer: 'return=minimal' },
   });
@@ -77,6 +90,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const missing = assertConfigured(env);
   if (missing) return missing;
+  const supabaseUrl = resolveSupabaseUrl(env);
 
   let body;
   try {
@@ -104,7 +118,7 @@ export async function onRequestPost(context) {
     '/rest/v1/chat_messages?user_id=eq.' + encodeURIComponent(user_id) +
     '&page_label=eq.' + encodeURIComponent(page_label);
 
-  const deleteRes = await fetch(env.SUPABASE_URL + deleteQuery, {
+  const deleteRes = await fetch(supabaseUrl + deleteQuery, {
     method: 'DELETE',
     headers: { ...serviceHeaders(env), Prefer: 'return=minimal' },
   });
@@ -115,7 +129,7 @@ export async function onRequestPost(context) {
 
   if (rows.length === 0) return jsonResponse({ ok: true, count: 0 });
 
-  const insertRes = await fetch(env.SUPABASE_URL + '/rest/v1/chat_messages', {
+  const insertRes = await fetch(supabaseUrl + '/rest/v1/chat_messages', {
     method: 'POST',
     headers: { ...serviceHeaders(env), Prefer: 'return=minimal' },
     body: JSON.stringify(rows),

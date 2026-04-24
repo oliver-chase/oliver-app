@@ -2,7 +2,7 @@
 ID: US-O8
 Title: Inventory-Only Receipt Upload via HR Chatbot
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

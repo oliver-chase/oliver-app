@@ -15,7 +15,7 @@ import styles from './hub.module.css'
 const HUB_MODULES = getHubModules()
 
 export default function HubPage() {
-  const { appUser, isAdmin, hasPermission, isLoading, loadError } = useUser()
+  const { appUser, isAdmin, hasPermission, isLoading, loadError, refreshUser } = useUser()
   const { account, logout } = useAuth()
 
   const permissionsReady = appUser !== null
@@ -57,6 +57,16 @@ export default function HubPage() {
             <p className={styles.statusBanner}>
               Permissions service unavailable. Falling back to the unrestricted module view for this session.
             </p>
+            <div className={styles.statusActions}>
+              <button
+                type="button"
+                className={styles.statusBtn}
+                onClick={() => { void refreshUser() }}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Retrying…' : 'Retry Permissions'}
+              </button>
+            </div>
           </div>
         )}
 

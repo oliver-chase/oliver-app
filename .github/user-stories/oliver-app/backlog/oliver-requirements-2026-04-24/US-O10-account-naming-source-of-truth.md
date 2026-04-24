@@ -2,7 +2,7 @@
 ID: US-O10
 Title: Account Strategy Naming Source of Truth (Page Header, Not Topbar)
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 

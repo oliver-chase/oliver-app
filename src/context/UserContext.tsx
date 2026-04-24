@@ -25,6 +25,7 @@ const UserContext = createContext<UserContextType>({
 })
 
 const E2E_AUTH_BYPASS = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
+const USER_LOAD_RETRY_DELAYS_MS = [0, 1200, 3000]
 
 function getAccountOid(account: AccountInfo | null) {
   if (!account) return null
@@ -65,6 +66,10 @@ function getBypassUser(account: AccountInfo | null): AppUser {
   }
 }
 
+function delay(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { account, isReady } = useAuth()
   const [appUser, setAppUser] = useState<AppUser | null>(null)
@@ -99,18 +104,29 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setLoadError(null)
 
     try {
-      let row = await getUser(userId)
-      if (!row && account.username) {
-        row = await upsertUser({
-          user_id: userId,
-          email: account.username,
-          name: getAccountName(account),
-        })
+      let lastError: unknown = null
+
+      for (let attempt = 0; attempt < USER_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+        if (attempt > 0) await delay(USER_LOAD_RETRY_DELAYS_MS[attempt] || 0)
+        try {
+          let row = await getUser(userId)
+          if (!row && account.username) {
+            row = await upsertUser({
+              user_id: userId,
+              email: account.username,
+              name: getAccountName(account),
+            })
+          }
+          setAppUser(row)
+          setLoadError(null)
+          return
+        } catch (err) {
+          lastError = err
+        }
       }
-      setAppUser(row)
-    } catch (err) {
+
       setAppUser(null)
-      setLoadError(err instanceof Error ? err.message : String(err))
+      setLoadError(lastError instanceof Error ? lastError.message : String(lastError))
     } finally {
       setIsLoading(false)
     }
@@ -119,6 +135,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void loadUser()
   }, [loadUser])
+
+  useEffect(() => {
+    if (!loadError || !account || E2E_AUTH_BYPASS) return
+    const onFocus = () => { void loadUser() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [account, loadError, loadUser])
 
   const value = useMemo<UserContextType>(() => {
     const isAdmin = appUser?.role === 'admin'

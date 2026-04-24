@@ -2,7 +2,7 @@
 ID: US-O16
 Title: Slide Import Edge-Case Regression Coverage
 Status: Code Present
-Verified: false
+Verified: true
 Backdated: 2026-04-24
 ---
 
