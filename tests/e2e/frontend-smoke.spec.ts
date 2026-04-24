@@ -142,6 +142,124 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/profile\/?$/)
   })
 
+  test('accounts export panel explains use case and downloads without popup redirects', async ({ page }) => {
+    await gotoAndSettle(page, '/accounts')
+
+    await page.locator('.account-card').first().click()
+    let popupOpened = false
+    page.once('popup', () => { popupOpened = true })
+
+    await page.getByRole('button', { name: 'Export Plan' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Export Account Plan' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('Use this when you need a print-ready account brief outside the app.')
+    await expect(dialog).toContainText('Open it in a browser and use Print to save as PDF if needed.')
+
+    await dialog.getByLabel('Account overview & revenue').check()
+    await expect(dialog.getByText(/Current selection: .*overview/i)).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download')
+    await dialog.getByRole('button', { name: 'Download Print-Ready Plan' }).click()
+    const download = await downloadPromise
+
+    expect(await download.suggestedFilename()).toMatch(/\.html$/)
+    expect(await download.failure()).toBeNull()
+    expect(popupOpened).toBeFalsy()
+    await expect(dialog).toHaveCount(0)
+  })
+
+  test('accounts chatbot export flow downloads directly without opening the page export modal', async ({ page }) => {
+    await gotoAndSettle(page, '/accounts')
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+    await input.fill('export pdf')
+    await input.press('Enter')
+
+    await expect(page.getByText(/Which account\?/)).toBeVisible()
+    await page.getByRole('toolbar', { name: 'account_id' }).getByRole('button', { name: 'NCL' }).click()
+    await expect(page.getByText('What export do you need?')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Export Account Plan' })).toHaveCount(0)
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Full Account Plan' }).click()
+    const download = await downloadPromise
+
+    expect(await download.suggestedFilename()).toMatch(/\.html$/)
+    expect(await download.failure()).toBeNull()
+    await expect(page.getByText(/Downloaded .*\.html\./)).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Export Account Plan' })).toHaveCount(0)
+  })
+
+  test('accounts chatbot transcript upload can be reviewed and written through confirm-write', async ({ page }) => {
+    const confirmWriteBodies: Array<Record<string, unknown>> = []
+    await page.route('**/api/confirm-write', async route => {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      confirmWriteBodies.push(body)
+      const dryRun = body.dryRun === true
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(dryRun
+          ? {
+              conflicts: [],
+              summary: { notes: 2, decisions: 1, actions: 1, people: 0, projects: 0, opportunities: 0 },
+              written: false,
+            }
+          : {
+              conflicts: [],
+              summary: { notes: 2, decisions: 1, actions: 1, people: 0, projects: 0, opportunities: 0 },
+              written: true,
+              message: 'Import saved to the account workspace.',
+            }),
+      })
+    })
+
+    await gotoAndSettle(page, '/accounts')
+    await page.locator('.account-card').first().click()
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+
+    const transcript = [
+      'Meeting: Weekly Account Review',
+      'Date: 2026-04-24',
+      'Alice Johnson: We decided to expand the pilot.',
+      'Bob Smith: Alice will send the revised rollout plan.',
+    ].join('\n')
+
+    const chooserPromise = page.waitForEvent('filechooser')
+    await page.getByRole('button', { name: 'Upload file' }).click()
+    const chooser = await chooserPromise
+    await chooser.setFiles({
+      name: 'weekly-account-review.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(transcript),
+    })
+
+    await expect(page.getByText('Transcript (client-parsed)')).toBeVisible()
+    await expect(page.getByText(/Parsed locally — no API call\. Confirm to save\./)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Review & Edit' }).click()
+    const reviewDialog = page.getByRole('dialog', { name: 'Review Transcript' })
+    await expect(reviewDialog).toBeVisible()
+    await reviewDialog.getByPlaceholder('Meeting title').fill('Weekly Account Review Revised')
+    await reviewDialog.getByRole('button', { name: 'Save & Continue' }).click()
+
+    await expect(page.getByText(/Ready to write:/)).toBeVisible()
+    await expect(page.getByText(/actions:\s*1/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Confirm & Write' }).click()
+    await expect(page.getByText('Import saved to the account workspace.')).toBeVisible()
+    await expect(page.getByText(/Do you want me to create reminders or add calendar entries/)).toBeVisible()
+
+    expect(confirmWriteBodies).toHaveLength(2)
+    expect(confirmWriteBodies[0]?.dryRun).toBe(true)
+    expect(confirmWriteBodies[1]?.dryRun).toBe(false)
+    expect(confirmWriteBodies[0]?.accountId).toBeTruthy()
+    expect(confirmWriteBodies[0]?.accountId).toBe(confirmWriteBodies[1]?.accountId)
+    expect(((confirmWriteBodies[0]?.payload as Record<string, unknown>)?.metadata as Record<string, unknown>)?.title).toBe('Weekly Account Review Revised')
+    expect(Array.isArray((confirmWriteBodies[1]?.payload as Record<string, unknown>)?.actions)).toBe(true)
+  })
+
   test('hr sidebar and section navigation work', async ({ page }) => {
     await gotoAndSettle(page, '/hr')
 
@@ -249,6 +367,45 @@ test.describe('frontend smoke', () => {
     await expect(page.getByRole('button', { name: 'Save Pipeline Changes' })).toBeVisible()
   })
 
+  test('sdr pipeline editor saves changes through the backend patch route', async ({ page }) => {
+    let patchBody: unknown = null
+    await page.route('**/api/sdr-prospects', async route => {
+      patchBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, prospect: null }),
+      })
+    })
+
+    await gotoAndSettle(page, '/sdr')
+    await page.locator('.app-sidebar-item', { hasText: 'Prospects' }).click()
+    const prospectCards = page.locator('.sdr-prospect-card')
+    const count = await prospectCards.count()
+    if (count === 0) return
+
+    await prospectCards.first().click()
+    const editor = page.locator('[data-testid="sdr-pipeline-editor"]')
+    await expect(editor).toBeVisible()
+
+    const commentField = editor.locator('textarea')
+    const originalComment = await commentField.inputValue()
+    const nextComment = originalComment
+      ? originalComment + ' | QA smoke save'
+      : 'QA smoke pipeline save verified'
+    await commentField.fill(nextComment)
+    await page.getByRole('button', { name: 'Save Pipeline Changes' }).click()
+
+    await expect(page.getByText('Pipeline fields saved.')).toBeVisible()
+    if (!patchBody) {
+      throw new Error('Expected /api/sdr-prospects to receive a PATCH payload.')
+    }
+    const savedPatch = patchBody as Record<string, unknown>
+    expect(typeof savedPatch.id).toBe('string')
+    expect((savedPatch.patch as Record<string, unknown>).lc).toBe(nextComment)
+    expect(typeof (savedPatch.patch as Record<string, unknown>).lu).toBe('string')
+  })
+
   test('crm route stays in explicit coming-soon mode without CRUD controls', async ({ page }) => {
     await gotoAndSettle(page, '/crm')
 
@@ -317,7 +474,7 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/slides')
 
     await expect(page.getByRole('heading', { name: 'HTML to Editable Components' })).toBeVisible()
-    await expect(page.getByText(/Canvas editing and export are in the editor backlog \(coming soon\)\./)).toBeVisible()
+    await expect(page.getByText(/Import existing slide HTML, review structured parser output, then save to My Slides/)).toBeVisible()
     const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
       <h1 style="position:absolute;left:100px;top:120px;width:800px;font-size:64px;color:#FEFFFF;">Hello</h1>
       <div class="card" style="position:absolute;left:120px;top:260px;width:420px;">Card Body</div>
@@ -325,10 +482,12 @@ test.describe('frontend smoke', () => {
     await page.locator('#slides-raw-html').fill(rawHtml)
     await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
 
+    await expect(page.getByText('Parse complete.')).toBeVisible()
     await expect(page.getByText(/Canvas:\s*1920 × 1080/)).toBeVisible()
     await expect(page.getByText(/Components:\s*2/)).toBeVisible()
-    await expect(page.locator('.slides-code')).toContainText('"type": "heading"')
-    await expect(page.locator('.slides-code')).toContainText('"type": "card"')
+    await expect(page.locator('.slides-component-grid-row')).toHaveCount(2)
+    await expect(page.locator('.slides-component-grid-row').first()).toContainText('heading')
+    await expect(page.locator('.slides-component-grid-row').nth(1)).toContainText('card')
   })
 
   test('US-SLD-003 slides import sanitizes markup and warns on unsupported units/transforms', async ({ page }) => {
@@ -342,11 +501,13 @@ test.describe('frontend smoke', () => {
     await page.locator('#slides-raw-html').fill(rawHtml)
     await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
 
+    await expect(page.getByText('Parse complete.')).toBeVisible()
     await expect(page.getByText(/Canvas:\s*1920 × 1080/)).toBeVisible()
     await expect(page.getByText(/Normalized imported canvas from 1280x720 to 1920x1080/)).toBeVisible()
     await expect(page.getByText(/unsupported left unit/i)).toBeVisible()
     await expect(page.getByText(/unsupported transform/i)).toBeVisible()
 
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
     const parsedComponents = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
     expect(Array.isArray(parsedComponents)).toBe(true)
     expect(parsedComponents).toHaveLength(1)
@@ -366,6 +527,8 @@ test.describe('frontend smoke', () => {
     await page.locator('#slides-raw-html').fill(rawHtml)
     await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
 
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
     const parsedComponents = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
     expect(parsedComponents).toHaveLength(1)
     expect(parsedComponents[0]?.x).toBe(207)

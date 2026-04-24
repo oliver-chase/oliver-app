@@ -9,10 +9,10 @@ Goal: create one actionable backlog that covers:
 
 ## Current Reality Snapshot
 
-- Slide module currently provides an HTML import/parser surface and parser warnings output.
-- There is no persisted slide library, no template management, no editor canvas interactions, and no slide export pipeline in the current module UI.
-- Existing slide parser work is tracked in backlog-only items (`US-O13`..`US-O16`) rather than in canonical module story coverage.
-- Module copy still implies capabilities (template flow/export workflow) that are not yet present in the UI.
+- Slide module now provides import preflight validation, categorized parser failures, grouped warnings, and structured component result tables.
+- Persisted My Slides + Template Library views are wired to a FE/BE contract (`/api/slides`) with local fallback for dev/QA and Supabase-backed production path.
+- Save/autosave, revision conflict handling, draft recovery, HTML export metadata, PDF print contract, and audit feed are implemented.
+- Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
 
 ## Epic Breakdown
 
@@ -28,16 +28,15 @@ Goal: create one actionable backlog that covers:
 | Epic | Status | Commit Readiness |
 | --- | --- | --- |
 | S0 | Complete (`US-SLD-001`..`US-SLD-005`) | Ready to commit as one epic milestone |
-| S1 | Not started | Not commit-ready |
-| S2 | Not started | Not commit-ready |
-| S3 | Not started | Not commit-ready |
+| S1 | Complete (`US-SLD-010`..`US-SLD-013`) | Ready to commit as one epic milestone |
+| S2 | Not started (`US-SLD-020`..`US-SLD-025`) | Not commit-ready |
+| S3 | Complete (`US-SLD-030`..`US-SLD-036`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
-1. Execute `S0` first so current shipped behavior is traceable and wording is accurate.
-2. Execute `S1` second to improve immediate usability/safety of the existing import flow.
-3. Execute `S3` foundation stories (`US-SLD-030`, `US-SLD-031`) before most of `S2`, so editor work has a real persistence contract.
-4. Ship `S2` + `S3` iteratively with paired FE/BE slices and story-level tests.
+1. Execute `S2` (`US-SLD-020`..`US-SLD-025`) next, using the now-shipped S3 persistence contracts.
+2. Keep S1/S3 regression coverage green while adding editor interactions.
+3. Land editor features in story-sized slices so each interaction family (selection, text editing, undo/redo, accessibility) ships with tests.
 
 ## Execution and Commit Model
 

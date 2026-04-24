@@ -46,11 +46,11 @@ const MODULES: ModuleDefinition[] = [
   {
     id: 'slides',
     name: 'Slide Editor',
-    description: 'Import-first slide conversion: parse HTML into component JSON with warnings and sanitization.',
+    description: 'Import slide HTML, review structured component output, then save/autosave to My Slides with template and export support.',
     href: '/slides',
     pageLabel: 'Slide Editor',
-    defaultPlaceholder: 'Import or paste slide HTML to parse into component JSON...',
-    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. HTML import is live; canvas editing and export are coming soon.",
+    defaultPlaceholder: 'Import or paste slide HTML, then save or export...',
+    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. Import, validate, save, and export flows are live while canvas editing remains in backlog.",
   },
   {
     id: 'crm',

@@ -306,6 +306,7 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
     return {
       id: 'import-' + String(index + 1).padStart(3, '0'),
       type: inferType(node),
+      sourceLabel: nodeLabel,
       x: scaleValue(baseX + transformOffsets.x, scaleX),
       y: scaleValue(baseY + transformOffsets.y, scaleY),
       width: scaleValue(baseWidth, scaleX),

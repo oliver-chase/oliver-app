@@ -220,7 +220,13 @@ export default function OliverDock() {
       run: () => {},
     }))
     const hasProfileAction = config.actions.some(action => normalize(action.label) === normalize(profileAction.label))
-    return [...config.actions, ...flowCommands, ...(hasProfileAction ? [] : [profileAction])]
+    const seen = new Set<string>()
+    return [...config.actions, ...flowCommands, ...(hasProfileAction ? [] : [profileAction])].filter((action) => {
+      const key = normalize(action.id + '|' + action.label)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }, [config, profileAction])
 
   // Fuzzy suggestions driven by input (top 3, ≤2 edits).

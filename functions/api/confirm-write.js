@@ -288,12 +288,19 @@ function buildSummary(payload) {
   };
 }
 
-async function restWrite(supabaseUrl, env, table, method, body, query = '') {
+async function restWrite(supabaseUrl, env, table, method, body, query = '', options = {}) {
+  const upsertKey = typeof options.upsertKey === 'string' ? options.upsertKey.trim() : '';
+  const mergeQuery = upsertKey
+    ? (query ? query + '&' : '?') + 'on_conflict=' + encodeURIComponent(upsertKey)
+    : query;
+  const prefer = upsertKey
+    ? 'resolution=merge-duplicates,return=representation'
+    : 'return=representation';
   const response = await fetch(
-    supabaseUrl + '/rest/v1/' + table + query,
+    supabaseUrl + '/rest/v1/' + table + mergeQuery,
     {
       method,
-      headers: serviceHeaders(env, { Prefer: 'return=representation' }),
+      headers: serviceHeaders(env, { Prefer: prefer }),
       body: JSON.stringify(body),
     },
   );
@@ -382,7 +389,7 @@ async function writePayload(supabaseUrl, env, accountId, payload, existing) {
       };
     });
 
-    await restWrite(supabaseUrl, env, 'stakeholders', 'POST', stakeholderRecords);
+    await restWrite(supabaseUrl, env, 'stakeholders', 'POST', stakeholderRecords, '', { upsertKey: 'stakeholder_id' });
   }
 
   const projectUpdates = Array.isArray(payload.updates?.projects) ? payload.updates.projects : [];
@@ -407,7 +414,7 @@ async function writePayload(supabaseUrl, env, accountId, payload, existing) {
         };
       })
       .filter(Boolean);
-    if (projectRecords.length > 0) await restWrite(supabaseUrl, env, 'projects', 'POST', projectRecords);
+    if (projectRecords.length > 0) await restWrite(supabaseUrl, env, 'projects', 'POST', projectRecords, '', { upsertKey: 'project_id' });
   }
 
   const opportunityUpdates = Array.isArray(payload.updates?.opportunities) ? payload.updates.opportunities : [];
@@ -434,7 +441,7 @@ async function writePayload(supabaseUrl, env, accountId, payload, existing) {
         };
       })
       .filter(Boolean);
-    if (opportunityRecords.length > 0) await restWrite(supabaseUrl, env, 'opportunities', 'POST', opportunityRecords);
+    if (opportunityRecords.length > 0) await restWrite(supabaseUrl, env, 'opportunities', 'POST', opportunityRecords, '', { upsertKey: 'opportunity_id' });
   }
 }
 
