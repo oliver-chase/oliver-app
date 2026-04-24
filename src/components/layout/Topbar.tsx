@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
 import SyncDot from '@/components/shared/SyncDot';
 
 type SyncStatus = 'syncing' | 'ok' | 'err';
@@ -25,7 +24,6 @@ interface TopbarProps {
   sidebarOpen?: boolean;
   activeSection?: string;
   onSectionSelect?: (section: string) => void;
-  onAccountNameChange?: (name: string) => void;
 }
 
 export default function Topbar({
@@ -39,12 +37,9 @@ export default function Topbar({
   sidebarOpen,
   activeSection,
   onSectionSelect,
-  onAccountNameChange,
 }: TopbarProps) {
-  const titleRef = useRef<HTMLDivElement>(null);
   const showDetail = currentAccountId !== null;
-  const editable = showDetail && !!onAccountNameChange;
-  const title = showDetail ? (accountName ?? 'Account') : 'All Accounts';
+  const title = accountName || 'Account Strategy';
 
   return (
     <header className="topbar">
@@ -60,22 +55,7 @@ export default function Topbar({
         &#9776;
       </button>
 
-      <div
-        ref={titleRef}
-        id="topbar-account"
-        className="topbar-account"
-        contentEditable={editable || undefined}
-        suppressContentEditableWarning
-        title={editable ? 'Click to edit account name' : undefined}
-        onBlur={() => {
-          if (editable && titleRef.current && onAccountNameChange) {
-            const v = titleRef.current.textContent?.trim() || ''
-            if (v) onAccountNameChange(v)
-            else titleRef.current.textContent = title
-          }
-        }}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); titleRef.current?.blur() } }}
-      >
+      <div id="topbar-account" className="topbar-account">
         {title}
       </div>
 

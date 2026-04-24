@@ -1,59 +1,12 @@
-.page {
-  min-height: 100vh;
-  background: var(--color-bg-page);
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.headerInner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 var(--spacing-xl);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--spacing-56);
-}
-
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-20);
-}
-
-.backLink {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  font-family: var(--font-family-mono);
-  transition: color 0.15s;
-}
-
-.backLink:hover {
-  color: var(--color-text-primary);
-}
-
-.title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
 .tabs {
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: var(--spacing-xs);
   background: var(--color-bg-hover);
-  padding: 3px;
+  padding: var(--spacing-xs);
   border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
 }
 
 .tab {
@@ -80,11 +33,23 @@
 }
 
 .body {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-xl);
   width: 100%;
-  flex: 1;
+}
+
+.dsLink {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-family: var(--font-family-mono);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-2xs) var(--spacing-sm);
+}
+
+.dsLink:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-card);
 }
 
 /* ── TokenEditor ─────────────────────────────────────────────────────────── */
@@ -249,17 +214,7 @@
 }
 
 @media (max-width: 500px) {
-  .headerInner {
-    padding: 0 var(--spacing-md);
-    flex-direction: column;
-    height: auto;
-    padding-top: var(--spacing-12);
-    padding-bottom: var(--spacing-12);
-    gap: var(--spacing-12);
-    align-items: flex-start;
-  }
-
-  .body {
-    padding: var(--spacing-md);
+  .dsLink {
+    margin-left: 0;
   }
 }

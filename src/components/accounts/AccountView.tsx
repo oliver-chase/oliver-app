@@ -55,13 +55,15 @@ export default function AccountView({
     <div id="account-content">
       <div className="account-header-row">
         <div>
-          <div
+          <ContentEditable
             id="account-name-heading"
             className="account-name-heading"
-            aria-label="Account name"
-          >
-            {acct.account_name}
-          </div>
+            title="Click to edit short account name"
+            value={acct.account_name || ''}
+            ariaLabel="Short account name"
+            placeholder="Account Name"
+            onSave={v => { const cur = acctRef.current; if (cur) onUpdateAccount({ ...cur, account_name: v, last_updated: today() }) }}
+          />
           <ContentEditable
             id="account-client-company"
             className="account-client-company"

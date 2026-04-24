@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { runWrites } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
@@ -8,6 +8,14 @@ import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Device } from './types'
 import { getList } from './types'
+import {
+  createFileAsset,
+  createLinkAsset,
+  filenameForDownload,
+  mergeDeviceReceiptsIntoNotes,
+  parseDeviceReceiptsFromNotes,
+  sortAssetsNewestFirst,
+} from '@/lib/hr-assets'
 
 interface Props {
   db: HrDB
@@ -42,6 +50,9 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
   const [focusDevId, setFocusDevId] = useState<string | null>(null)
   const [form, setForm] = useState<DevForm>({ ...BLANK_DEV, purchaseDate: today() })
   const [assignEmpId, setAssignEmpId] = useState('')
+  const [receiptLinkInput, setReceiptLinkInput] = useState('')
+  const [receiptError, setReceiptError] = useState('')
+  const receiptUploadRef = useRef<HTMLInputElement>(null)
   const { modal, showModal } = useAppModal()
   const { softDelete, toastEl } = useSoftDelete<Device>()
 
@@ -64,6 +75,8 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
 
   function openDetail(id: string) {
     setFocusDevId(id)
+    setReceiptLinkInput('')
+    setReceiptError('')
     setModalType('detail')
   }
 
@@ -169,9 +182,77 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
     await dbMulti([() => supabase.from('devices').upsert(updated)])
   }
 
+  async function persistDevice(update: Device) {
+    setDb(prev => ({ ...prev, devices: prev.devices.map(x => x.id === update.id ? update : x) }))
+    await dbMulti([() => supabase.from('devices').upsert(update)])
+  }
+
+  async function addReceiptLinkToDevice(device: Device) {
+    const url = receiptLinkInput.trim()
+    if (!url) {
+      setReceiptError('Enter a receipt link first.')
+      return
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      setReceiptError('Receipt links must start with http:// or https://.')
+      return
+    }
+    const { plainNotes, receipts } = parseDeviceReceiptsFromNotes(device.notes || '')
+    const nextReceipts = sortAssetsNewestFirst([...receipts, createLinkAsset(url, 'Receipt Link')])
+    const updated: Device = {
+      ...device,
+      notes: mergeDeviceReceiptsIntoNotes(plainNotes, nextReceipts),
+      updated_at: new Date().toISOString(),
+    }
+    setReceiptError('')
+    setReceiptLinkInput('')
+    await persistDevice(updated)
+  }
+
+  async function addReceiptFileToDevice(device: Device, file: File) {
+    const MAX_BYTES = 7 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      setReceiptError('Receipt file exceeds 7 MB. Upload a smaller file.')
+      return
+    }
+    const { plainNotes, receipts } = parseDeviceReceiptsFromNotes(device.notes || '')
+    try {
+      const asset = await createFileAsset(file, 'Receipt')
+      const updated: Device = {
+        ...device,
+        notes: mergeDeviceReceiptsIntoNotes(plainNotes, sortAssetsNewestFirst([...receipts, asset])),
+        updated_at: new Date().toISOString(),
+      }
+      setReceiptError('')
+      await persistDevice(updated)
+    } catch (err) {
+      setReceiptError(err instanceof Error ? err.message : 'Failed to read this receipt file.')
+    }
+  }
+
+  async function deleteReceiptFromDevice(device: Device, receiptId: string) {
+    const { plainNotes, receipts } = parseDeviceReceiptsFromNotes(device.notes || '')
+    const target = receipts.find(r => r.id === receiptId)
+    if (!target) return
+    const { buttonValue } = await showModal({
+      title: 'Delete Receipt',
+      message: 'Delete "' + target.name + '"?',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+    })
+    if (buttonValue !== 'confirm') return
+    const updated: Device = {
+      ...device,
+      notes: mergeDeviceReceiptsIntoNotes(plainNotes, receipts.filter(r => r.id !== receiptId)),
+      updated_at: new Date().toISOString(),
+    }
+    await persistDevice(updated)
+  }
+
   const assigneeFirstName = focusDev?.assignedTo ? (db.employees.find(e => e.id === focusDev.assignedTo)?.name.split(' ')[0] || '') : ''
   const focusAssignee    = focusDev?.assignedTo ? db.employees.find(e => e.id === focusDev.assignedTo) : null
   const assignHistory    = focusDev ? db.assignments.filter(a => a.deviceId === focusDev.id && a.status === 'returned') : []
+  const focusReceiptMeta = focusDev ? parseDeviceReceiptsFromNotes(focusDev.notes || '') : { plainNotes: '', receipts: [] }
 
   return (
     <div className="page page--split">
@@ -322,6 +403,64 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
                 </div>
               )}
               {focusDev.specs && <div className="detail-row detail-col"><span className="detail-key">Specs</span><span className="device-specs">{focusDev.specs}</span></div>}
+              <div className="detail-row detail-col">
+                <span className="detail-key">Receipts ({focusReceiptMeta.receipts.length})</span>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap', marginTop: 'var(--spacing-xs)' }}>
+                  <input
+                    className="form-input"
+                    style={{ minWidth: 220, flex: 1 }}
+                    type="url"
+                    placeholder="https://... receipt link"
+                    value={receiptLinkInput}
+                    onChange={e => setReceiptLinkInput(e.currentTarget.value)}
+                  />
+                  <button className="btn btn-sm btn-secondary" onClick={() => { void addReceiptLinkToDevice(focusDev) }}>Add Link</button>
+                  <input
+                    ref={receiptUploadRef}
+                    type="file"
+                    accept=".txt,.pdf,image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) void addReceiptFileToDevice(focusDev, file)
+                      e.currentTarget.value = ''
+                    }}
+                  />
+                  <button className="btn btn-sm btn-secondary" onClick={() => receiptUploadRef.current?.click()}>Upload File</button>
+                </div>
+                {receiptError && <div className="iv-date-past" style={{ marginTop: 'var(--spacing-xs)' }}>{receiptError}</div>}
+                {focusReceiptMeta.receipts.length === 0 ? (
+                  <div className="iv-empty" style={{ marginTop: 'var(--spacing-xs)' }}>No receipts saved yet.</div>
+                ) : (
+                  <div style={{ marginTop: 'var(--spacing-sm)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
+                    {focusReceiptMeta.receipts.map(asset => (
+                      <div key={asset.id} className="detail-row">
+                        <span className="detail-key">{new Date(asset.createdAt).toLocaleDateString()}</span>
+                        <span className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                          <a
+                            href={asset.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="link-accent-sm"
+                            download={asset.kind === 'file' ? filenameForDownload(asset, 'receipt') : undefined}
+                          >
+                            {asset.name}
+                          </a>
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            type="button"
+                            aria-label="Delete receipt"
+                            onClick={() => { void deleteReceiptFromDevice(focusDev, asset.id) }}
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {focusReceiptMeta.plainNotes && <div className="detail-row detail-col"><span className="detail-key">Notes</span><span className="device-specs">{focusReceiptMeta.plainNotes}</span></div>}
               {focusAssignee && <div className="detail-row"><span className="detail-key">Assigned To</span><span className="detail-val">{focusAssignee.name}</span></div>}
               {assignHistory.length > 0 && (
                 <div className="detail-row detail-col">

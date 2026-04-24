@@ -9,10 +9,9 @@ import InterviewLogModal from './InterviewLogModal'
 import EditCandidateModal from './EditCandidateModal'
 import DeleteConfirmModal from '@/components/shared/DeleteConfirmModal'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
-import type { HrDB, Candidate, Employee, Interview, Device } from './types'
+import type { HrDB, Candidate, Employee, Interview } from './types'
 import { STAGES, getList } from './types'
-import { parseReceipt } from '@/lib/parsers/receipt-parser'
-import type { ParsedReceipt } from '@/lib/parsers/receipt-parser'
+import { filenameForDownload, parseResumeAssets, serializeResumeAssets } from '@/lib/hr-assets'
 
 interface Props {
   db: HrDB
@@ -54,54 +53,6 @@ function StatusPill({ status }: { status: string }) {
   return <span className={'pill pill-' + (STATUS_COLOR[status] || 'gray')}>{status || '—'}</span>
 }
 
-function ReceiptForm({ receipt, saving, onSave, onCancel }: {
-  receipt: ParsedReceipt
-  saving: boolean
-  onSave: (r: ParsedReceipt, overrides: Partial<Device>) => void
-  onCancel: () => void
-}) {
-  const [name, setName]               = useState(receipt.deviceName || '')
-  const [serial, setSerial]           = useState(receipt.serialNumber || receipt.imei || '')
-  const [purchaseDate, setPurchaseDate] = useState(receipt.purchaseDate || '')
-  const [customer, setCustomer]       = useState(receipt.customerName || '')
-
-  return (
-    <div style={{ flex: 1, minWidth: 260 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', marginBottom: 8 }}>
-        Parsed Fields {receipt.gaps.length > 0 && <span style={{ color: 'var(--color-amber, #d97706)', fontWeight: 400 }}> — missing: {receipt.gaps.join(', ')}</span>}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--spacing-xs)' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Device Name</span>
-          <input className="input input-sm" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. MacBook Pro 14 M3" style={{ fontSize: 12 }} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Serial / IMEI</span>
-          <input className="input input-sm" value={serial} onChange={e => setSerial(e.target.value)} placeholder="Serial number" style={{ fontSize: 12 }} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Purchase Date</span>
-          <input className="input input-sm" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} placeholder="YYYY-MM-DD" style={{ fontSize: 12 }} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Assigned To</span>
-          <input className="input input-sm" value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Employee name" style={{ fontSize: 12 }} />
-        </label>
-      </div>
-      <div style={{ display: 'flex', gap: 'var(--spacing-xs)', marginTop: 'var(--spacing-sm)' }}>
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={saving || !name.trim()}
-          onClick={() => onSave(receipt, { name, serial, purchaseDate, notes: customer ? 'Assigned to: ' + customer : '' })}
-        >
-          {saving ? 'Saving...' : 'Add to Inventory'}
-        </button>
-        <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
-      </div>
-    </div>
-  )
-}
-
 export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEditConsumed }: Props) {
   const [q, setQ]               = useState('')
   const [status, setStatus]     = useState('')
@@ -120,10 +71,6 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   const [confirmDelIvId, setConfirmDelIvId] = useState<string | null>(null)
   const [editCand, setEditCand] = useState<Candidate | null>(null)
   const [confirmDelCand, setConfirmDelCand] = useState<Candidate | null>(null)
-  const [receiptOpen, setReceiptOpen] = useState(false)
-  const [parsedReceipt, setParsedReceipt] = useState<ParsedReceipt | null>(null)
-  const [receiptSaving, setReceiptSaving] = useState(false)
-  const receiptFileRef = useRef<HTMLInputElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -153,58 +100,6 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
       confirmLabel: 'Yes, Move to Hired',
     })
     if (buttonValue === 'confirm') setPromoteCand(c)
-  }
-
-  async function handleReceiptFile(file: File) {
-    const isImage = file.type.startsWith('image/')
-    const isPdf = file.name.endsWith('.pdf')
-    if (isImage || isPdf) {
-      setParsedReceipt({ purchaseDate: null, serialNumber: null, imei: null, deviceType: null, deviceName: null, customerName: null, price: null, orderId: null, gaps: ['File is an image or PDF — enter details manually below'] })
-      setReceiptOpen(true)
-      return
-    }
-    const text = await file.text()
-    const result = parseReceipt(text)
-    setParsedReceipt(result)
-    setReceiptOpen(true)
-  }
-
-  async function saveReceiptAsDevice(r: ParsedReceipt, overrides: Partial<Device>) {
-    setReceiptSaving(true)
-    const now = new Date().toISOString()
-    const deviceTypeLower = (r.deviceType || overrides.type || 'other').toLowerCase()
-    const knownType = ['laptop', 'monitor', 'phone', 'keyboard', 'mouse', 'headset'].includes(deviceTypeLower) ? deviceTypeLower : 'other'
-    const rec: Device = {
-      id: 'DEV-' + crypto.randomUUID(),
-      name: overrides.name || r.deviceName || r.deviceType || 'Unknown Device',
-      make: overrides.make || (r.deviceType?.split(' ')[0] || ''),
-      type: overrides.type || knownType,
-      model: overrides.model || r.deviceName || '',
-      modelNumber: overrides.modelNumber || '',
-      serial: overrides.serial || r.serialNumber || r.imei || '',
-      status: 'available',
-      assignedTo: '',
-      condition: 'new',
-      purchaseDate: overrides.purchaseDate || r.purchaseDate || '',
-      purchaseStore: overrides.purchaseStore || 'Best Buy',
-      orderNumber: overrides.orderNumber || r.orderId || '',
-      specs: overrides.specs || '',
-      location: overrides.location || '',
-      notes: overrides.notes || (r.imei ? 'IMEI: ' + r.imei : ''),
-      created_at: now,
-      updated_at: now,
-    }
-    setDb(prev => ({ ...prev, devices: [rec, ...prev.devices] }))
-    setSyncState('syncing')
-    try {
-      await dbWrite(supabase.from('devices').insert(rec), 'hiring.receiptSaveDevice')
-      setSyncState('ok')
-    } catch {
-      setSyncState('error')
-    }
-    setReceiptSaving(false)
-    setParsedReceipt(null)
-    setReceiptOpen(false)
   }
 
   const { softDelete, toastEl } = useSoftDelete<Candidate>()
@@ -238,6 +133,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
     : `${list.length} of ${total} candidates`
 
   const selected = selectedId ? db.candidates.find(c => c.id === selectedId) || null : null
+  const selectedResumes = selected ? parseResumeAssets(selected.resumeLink) : []
 
   const save = useCallback(async (c: Candidate) => {
     setDb(prev => ({ ...prev, candidates: prev.candidates.map(x => x.id === c.id ? c : x) }))
@@ -340,6 +236,25 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
   })
 
   const candIvs = selected ? db.interviews.filter(iv => iv.candidateId === selected.id) : []
+
+  async function requestDeleteResumeVersion(cand: Candidate, resumeId: string) {
+    const versions = parseResumeAssets(cand.resumeLink)
+    const target = versions.find(v => v.id === resumeId)
+    if (!target) return
+    const { buttonValue } = await showModal({
+      title: 'Delete Resume Version',
+      message: 'Delete "' + target.name + '"?',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+    })
+    if (buttonValue !== 'confirm') return
+    const updated = {
+      ...cand,
+      resumeLink: serializeResumeAssets(versions.filter(v => v.id !== resumeId)),
+      updatedAt: new Date().toISOString(),
+    }
+    await save(updated)
+  }
 
   return (
     <div className="page page--split">
@@ -514,45 +429,7 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
               {' '}Table
             </button>
           </div>
-          <button
-            className={'btn btn-sm btn-secondary' + (receiptOpen ? ' btn-active' : '')}
-            onClick={() => { setReceiptOpen(o => !o); if (!receiptOpen) setParsedReceipt(null) }}
-            title="Upload a Best Buy receipt to auto-fill device info"
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginRight: 4 }}><path d="M9 1H3a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V6L9 1z"/><path d="M9 1v5h5"/></svg>
-            Receipt Upload
-          </button>
         </div>
-
-        {/* Receipt upload panel */}
-        {receiptOpen && (
-          <div style={{ borderTop: '1px solid var(--border-color, #e5e5e5)', padding: 'var(--spacing-sm)', background: 'var(--bg-subtle, #fafafa)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-              <div style={{ flex: '0 0 auto' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  Upload Receipt
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, maxWidth: 220 }}>
-                  Upload Receipt/Device Info — upload a Best Buy receipt screenshot or PDF. We'll extract date, serial number, device type, and device name. Plain text (.txt) is parsed instantly; images/PDFs require manual entry below.
-                </div>
-                <input
-                  ref={receiptFileRef}
-                  type="file"
-                  accept=".txt,.pdf,image/*"
-                  style={{ display: 'none' }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleReceiptFile(f); e.target.value = '' }}
-                />
-                <button className="btn btn-sm btn-secondary" onClick={() => receiptFileRef.current?.click()}>
-                  Choose File
-                </button>
-              </div>
-
-              {parsedReceipt && (
-                <ReceiptForm receipt={parsedReceipt} saving={receiptSaving} onSave={saveReceiptAsDevice} onCancel={() => { setParsedReceipt(null); setReceiptOpen(false) }} />
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="split-layout">
@@ -697,10 +574,33 @@ export default function HrHiring({ db, setDb, setSyncState, pendingEditId, onEdi
                   <div className="detail-row"><span className="detail-key">Last Updated</span><span className="detail-val">{relTime(selected.updatedAt)}</span></div>
                 </div>
 
-                {selected.resumeLink && (
+                {selectedResumes.length > 0 && (
                   <div className="detail-section">
-                    <div className="detail-section-title">Resume</div>
-                    <a href={selected.resumeLink} target="_blank" rel="noreferrer" className="link-accent-sm">View on SharePoint ↗</a>
+                    <div className="detail-section-title">Resumes ({selectedResumes.length})</div>
+                    {selectedResumes.map(asset => (
+                      <div key={asset.id} className="detail-row">
+                        <span className="detail-key">{new Date(asset.createdAt).toLocaleDateString()}</span>
+                        <span className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                          <a
+                            href={asset.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="link-accent-sm"
+                            download={asset.kind === 'file' ? filenameForDownload(asset, 'resume') : undefined}
+                          >
+                            {asset.name}
+                          </a>
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            type="button"
+                            aria-label="Delete resume version"
+                            onClick={() => requestDeleteResumeVersion(selected, asset.id)}
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
 

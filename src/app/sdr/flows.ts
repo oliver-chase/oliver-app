@@ -19,11 +19,66 @@ type Ctx = {
 }
 
 const now = () => new Date().toISOString()
+const asText = (v: unknown) => (v == null ? '' : String(v).trim())
+const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
   const { prospects, approvalItems, refetch } = ctx
 
   return [
+    {
+      id: 'add-opp',
+      label: 'Add Opportunity',
+      aliases: ['add prospect', 'new lead', 'new opportunity', 'track opportunity'],
+      steps: [
+        { id: 'name', prompt: 'Prospect full name?', kind: 'text', placeholder: 'e.g. Jordan Lee' },
+        { id: 'company', prompt: 'Company?', kind: 'text', placeholder: 'Company' },
+        { id: 'email', prompt: 'Email? (optional)', kind: 'text', placeholder: 'email@company.com', optional: true },
+        {
+          id: 'track', prompt: 'Track?', kind: 'choice', optional: true,
+          choices: [
+            { label: 'product-maker', value: 'product-maker' },
+            { label: 'ai-enablement', value: 'ai-enablement' },
+            { label: 'pace-car', value: 'pace-car' },
+          ],
+        },
+        { id: 'note', prompt: 'Initial note? (optional)', kind: 'text', placeholder: 'Why this is an opportunity', optional: true },
+      ],
+      run: async (answers) => {
+        const ts = now()
+        const name = asText(answers.name)
+        const prospect: SdrProspect = {
+          id: newId('pros'),
+          nm: name,
+          fn: name,
+          ti: '',
+          co: asText(answers.company),
+          em: asText(answers.email),
+          dm: '',
+          st: 'new',
+          tr: asText(answers.track) || 'product-maker',
+          sig: '',
+          ind: '',
+          sz: '',
+          rev: '',
+          city: '',
+          state: '',
+          country: '',
+          fuc: '',
+          fc: '',
+          sc: '',
+          tc: '',
+          nfu: '',
+          lc: asText(answers.note),
+          lu: ts,
+          created_at: ts,
+        }
+        const { error } = await supabase.from('sdr_prospects').insert(prospect)
+        if (error) return 'Insert failed: ' + error.message
+        await refetch()
+        return `Opportunity added for ${prospect.nm} (${prospect.co}).`
+      },
+    },
     {
       id: 'edit-prospect',
       label: 'Edit Prospect',
@@ -61,7 +116,7 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
       },
     },
     {
-      id: 'log-prospect-call',
+      id: 'log-call',
       label: 'Log Prospect Call',
       aliases: ['log call', 'record call', 'prospect note'],
       steps: [

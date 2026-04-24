@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import AppChip from '@/components/shared/AppChip'
 import AppBadge from '@/components/shared/AppBadge'
 import SyncDot from '@/components/shared/SyncDot'
 import CustomPicker from '@/components/shared/CustomPicker'
 import ConfirmModal from '@/components/shared/ConfirmModal'
+import { AdminShell } from '@/components/admin/AdminShell'
 import { useAppModal } from '@/components/shared/AppModal'
 import { copyToClipboard } from '@/lib/clipboard'
+import { useUser } from '@/context/UserContext'
+import { getAllModules } from '@/modules/registry'
+import { getAdminNavItems } from '@/modules/admin-nav'
+import { DESIGN_COMPONENT_CATALOG } from '@/modules/design-catalog'
 import './ds.css'
 
 // ── Copy helper ─────────────────────────────────────────────────────────────
@@ -486,6 +491,7 @@ const DESIGN_SECTIONS = [
   { id: 'sec-effects',    label: 'Radius / Shadows / Z / Transitions' },
   { id: 'sec-components', label: 'Components' },
   { id: 'sec-layout',     label: 'Layout Tokens' },
+  { id: 'sec-dynamic',    label: 'Dynamic Inventories' },
 ]
 
 const COMPONENT_FILTERS = [
@@ -501,6 +507,8 @@ type ComponentFilter = typeof COMPONENT_FILTERS[number]['id']
 
 export default function DesignSystemPage() {
   const { modal, showModal } = useAppModal()
+  const router = useRouter()
+  const { isAdmin, appUser, isLoading, loadError } = useUser()
   const [pickerVal, setPickerVal] = useState('')
   const [multiVal, setMultiVal] = useState<string[]>([])
   const [showConfirm, setShowConfirm] = useState(false)
@@ -513,7 +521,18 @@ export default function DesignSystemPage() {
     return componentFilter === 'all' || groups.includes(componentFilter)
   }
 
+  const canAccess = !isLoading && !loadError && !!appUser && isAdmin
+  const moduleInventory = getAllModules()
+  const adminNavInventory = getAdminNavItems()
+
+  useEffect(() => {
+    if (!isLoading && !canAccess) router.replace('/')
+  }, [canAccess, isLoading, router])
+
+  if (!canAccess) return null
+
   return (
+    <AdminShell title="Design System">
     <div className="page">
       {modal}
       {showConfirm && (
@@ -526,11 +545,7 @@ export default function DesignSystemPage() {
           onCancel={() => setShowConfirm(false)}
         />
       )}
-
-      <div className="topbar">
-        <Link href="/" className="back">&larr; Hub</Link>
-        <h1 className="pageTitle">Design System</h1>
-      </div>
+      <h1 className="pageTitle">Design System</h1>
 
       <nav className="anchorNav" aria-label="Design system sections">
         {DESIGN_SECTIONS.map(s => (
@@ -1113,6 +1128,87 @@ export default function DesignSystemPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── SECTION 7 — DYNAMIC INVENTORIES ── */}
+      <div className="section" id="sec-dynamic">
+        <div className="sectionTitle">7 — Dynamic Inventories</div>
+        <p className="sectionNote">
+          These tables are driven by shared app registries. Module/shell updates should appear here automatically.
+        </p>
+
+        <div className="groupTitle">Module Registry</div>
+        <table className="tokenTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Route</th>
+              <th>Status</th>
+              <th>Chat Label</th>
+            </tr>
+          </thead>
+          <tbody>
+            {moduleInventory.map(module => (
+              <tr key={module.id}>
+                <td>{module.id}</td>
+                <td>{module.name}</td>
+                <td>{module.href}</td>
+                <td>{module.comingSoon ? 'Coming Soon' : 'Active'}</td>
+                <td>{module.pageLabel}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="groupTitle">Admin Navigation Registry</div>
+        <table className="tokenTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Label</th>
+              <th>Route</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adminNavInventory.map(item => (
+              <tr key={item.id}>
+                <td>{item.id}</td>
+                <td>{item.label}</td>
+                <td>{item.href}</td>
+                <td>{item.description}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="groupTitle">Component Contract Catalog</div>
+        <table className="tokenTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Group</th>
+              <th>Status</th>
+              <th>Source</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DESIGN_COMPONENT_CATALOG.map(component => (
+              <tr key={component.id}>
+                <td>{component.id}</td>
+                <td>{component.name}</td>
+                <td>{component.group}</td>
+                <td>{component.status}</td>
+                <td>{component.source}</td>
+                <td>{component.notes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
+    </AdminShell>
   )
 }

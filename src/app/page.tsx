@@ -8,45 +8,11 @@ import { useMemo } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@/context/UserContext'
-import { ModuleCard } from '@/components/hub/ModuleCard'
-import type { PagePermission } from '@/types/auth'
+import { HubModuleList } from '@/components/hub/HubModuleList'
+import { getHubModules } from '@/modules/registry'
 import styles from './hub.module.css'
 
-interface Module {
-  id: PagePermission | 'crm'
-  name: string
-  description: string
-  href: string
-  comingSoon?: boolean
-}
-
-const ALL_MODULES: Module[] = [
-  {
-    id: 'accounts',
-    name: 'Account Strategy & Planning',
-    description: 'Strategic account planning, stakeholder mapping, meeting notes, and action tracking.',
-    href: '/accounts',
-  },
-  {
-    id: 'hr',
-    name: 'HR & People Ops',
-    description: 'Applicant tracking, employee directory, onboarding, and device management.',
-    href: '/hr',
-  },
-  {
-    id: 'sdr',
-    name: 'SDR & Outreach',
-    description: 'Prospect pipeline, outreach sequences, and engagement tracking.',
-    href: '/sdr',
-  },
-  {
-    id: 'crm',
-    name: 'CRM & Business Development',
-    description: 'Client relationships, opportunity tracking, and proposal management.',
-    href: '/crm',
-    comingSoon: true,
-  },
-]
+const HUB_MODULES = getHubModules()
 
 export default function HubPage() {
   const { appUser, isAdmin, hasPermission, isLoading, loadError } = useUser()
@@ -54,10 +20,10 @@ export default function HubPage() {
 
   const permissionsReady = appUser !== null
   const visibleModules = useMemo(
-    () => ALL_MODULES.filter(m => {
+    () => HUB_MODULES.filter(m => {
       if (m.comingSoon) return isAdmin
       if (!permissionsReady) return true
-      return hasPermission(m.id as PagePermission)
+      return hasPermission(m.id)
     }),
     [isAdmin, permissionsReady, hasPermission],
   )
@@ -86,6 +52,14 @@ export default function HubPage() {
       )}
 
       <div className={styles.hub}>
+        {loadError && (
+          <div className={styles.statusRegion}>
+            <p className={styles.statusBanner}>
+              Permissions service unavailable. Falling back to the unrestricted module view for this session.
+            </p>
+          </div>
+        )}
+
         <div className={styles.brand}>
           <div className={styles.wordmark}>V.Two Ops</div>
           <div className={styles.subtitle}>
@@ -93,26 +67,9 @@ export default function HubPage() {
           </div>
         </div>
 
-        {loadError && (
-          <p className={styles.empty}>
-            Permissions service unavailable. Falling back to the unrestricted module view for this session.
-          </p>
-        )}
-
-        <div className={styles.cards}>
-          {visibleModules.map(m => (
-            <ModuleCard
-              key={m.id}
-              name={m.name}
-              description={m.description}
-              href={m.href}
-              comingSoon={m.comingSoon}
-            />
-          ))}
-          {visibleModules.length === 0 && (
-            <p className={styles.empty}>No modules assigned. Contact your administrator.</p>
-          )}
-        </div>
+        {visibleModules.length > 0
+          ? <HubModuleList modules={visibleModules} />
+          : <p className={styles.empty}>No modules assigned. Contact your administrator.</p>}
       </div>
       <div className={styles.footer}>V.TWO &middot; 2026</div>
     </>

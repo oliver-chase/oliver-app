@@ -2,9 +2,10 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction, OliverFlow } from './OliverContext'
-import { fuzzyFilter } from '@/lib/fuzzy'
+import { fuzzyFilter, fuzzyScore } from '@/lib/fuzzy'
 import { useUser } from '@/context/UserContext'
 import { useAuth } from '@/context/AuthContext'
+import { detectPathScopeViolation } from '@/lib/chatbot-intents'
 import TranscriptReviewModal from './TranscriptReviewModal'
 import { ChatbotTopbar } from './ChatbotTopbar'
 import { ChatbotInputBar } from './ChatbotInputBar'
@@ -185,20 +186,75 @@ export default function OliverDock() {
   // Granular per-entity actions (edit person X) stay hidden from chips and only
   // surface via fuzzy typeahead.
   const fabActions = useMemo(() => config?.actions.filter(a => !a.granular) ?? [], [config])
+  const commandPool = useMemo<OliverAction[]>(() => {
+    if (!config) return []
+    const flowCommands: OliverAction[] = (config.flows ?? []).map(flow => ({
+      id: flow.id,
+      label: flow.label,
+      group: 'Quick',
+      hint: flow.hint,
+      granular: true,
+      run: () => {},
+    }))
+    return [...config.actions, ...flowCommands]
+  }, [config])
+
+  const flowAliasesById = useMemo(() => {
+    if (!config?.flows) return new Map<string, string>()
+    return new Map(config.flows.map(flow => [flow.id, (flow.aliases ?? []).join(' ')]))
+  }, [config])
 
   // Fuzzy suggestions driven by input (top 3, ≤2 edits).
   const suggestions = useMemo(() => {
     if (!config || !input.trim()) return []
-    return fuzzyFilter(input, config.actions, a => a.label + ' ' + (a.hint ?? ''))
+    return fuzzyFilter(input, commandPool, a => {
+      const aliases = flowAliasesById.get(a.id) ?? ''
+      return a.label + ' ' + (a.hint ?? '') + ' ' + aliases
+    })
       .slice(0, 3)
       .map(h => h.item)
-  }, [config, input])
+  }, [commandPool, config, flowAliasesById, input])
+
+  function normalize(text: string) {
+    return text.trim().toLowerCase().replace(/\s+/g, ' ')
+  }
+
+  function resolveChoiceValue(step: Extract<OliverFlow['steps'][number], { kind: 'choice' }>, text: string): string | null {
+    const n = normalize(text)
+    if (!n) return null
+    const direct = step.choices.find(c => normalize(c.value) === n || normalize(c.label) === n)
+    if (direct) return direct.value
+    let best: { value: string; score: number } | null = null
+    for (const c of step.choices) {
+      const score = fuzzyScore(n, normalize(c.label + ' ' + c.value))
+      if (score === null) continue
+      if (!best || score < best.score) best = { value: c.value, score }
+    }
+    return best ? best.value : null
+  }
+
+  function resolveEntityValue(step: Extract<OliverFlow['steps'][number], { kind: 'entity' }>, text: string): string | null {
+    const n = normalize(text)
+    if (!n) return null
+    const opts = step.options()
+    const direct = opts.find(o => normalize(o.value) === n || normalize(o.label) === n)
+    if (direct) return direct.value
+    let best: { value: string; score: number } | null = null
+    for (const o of opts) {
+      const score = fuzzyScore(n, normalize(o.label + ' ' + o.value))
+      if (score === null) continue
+      if (!best || score < best.score) best = { value: o.value, score }
+    }
+    // For entity steps, allow typed fallback if no option matched.
+    return best ? best.value : text
+  }
 
   async function executeAction(a: OliverAction) {
     setInput('')
     // An action's id may match a registered flow id — if so, start the flow
     // instead of running the action's side effect.
     const flow = config?.flows?.find(f => f.id === a.id)
+      ?? config?.flows?.find(f => normalize(f.label) === normalize(a.label))
     if (flow) { startFlow(flow); return }
     try { await a.run() } catch (err) { console.error('[Oliver] action failed', a.id, err) }
   }
@@ -262,6 +318,17 @@ export default function OliverDock() {
 
   const sendChat = useCallback(async (text: string) => {
     if (!config || !text || busy) return
+    const scopeViolation = config.conversationPath
+      ? detectPathScopeViolation(text, config.conversationPath)
+      : null
+    if (scopeViolation) {
+      setItems(prev => [
+        ...prev,
+        { id: nextId(), kind: 'msg', role: 'user', text },
+        { id: nextId(), kind: 'msg', role: 'assistant', text: scopeViolation.message },
+      ])
+      return
+    }
     setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'user', text }])
     setBusy(true)
     try {
@@ -274,6 +341,7 @@ export default function OliverDock() {
         body: JSON.stringify({
           messages: [...history, { role: 'user', content: text }].slice(-20),
           pageContext: config.pageLabel,
+          conversationPath: config.conversationPath ?? null,
           accountData: config.contextPayload ? config.contextPayload() : null,
         }),
       })
@@ -298,7 +366,28 @@ export default function OliverDock() {
     const s = flowStateRef.current
     if (s) {
       const step = s.flow.steps[s.stepIdx]
+      const n = normalize(text)
+      if (n === 'cancel' || n === 'stop' || n === 'never mind' || n === 'nevermind') { cancelFlow(); return }
+      if (step.optional && (n === 'skip' || n === 'none' || n === 'n/a' || n === 'na')) { supplyFlowAnswer(''); return }
       if (step.kind === 'text' || step.kind === 'number') { supplyFlowAnswer(text); return }
+      if (step.kind === 'choice') {
+        const resolved = resolveChoiceValue(step, text)
+        if (!resolved) {
+          setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Pick one of the options above, or type Cancel.' }])
+          return
+        }
+        supplyFlowAnswer(resolved)
+        return
+      }
+      if (step.kind === 'entity') {
+        const resolved = resolveEntityValue(step, text)
+        if (!resolved) {
+          setItems(prev => [...prev, { id: nextId(), kind: 'msg', role: 'assistant', text: 'Choose from the options above, or type the exact value.' }])
+          return
+        }
+        supplyFlowAnswer(resolved)
+        return
+      }
     }
     // Execute top fuzzy match; fall through to chat if none found.
     if (suggestions.length > 0) {

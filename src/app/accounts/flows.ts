@@ -8,8 +8,8 @@
  * walks through.
  */
 import type { OliverFlow } from '@/components/shared/OliverContext'
-import type { Account, Stakeholder, Action, Note, Opportunity, Project } from '@/types'
-import { upsertStakeholder, upsertAction, upsertNote, upsertOpportunity, upsertProject, deleteRecord } from '@/lib/db'
+import type { Account, Stakeholder, Action, Note, Opportunity, Project, Background } from '@/types'
+import { upsertStakeholder, upsertAction, upsertNote, upsertOpportunity, upsertProject, upsertBackground, deleteRecord } from '@/lib/db'
 
 type AccountsData = {
   accounts: Account[]
@@ -18,6 +18,7 @@ type AccountsData = {
   notes: Note[]
   opportunities: Opportunity[]
   projects: Project[]
+  background: Background[]
 }
 
 type Ctx = {
@@ -58,6 +59,35 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
   // Resolve the answer if the step was skipped (currentAccountId fallback).
   const resolveAccountId = (answers: Record<string, unknown>): string | null =>
     asString(answers.account_id) || currentAccountId
+  const resolveAccount = (answers: Record<string, unknown>) =>
+    accountFor(data, currentAccountId, asString(answers.account_id))
+  const getBackground = (accountId: string) =>
+    data.background.find(b => b.account_id === accountId && !b.engagement_id) ?? null
+  const ensureBackground = (accountId: string): Background => (
+    getBackground(accountId) ?? {
+      background_id: newId('bg'),
+      account_id: accountId,
+      engagement_id: '',
+      overview: '',
+      strategic_context: '',
+      delivery_model: '',
+      key_dates: '',
+      account_director: '',
+      account_manager: '',
+      account_team: '',
+      next_meeting: '',
+      account_tier: '',
+      meeting_title: '',
+      meeting_frequency: '',
+      meeting_day: '',
+      meeting_attendees: '',
+      meeting_interval: '',
+      next_meeting_override: '',
+      revenue: {},
+      created_date: nowIso(),
+      last_updated: nowIso(),
+    }
+  )
 
   return [
     // ─────────────── Account-level ───────────────
@@ -325,6 +355,30 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
         return `Marked done: ${a.description}.`
       },
     },
+    {
+      id: 'delete-action',
+      label: 'Delete Action',
+      aliases: ['remove action', 'delete task'],
+      steps: [
+        {
+          id: 'action_id', prompt: 'Which action should be deleted?', kind: 'entity',
+          options: () => data.actions
+            .filter(a => !currentAccountId || a.account_id === currentAccountId)
+            .map(a => ({ label: `${a.description}${a.status ? ' (' + a.status + ')' : ''}`, value: a.action_id })),
+        },
+        {
+          id: 'confirm', prompt: 'Confirm delete?', kind: 'choice',
+          choices: [{ label: 'Yes, delete', value: 'yes' }, { label: 'No, cancel', value: 'no' }],
+        },
+      ],
+      run: async (answers) => {
+        if (asString(answers.confirm) !== 'yes') return 'Cancelled.'
+        const id = asString(answers.action_id)
+        await deleteRecord('actions', 'action_id', id)
+        await refetch()
+        return 'Action deleted.'
+      },
+    },
 
     // ─────────────── Notes ───────────────
     {
@@ -349,6 +403,61 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
         await upsertNote(n)
         await refetch()
         return `Note saved${n.title ? ': ' + n.title : '.'}`
+      },
+    },
+    {
+      id: 'edit-note',
+      label: 'Edit Note',
+      aliases: ['update note', 'change note'],
+      steps: [
+        {
+          id: 'note_id', prompt: 'Which note?', kind: 'entity',
+          options: () => data.notes
+            .filter(n => !currentAccountId || n.account_id === currentAccountId)
+            .map(n => ({ label: `${n.date} — ${n.title || '(untitled)'}`, value: n.note_id })),
+        },
+        {
+          id: 'field', prompt: 'Which field?', kind: 'choice',
+          choices: [
+            { label: 'Title', value: 'title' },
+            { label: 'Body', value: 'body' },
+            { label: 'Date', value: 'date' },
+            { label: 'Type', value: 'type' },
+          ],
+        },
+        { id: 'value', prompt: 'New value?', kind: 'text', placeholder: 'New value' },
+      ],
+      run: async (answers) => {
+        const note = data.notes.find(n => n.note_id === answers.note_id)
+        if (!note) return 'Note not found.'
+        const field = asString(answers.field) as keyof Note
+        const value = asString(answers.value) as Note[keyof Note]
+        await upsertNote({ ...note, [field]: value, last_updated: nowIso() })
+        await refetch()
+        return `Updated ${field} on that note.`
+      },
+    },
+    {
+      id: 'delete-note',
+      label: 'Delete Note',
+      aliases: ['remove note'],
+      steps: [
+        {
+          id: 'note_id', prompt: 'Which note should be deleted?', kind: 'entity',
+          options: () => data.notes
+            .filter(n => !currentAccountId || n.account_id === currentAccountId)
+            .map(n => ({ label: `${n.date} — ${n.title || '(untitled)'}`, value: n.note_id })),
+        },
+        {
+          id: 'confirm', prompt: 'Confirm delete?', kind: 'choice',
+          choices: [{ label: 'Yes, delete', value: 'yes' }, { label: 'No, cancel', value: 'no' }],
+        },
+      ],
+      run: async (answers) => {
+        if (asString(answers.confirm) !== 'yes') return 'Cancelled.'
+        await deleteRecord('notes', 'note_id', asString(answers.note_id))
+        await refetch()
+        return 'Note deleted.'
       },
     },
 
@@ -423,6 +532,29 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
       },
     },
     {
+      id: 'delete-opportunity',
+      label: 'Delete Opportunity',
+      aliases: ['remove opportunity', 'delete opp'],
+      steps: [
+        {
+          id: 'opportunity_id', prompt: 'Which opportunity should be deleted?', kind: 'entity',
+          options: () => data.opportunities
+            .filter(o => !currentAccountId || o.account_id === currentAccountId)
+            .map(o => ({ label: `${o.description} (${o.status})`, value: o.opportunity_id })),
+        },
+        {
+          id: 'confirm', prompt: 'Confirm delete?', kind: 'choice',
+          choices: [{ label: 'Yes, delete', value: 'yes' }, { label: 'No, cancel', value: 'no' }],
+        },
+      ],
+      run: async (answers) => {
+        if (asString(answers.confirm) !== 'yes') return 'Cancelled.'
+        await deleteRecord('opportunities', 'opportunity_id', asString(answers.opportunity_id))
+        await refetch()
+        return 'Opportunity deleted.'
+      },
+    },
+    {
       id: 'promote-opportunity',
       label: 'Promote Opportunity to Project',
       aliases: ['promote opp', 'opp to project', 'convert opportunity'],
@@ -451,6 +583,141 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
         await upsertOpportunity({ ...o, status: 'Won', last_updated: nowIso() })
         await refetch()
         return `Promoted — ${p.project_name} is now an active project.`
+      },
+    },
+
+    // ─────────────── Projects ───────────────
+    {
+      id: 'add-project',
+      label: 'Add Project',
+      aliases: ['new project', 'create project'],
+      steps: [
+        pickAccountStep(),
+        { id: 'project_name', prompt: 'Project name?', kind: 'text', placeholder: 'Project name' },
+        {
+          id: 'status', prompt: 'Status?', kind: 'choice',
+          choices: [
+            { label: 'Active', value: 'Active' },
+            { label: 'On Hold', value: 'On Hold' },
+            { label: 'Complete', value: 'Complete' },
+          ],
+          optional: true,
+        },
+        { id: 'year', prompt: 'Year? (optional)', kind: 'text', placeholder: String(new Date().getFullYear()), optional: true },
+        { id: 'notes', prompt: 'Notes? (optional)', kind: 'text', placeholder: 'Project notes', optional: true },
+      ],
+      run: async (answers) => {
+        const account = resolveAccount(answers)
+        if (!account) return 'Account not found.'
+        const p: Project = {
+          project_id: newId('proj'),
+          account_id: account.account_id,
+          engagement_id: '',
+          project_name: asString(answers.project_name),
+          status: (asString(answers.status) || 'Active') as Project['status'],
+          client_stakeholder_ids: [],
+          notes: asString(answers.notes),
+          year: asString(answers.year) || String(new Date().getFullYear()),
+          created_date: nowIso(),
+          last_updated: nowIso(),
+        }
+        await upsertProject(p)
+        await refetch()
+        return `Project created: ${p.project_name}.`
+      },
+    },
+    {
+      id: 'edit-project',
+      label: 'Edit Project',
+      aliases: ['update project', 'change project'],
+      steps: [
+        {
+          id: 'project_id', prompt: 'Which project?', kind: 'entity',
+          options: () => data.projects
+            .filter(p => !currentAccountId || p.account_id === currentAccountId)
+            .map(p => ({ label: `${p.project_name} (${p.status})`, value: p.project_id })),
+        },
+        {
+          id: 'field', prompt: 'Which field?', kind: 'choice',
+          choices: [
+            { label: 'Project name', value: 'project_name' },
+            { label: 'Status', value: 'status' },
+            { label: 'Year', value: 'year' },
+            { label: 'Notes', value: 'notes' },
+          ],
+        },
+        { id: 'value', prompt: 'New value?', kind: 'text', placeholder: 'New value' },
+      ],
+      run: async (answers) => {
+        const project = data.projects.find(p => p.project_id === answers.project_id)
+        if (!project) return 'Project not found.'
+        const field = asString(answers.field) as keyof Project
+        const value = asString(answers.value) as Project[keyof Project]
+        await upsertProject({ ...project, [field]: value, last_updated: nowIso() })
+        await refetch()
+        return `Updated ${field} on that project.`
+      },
+    },
+    {
+      id: 'delete-project',
+      label: 'Delete Project',
+      aliases: ['remove project'],
+      steps: [
+        {
+          id: 'project_id', prompt: 'Which project should be deleted?', kind: 'entity',
+          options: () => data.projects
+            .filter(p => !currentAccountId || p.account_id === currentAccountId)
+            .map(p => ({ label: `${p.project_name} (${p.status})`, value: p.project_id })),
+        },
+        {
+          id: 'confirm', prompt: 'Confirm delete?', kind: 'choice',
+          choices: [{ label: 'Yes, delete', value: 'yes' }, { label: 'No, cancel', value: 'no' }],
+        },
+      ],
+      run: async (answers) => {
+        if (asString(answers.confirm) !== 'yes') return 'Cancelled.'
+        await deleteRecord('projects', 'project_id', asString(answers.project_id))
+        await refetch()
+        return 'Project deleted.'
+      },
+    },
+    {
+      id: 'update-account-background',
+      label: 'Update Account Background',
+      aliases: ['update account context', 'edit account overview', 'update meeting details'],
+      steps: [
+        pickAccountStep(),
+        {
+          id: 'field', prompt: 'Which background field?', kind: 'choice',
+          choices: [
+            { label: 'Overview', value: 'overview' },
+            { label: 'Strategic context', value: 'strategic_context' },
+            { label: 'Delivery model', value: 'delivery_model' },
+            { label: 'Key dates', value: 'key_dates' },
+            { label: 'Account director', value: 'account_director' },
+            { label: 'Account manager', value: 'account_manager' },
+            { label: 'Account team', value: 'account_team' },
+            { label: 'Next meeting', value: 'next_meeting' },
+            { label: 'Account tier', value: 'account_tier' },
+            { label: 'Meeting title', value: 'meeting_title' },
+            { label: 'Meeting frequency', value: 'meeting_frequency' },
+            { label: 'Meeting day', value: 'meeting_day' },
+            { label: 'Meeting attendees', value: 'meeting_attendees' },
+            { label: 'Meeting interval', value: 'meeting_interval' },
+            { label: 'Next meeting override', value: 'next_meeting_override' },
+          ],
+        },
+        { id: 'value', prompt: 'New value?', kind: 'text', placeholder: 'New value' },
+      ],
+      run: async (answers) => {
+        const account = resolveAccount(answers)
+        if (!account) return 'Account not found.'
+        const field = asString(answers.field) as keyof Background
+        const value = asString(answers.value) as Background[keyof Background]
+        const bg = ensureBackground(account.account_id)
+        await upsertBackground({ ...bg, [field]: value, last_updated: nowIso() })
+        await refetch()
+        return `Updated ${field} for ${account.account_name}.`
       },
     },
   ]

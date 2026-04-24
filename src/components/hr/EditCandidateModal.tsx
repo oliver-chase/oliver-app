@@ -1,8 +1,17 @@
 'use client'
-import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import type { Candidate, HrList } from './types'
 import { getList } from './types'
 import CustomPicker from '@/components/shared/CustomPicker'
+import {
+  createFileAsset,
+  createLinkAsset,
+  filenameForDownload,
+  parseResumeAssets,
+  serializeResumeAssets,
+  sortAssetsNewestFirst,
+  type StoredDocumentAsset,
+} from '@/lib/hr-assets'
 
 interface Props {
   candidate: Candidate
@@ -15,12 +24,23 @@ interface Props {
 export default function EditCandidateModal({ candidate, lists, onSave, onCancel, onDelete }: Props) {
   const titleId = useId()
   const [c, setC] = useState<Candidate>({ ...candidate })
+  const [resumeAssets, setResumeAssets] = useState<StoredDocumentAsset[]>(() => parseResumeAssets(candidate.resumeLink))
+  const [resumeUrlInput, setResumeUrlInput] = useState('')
+  const [resumeError, setResumeError] = useState('')
+  const uploadRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onCancel() } }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onCancel])
+
+  useEffect(() => {
+    setC({ ...candidate })
+    setResumeAssets(parseResumeAssets(candidate.resumeLink))
+    setResumeUrlInput('')
+    setResumeError('')
+  }, [candidate])
 
   function update<K extends keyof Candidate>(k: K, v: Candidate[K]) { setC(prev => ({ ...prev, [k]: v })) }
 
@@ -29,6 +49,43 @@ export default function EditCandidateModal({ candidate, lists, onSave, onCancel,
   const sources  = getList(lists, 'source')
   const sens     = getList(lists, 'seniority')
   const etypes   = getList(lists, 'empType')
+  const hasResumes = resumeAssets.length > 0
+
+  async function handleResumeFile(file: File) {
+    const MAX_BYTES = 5 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      setResumeError('Resume exceeds 5 MB. Upload a smaller file or use a link.')
+      return
+    }
+    setResumeError('')
+    try {
+      const asset = await createFileAsset(file, 'Resume')
+      setResumeAssets(prev => sortAssetsNewestFirst([...prev, asset]))
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : 'Could not read the selected file.')
+    }
+  }
+
+  function addResumeLink() {
+    const url = resumeUrlInput.trim()
+    if (!url) {
+      setResumeError('Enter a valid resume URL first.')
+      return
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      setResumeError('Resume links must begin with http:// or https://.')
+      return
+    }
+    setResumeError('')
+    const asset = createLinkAsset(url, 'Resume Link')
+    setResumeAssets(prev => sortAssetsNewestFirst([...prev, asset]))
+    setResumeUrlInput('')
+  }
+
+  function removeResume(assetId: string) {
+    if (!window.confirm('Delete this resume version?')) return
+    setResumeAssets(prev => prev.filter(asset => asset.id !== assetId))
+  }
 
   function selectField<K extends keyof Candidate>(label: string, key: K, opts: string[]) {
     return (
@@ -98,7 +155,65 @@ export default function EditCandidateModal({ candidate, lists, onSave, onCancel,
           </div>
           {inputField('Client', 'client')}
           {inputField('Email', 'email', 'email')}
-          {inputField('Resume Link', 'resumeLink', 'url')}
+          <div className="cand-edit-group">
+            <label className="app-modal-label">Resumes</label>
+            <div className="cand-edit-row">
+              <input
+                className="app-modal-input"
+                type="url"
+                placeholder="https://sharepoint/... or other resume URL"
+                value={resumeUrlInput}
+                onChange={e => setResumeUrlInput(e.currentTarget.value)}
+              />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={addResumeLink}>Add Link</button>
+              <input
+                ref={uploadRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) void handleResumeFile(file)
+                  e.currentTarget.value = ''
+                }}
+              />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => uploadRef.current?.click()}>Upload File</button>
+            </div>
+            {resumeError && <div className="iv-date-past" style={{ marginTop: 'var(--spacing-xs)' }}>{resumeError}</div>}
+            {!hasResumes && (
+              <div className="iv-empty" style={{ marginTop: 'var(--spacing-xs)' }}>No resume versions yet.</div>
+            )}
+            {hasResumes && (
+              <div style={{ marginTop: 'var(--spacing-sm)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
+                {resumeAssets.map(asset => (
+                  <div key={asset.id} className="detail-row">
+                    <span className="detail-key">
+                      {new Date(asset.createdAt).toLocaleDateString()}
+                    </span>
+                    <span className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                      <a
+                        href={asset.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="link-accent-sm"
+                        download={asset.kind === 'file' ? filenameForDownload(asset, 'resume') : undefined}
+                      >
+                        {asset.name}
+                      </a>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        aria-label="Delete resume version"
+                        onClick={() => removeResume(asset.id)}
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {c.candStatus === 'Closed' && inputField('Rejection Reason', 'rejectionReason', 'text', 'Why closed?')}
           <div className="cand-edit-group">
             <label className="app-modal-label">Notes</label>
@@ -113,7 +228,18 @@ export default function EditCandidateModal({ candidate, lists, onSave, onCancel,
         <div className="app-modal-actions">
           {onDelete && <button className="btn btn-danger btn-sm" style={{ marginRight: 'auto' }} type="button" onClick={onDelete}>Delete</button>}
           <button className="btn btn-ghost" type="button" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-primary" type="button" disabled={!c.name.trim()} onClick={() => onSave({ ...c, updatedAt: new Date().toISOString() })}>Save Changes</button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={!c.name.trim()}
+            onClick={() => onSave({
+              ...c,
+              resumeLink: serializeResumeAssets(resumeAssets),
+              updatedAt: new Date().toISOString(),
+            })}
+          >
+            Save Changes
+          </button>
         </div>
       </div>
     </div>

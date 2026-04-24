@@ -15,6 +15,8 @@ import type { OliverConfig, OliverAction } from '@/components/shared/OliverConte
 import { triggerOliverUpload } from '@/components/shared/OliverDock'
 import { ACCOUNTS_COMMANDS } from '@/app/accounts/commands'
 import { buildAccountsFlows } from '@/app/accounts/flows'
+import { buildModuleOliverConfig } from '@/modules/oliver-config'
+import { useModuleAccess } from '@/modules/use-module-access'
 import type { Account } from '@/types'
 import { parseTranscript } from '@/lib/parsers/transcript-parser'
 
@@ -86,6 +88,7 @@ function readAsBase64(file: File): Promise<string> {
 }
 
 export default function AccountsApp() {
+  const { allowRender } = useModuleAccess('accounts')
   const { data, setData, loading, error, syncState, reportSync, saveAccount, addAccount, refetch } = useAccountsData()
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null)
   const [currentEngagementId] = useState<string | null>(null)
@@ -203,18 +206,38 @@ export default function AccountsApp() {
   const accountIdRef = useRef(currentAccountId); accountIdRef.current = currentAccountId
 
   const oliverConfig = useMemo<OliverConfig>(() => {
+    const ensureAccountSelected = () => {
+      const current = accountIdRef.current
+      if (current) return current
+      const first = dataRef.current.accounts[0]?.account_id
+      if (first) setCurrentAccountId(first)
+      return first ?? null
+    }
+
     const actions: OliverAction[] = ACCOUNTS_COMMANDS.map(c => {
       let run: () => void
       switch (c.id) {
         case 'add-account':       run = () => handleAddAccount(); break
-        case 'import-transcript': run = () => triggerOliverUpload(); break
-        case 'view-org-chart':    run = () => { document.querySelector('[data-section="people"]')?.scrollIntoView({ behavior: 'smooth' }) }; break
-        case 'export-data':       run = () => setExportOpen(true); break
+        case 'import-transcript': run = () => {
+          const accountId = ensureAccountSelected()
+          if (!accountId) return
+          setTimeout(() => triggerOliverUpload(), 80)
+        }; break
+        case 'view-org-chart':    run = () => {
+          const accountId = ensureAccountSelected()
+          if (!accountId) return
+          setTimeout(() => { document.querySelector('[data-section="people"]')?.scrollIntoView({ behavior: 'smooth' }) }, 120)
+        }; break
+        case 'export-data':       run = () => {
+          const accountId = ensureAccountSelected()
+          if (!accountId) return
+          setExportOpen(true)
+        }; break
         default:                  run = () => {}
       }
       return { ...c, run }
     })
-    const greeting = "Hi, I'm Oliver. You're viewing Account Planning. You can add a new account, import transcripts, view your org chart, or ask me anything about your accounts. What would you like to do?"
+    const greeting = "Hi, I'm Oliver. You're in Account Planning. I can help with portfolio updates, account details, transcript imports, and action tracking."
     const upload = currentAccountId ? {
       accepts: '.docx,.txt,.pdf,image/jpeg,image/png,image/gif,image/webp',
       hint: 'Transcripts (.txt): parsed instantly, no AI call. Org charts (image): extracts people + titles. Docs (.docx/.pdf): AI-parsed.',
@@ -281,7 +304,7 @@ export default function AccountsApp() {
         return { message: d.message || 'Done. Data written.' }
       },
     } : undefined
-    const flows = buildAccountsFlows({
+    const allFlows = buildAccountsFlows({
       data: {
         accounts: data.accounts,
         stakeholders: data.stakeholders,
@@ -289,24 +312,22 @@ export default function AccountsApp() {
         notes: data.notes,
         opportunities: data.opportunities,
         projects: data.projects,
+        background: data.background,
       },
       currentAccountId,
       addAccount: async (name: string, clientCompany = '') => addAccount(name, clientCompany),
       saveAccount,
       refetch,
     })
-    return {
-      pageLabel: 'Account Planning',
-      placeholder: 'Type a message or pick a command...',
+    return buildModuleOliverConfig('accounts', {
       greeting,
       actions,
-      flows,
+      flows: allFlows,
       upload,
-      quickConvos: currentAccountId ? [
+      quickConvos: [
         'Summarise recent activity on this account.',
         'Which actions are overdue?',
         'Who are the key stakeholders?',
-      ] : [
         'Which accounts need attention this week?',
         'Summarise the portfolio.',
       ],
@@ -327,10 +348,12 @@ export default function AccountsApp() {
         }
       },
       onChatRefresh: () => { refetch() },
-    }
-  }, [currentAccountId, handleAddAccount, refetch])
+    })
+  }, [currentAccountId, data, handleAddAccount, refetch])
 
   useRegisterOliver(oliverConfig)
+
+  if (!allowRender) return null
 
   useEffect(() => {
     if (!currentAccountId) {
@@ -379,7 +402,6 @@ export default function AccountsApp() {
     return () => window.removeEventListener('hashchange', syncHashSection)
   }, [currentAccountId])
 
-  const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'All Accounts'
   const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
   const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'
 
@@ -407,7 +429,7 @@ export default function AccountsApp() {
 
       <div className="app-layout-content">
         <Topbar
-          accountName={topbarTitle}
+          accountName="Account Strategy"
           engagementName={engagement?.engagement_name}
           currentAccountId={currentAccountId}
           syncStatus={syncStatus}
@@ -417,7 +439,6 @@ export default function AccountsApp() {
           onExportClick={() => setExportOpen(true)}
           onHamburgerClick={() => setSidebarOpen(s => !s)}
           sidebarOpen={sidebarOpen}
-          onAccountNameChange={currentAccount ? (name => handleUpdateAccount({ ...currentAccount, account_name: name })) : undefined}
         />
 
         <Filterbar

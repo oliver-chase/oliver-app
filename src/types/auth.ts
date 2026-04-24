@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'user'
 
-export type PagePermission = 'accounts' | 'hr' | 'sdr' | 'crm'
+export type PagePermission = 'accounts' | 'hr' | 'sdr' | 'crm' | 'slides'
 
 export interface AppUser {
   user_id: string

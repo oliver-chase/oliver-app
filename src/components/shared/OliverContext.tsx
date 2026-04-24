@@ -1,6 +1,7 @@
 'use client'
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import type { OliverConversationPath } from '@/lib/chatbot-conversation-paths'
 
 export interface OliverAction {
   id: string
@@ -96,6 +97,7 @@ export interface OliverConfig {
   placeholder: string
   greeting?: string
   actions: OliverAction[]
+  conversationPath?: OliverConversationPath
   /** Chat-driven stepper flows registered by the page/module. */
   flows?: OliverFlow[]
   quickConvos?: string[]

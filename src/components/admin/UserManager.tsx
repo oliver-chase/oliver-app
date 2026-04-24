@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import type { AppUser, PagePermission, Role } from '@/types/auth'
 import { listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
+import { getPermissionModules } from '@/modules/registry'
 import styles from './admin.module.css'
 
-const ALL_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm']
+const ALL_PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
 
 export function UserManager() {
   const [users, setUsers] = useState<AppUser[]>([])

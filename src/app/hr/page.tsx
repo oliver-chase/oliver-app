@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { dbWrite } from '@/lib/db-helpers'
 import HrDashboard from '@/components/hr/HrDashboard'
@@ -20,8 +21,12 @@ import { useAppModal } from '@/components/shared/AppModal'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import { triggerOliverUpload } from '@/components/shared/OliverDock'
+import { useModuleAccess } from '@/modules/use-module-access'
 import { HR_COMMANDS } from '@/app/hr/commands'
 import { buildHrFlows } from '@/app/hr/flows'
+import { buildModuleOliverConfig } from '@/modules/oliver-config'
+import { parseReceipt, receiptToSummary } from '@/lib/parsers/receipt-parser'
+import { createFileAsset, mergeDeviceReceiptsIntoNotes } from '@/lib/hr-assets'
 import { editCandidateFlow, deleteCandidateFlow, setCandStatusFlow, setCandStageFlow, logInterviewFlow } from '@/components/hr/flows/cand-flows'
 import { editEmployeeFlow, deleteEmployeeFlow, startOffboardingFlow } from '@/components/hr/flows/emp-flows'
 import { editDeviceFlow, deleteDeviceFlow, assignDeviceFlow, returnDeviceFlow } from '@/components/hr/flows/device-flows'
@@ -61,6 +66,8 @@ async function fetchTable<T>(table: string): Promise<T[]> {
 }
 
 export default function HrPage() {
+  const { allowRender } = useModuleAccess('hr')
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [page, setPage]               = useState<HrPage>('dashboard')
   const [db, setDb]                   = useState<HrDB>(EMPTY_DB)
@@ -81,6 +88,48 @@ export default function HrPage() {
   }, [])
 
   const clearPendingEdit = useCallback(() => setPendingEdit(null), [])
+
+  const deviceFromReceipt = useCallback((payload: {
+    parsed: ReturnType<typeof parseReceipt>
+    assetUrl: string
+    assetName: string
+    assetMimeType: string
+  }): Device => {
+    const now = new Date().toISOString()
+    const parsed = payload.parsed
+    const deviceTypeLower = (parsed.deviceType || 'other').toLowerCase()
+    const knownType = ['laptop', 'monitor', 'phone', 'keyboard', 'mouse', 'headset'].includes(deviceTypeLower)
+      ? deviceTypeLower
+      : 'other'
+    const receiptAsset = {
+      id: 'ASSET-' + crypto.randomUUID(),
+      kind: 'file' as const,
+      name: payload.assetName || 'Receipt',
+      url: payload.assetUrl,
+      mimeType: payload.assetMimeType,
+      createdAt: now,
+    }
+    return {
+      id: 'DEV-' + crypto.randomUUID(),
+      name: parsed.deviceName || parsed.deviceType || 'Unknown Device',
+      make: parsed.deviceType?.split(' ')[0] || '',
+      type: knownType,
+      model: parsed.deviceName || '',
+      modelNumber: '',
+      serial: parsed.serialNumber || parsed.imei || '',
+      status: 'available',
+      assignedTo: '',
+      condition: 'new',
+      purchaseDate: parsed.purchaseDate || '',
+      purchaseStore: 'Best Buy',
+      orderNumber: parsed.orderId || '',
+      specs: '',
+      location: '',
+      notes: mergeDeviceReceiptsIntoNotes(parsed.imei ? 'IMEI: ' + parsed.imei : '', [receiptAsset]),
+      created_at: now,
+      updated_at: now,
+    }
+  }, [])
 
   const quickAddCandidate = useCallback(async () => {
     const { buttonValue, inputValue } = await showModal({ title: 'Add Candidate', inputLabel: 'Full name', inputPlaceholder: 'e.g. Jane Doe', confirmLabel: 'Add' })
@@ -197,28 +246,109 @@ export default function HrPage() {
   const runFlow = useCallback(<D,>(f: Flow<D>) => setActiveFlow(f as Flow<unknown>), [])
 
   const oliverConfig = useMemo<OliverConfig>(() => {
-    const actions: OliverAction[] = HR_COMMANDS.map(c => {
+    const isInventoryPage = page === 'inventory'
+    const availableCommands = HR_COMMANDS.filter(c => c.id !== 'upload-device' || isInventoryPage)
+    const actions: OliverAction[] = availableCommands.map(c => {
       let run: () => void
       switch (c.id) {
         case 'add-cand':      run = quickAddCandidate; break
-        case 'upload-resume': run = () => triggerOliverUpload(); break
+        case 'add-employee':  run = quickAddEmployee; break
+        case 'add-device':    run = quickAddDevice; break
         case 'view-postings': run = () => navTo('hiring'); break
-        case 'upload-device': run = () => triggerOliverUpload(); break
-        case 'change-pw':     run = () => { window.open('https://mysignins.microsoft.com/security-info', '_blank', 'noopener,noreferrer') }; break
+        case 'upload-device': run = () => {
+          if (pageRef.current !== 'inventory') navTo('inventory')
+          setTimeout(() => triggerOliverUpload(), 80)
+        }; break
+        case 'open-reports':  run = () => navTo('reports'); break
+        case 'open-settings': run = () => navTo('settings'); break
+        case 'open-profile':  run = () => { router.push('/profile') }; break
         default:              run = () => {}
       }
       return { ...c, run }
     })
     const flows = buildHrFlows({
       candidates: dbRef.current.candidates,
+      employees: dbRef.current.employees,
+      devices: dbRef.current.devices,
+      tracks: dbRef.current.tracks,
+      tasks: dbRef.current.tasks,
+      onboardingRuns: dbRef.current.onboardingRuns,
+      runTasks: dbRef.current.runTasks,
+      lists: dbRef.current.lists,
       refetch: loadData,
     })
-    return {
-      pageLabel: 'HR & People Ops',
-      placeholder: 'What do you want to do?',
-      greeting: "Hi, I'm Oliver. You're viewing Hiring. You can add a candidate, upload a resume, view job postings, or ask me anything about hiring. What would you like to do?",
+    const upload = isInventoryPage ? {
+      accepts: '.txt,.pdf,image/*',
+      hint: 'Upload a receipt file (.txt, image, or PDF).',
+      guidance: 'Inventory receipts are parsed client-side without AI. Text files parse directly; images/PDFs keep file + fields for manual review.',
+      parse: async (file: File) => {
+        const isText = file.type.startsWith('text/') || file.name.toLowerCase().endsWith('.txt')
+        const parsed = isText
+          ? parseReceipt(await file.text())
+          : {
+              purchaseDate: null,
+              serialNumber: null,
+              imei: null,
+              deviceType: null,
+              deviceName: null,
+              customerName: null,
+              price: null,
+              orderId: null,
+              gaps: ['Image/PDF detected. Add missing fields after import.'],
+            }
+        const asset = await createFileAsset(file, 'Receipt')
+        const summary = receiptToSummary(parsed) + (parsed.gaps.length ? '\n\nMissing: ' + parsed.gaps.join(', ') : '')
+        return {
+          title: 'Parsed Receipt',
+          summary,
+          model: 'client-side-receipt-parser',
+          payload: { parsed, asset },
+        }
+      },
+      dryRun: async (payload: unknown) => {
+        const rec = payload as { parsed?: { gaps?: unknown[] }, asset?: { name?: string } }
+        const gapCount = Array.isArray(rec?.parsed?.gaps) ? rec.parsed!.gaps!.length : 0
+        return {
+          summary: {
+            device_records: 1,
+            receipt_assets: rec?.asset ? 1 : 0,
+            missing_fields: gapCount,
+          },
+        }
+      },
+      commit: async (payload: unknown) => {
+        const rec = payload as {
+          parsed?: ReturnType<typeof parseReceipt>
+          asset?: { url?: string; name?: string; mimeType?: string }
+        }
+        if (!rec?.parsed || !rec.asset?.url) throw new Error('Receipt payload is missing parsed data.')
+        const device = deviceFromReceipt({
+          parsed: rec.parsed,
+          assetUrl: rec.asset.url,
+          assetName: rec.asset.name || 'Receipt',
+          assetMimeType: rec.asset.mimeType || 'application/octet-stream',
+        })
+        setSyncState('syncing')
+        setDb(prev => ({ ...prev, devices: [device, ...prev.devices] }))
+        try {
+          await dbWrite(supabase.from('devices').insert(device), 'inventory.uploadReceiptDeviceCreate')
+          setSyncState('ok')
+          return { message: 'Receipt saved to inventory as "' + device.name + '".' }
+        } catch (err) {
+          setSyncState('error')
+          setDb(prev => ({ ...prev, devices: prev.devices.filter(d => d.id !== device.id) }))
+          throw err
+        }
+      },
+    } : undefined
+    const greeting = isInventoryPage
+      ? "Hi, I'm Oliver. You're viewing Inventory. Upload a receipt, add a device, assign returns, or ask me about assets."
+      : "Hi, I'm Oliver. I can help with hiring, directory, onboarding, inventory, and reports. What would you like to do?"
+    return buildModuleOliverConfig('hr', {
+      greeting,
       actions,
       flows,
+      upload,
       contextPayload: () => ({
         currentPage: pageRef.current,
         summary: {
@@ -232,10 +362,12 @@ export default function HrPage() {
         },
       }),
       onChatRefresh: () => loadData(),
-    }
-  }, [quickAddCandidate, navTo, loadData])
+    })
+  }, [db, quickAddCandidate, quickAddEmployee, quickAddDevice, navTo, loadData, page, router, deviceFromReceipt])
 
   useRegisterOliver(oliverConfig)
+
+  if (!allowRender) return null
 
   if (loading) {
     return (

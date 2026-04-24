@@ -59,7 +59,7 @@ function getBypassUser(account: AccountInfo | null): AppUser {
     email: account?.username || 'qa-admin@example.com',
     name: getAccountName(account) || 'QA Admin',
     role: 'admin',
-    page_permissions: ['accounts', 'hr', 'sdr', 'crm'],
+    page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
     created_at: now,
     updated_at: now,
   }

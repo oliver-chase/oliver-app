@@ -11,6 +11,8 @@
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
 
+const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides']);
+
 function serviceHeaders(env) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   return {
@@ -114,6 +116,8 @@ export async function onRequestPatch(context) {
   }
   if (body.page_permissions !== undefined) {
     if (!Array.isArray(body.page_permissions)) return errorResponse('page_permissions must be array', 400);
+    const invalid = body.page_permissions.find(p => typeof p !== 'string' || !VALID_PAGE_PERMISSIONS.has(p));
+    if (invalid) return errorResponse('invalid page permission: ' + String(invalid), 400);
     fields.page_permissions = body.page_permissions;
   }
   if (Object.keys(fields).length === 0) return errorResponse('no updatable fields', 400);

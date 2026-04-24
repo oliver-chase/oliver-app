@@ -24,5 +24,5 @@ CREATE TRIGGER app_users_updated_at
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- Seed: grant the first admin manually after deploy
--- UPDATE app_users SET role = 'admin', page_permissions = ARRAY['accounts','hr','sdr','crm']
+-- UPDATE app_users SET role = 'admin', page_permissions = ARRAY['accounts','hr','sdr','crm','slides']
 -- WHERE email = 'your@email.com';

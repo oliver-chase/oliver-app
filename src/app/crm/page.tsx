@@ -3,25 +3,31 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig } from '@/components/shared/OliverContext'
+import { CRM_COMMANDS } from '@/app/crm/commands'
+import { buildModuleOliverConfig } from '@/modules/oliver-config'
+import { useModuleAccess } from '@/modules/use-module-access'
 
 export default function CrmPage() {
+  const { allowRender } = useModuleAccess('crm')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   function toggleSidebar() { setSidebarOpen(o => !o) }
   function closeSidebar() { setSidebarOpen(false) }
 
-  const oliverConfig = useMemo<OliverConfig>(() => ({
-    pageLabel: 'CRM & Business Development',
-    placeholder: 'Ask about the CRM roadmap…',
-    greeting: "Hi, I'm Oliver. CRM & Business Development is in the backlog — ask what it will cover or when it's expected.",
-    actions: [],
-    quickConvos: [
-      'What will CRM include?',
-      'When does CRM ship?',
-    ],
-  }), [])
+  const oliverConfig = useMemo<OliverConfig>(() => (
+    buildModuleOliverConfig('crm', {
+      greeting: "Hi, I'm Oliver. CRM & Business Development is in the backlog — ask what it will cover or when it's expected.",
+      actions: CRM_COMMANDS.map(c => ({ ...c, run: () => {} })),
+      quickConvos: [
+        'What will CRM include?',
+        'When does CRM ship?',
+      ],
+    })
+  ), [])
 
   useRegisterOliver(oliverConfig)
+
+  if (!allowRender) return null
 
   return (
     <div className="app show-hamburger">
