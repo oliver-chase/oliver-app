@@ -9,7 +9,7 @@ This audit read the story index, all story files, coverage audit, traceability m
 - Strong verification path (canonical): 7
 - Weak verification path (canonical): 119
 - No meaningful verification path (canonical): 0
-- Automated test files found: 1
+- Automated test files found: 2
 - CI commands: npm run typecheck, npm run check-tokens, npm run build
 - Browser smoke command: npm run test:smoke
 
