@@ -10,6 +10,7 @@
 import type { OliverFlow } from '@/components/shared/OliverContext'
 import type { Account, Stakeholder, Action, Note, Opportunity, Project, Background } from '@/types'
 import { upsertStakeholder, upsertAction, upsertNote, upsertOpportunity, upsertProject, upsertBackground, deleteRecord } from '@/lib/db'
+import { downloadAccountExport, type AccountExportOptions } from '@/lib/accounts-export'
 
 type AccountsData = {
   accounts: Account[]
@@ -61,6 +62,7 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
     asString(answers.account_id) || currentAccountId
   const resolveAccount = (answers: Record<string, unknown>) =>
     accountFor(data, currentAccountId, asString(answers.account_id))
+  const asYes = (value: unknown) => asString(value) === 'yes'
   const getBackground = (accountId: string) =>
     data.background.find(b => b.account_id === accountId && !b.engagement_id) ?? null
   const ensureBackground = (accountId: string): Background => (
@@ -161,6 +163,127 @@ export function buildAccountsFlows(ctx: Ctx): OliverFlow[] {
         await saveAccount(next)
         await refetch()
         return `${a.account_name} is now ${next.status}.`
+      },
+    },
+    {
+      id: 'export-data',
+      label: 'Export Data',
+      aliases: ['export account plan', 'export pdf', 'download account brief'],
+      steps: [
+        pickAccountStep(),
+        {
+          id: 'preset',
+          prompt: 'What export do you need?',
+          kind: 'choice',
+          choices: [
+            { label: 'Weekly Brief', value: 'weekly' },
+            { label: 'Executive Readout', value: 'exec' },
+            { label: 'Full Account Plan', value: 'full' },
+            { label: 'Custom Export', value: 'custom' },
+          ],
+        },
+        {
+          id: 'include_actions',
+          prompt: 'Include actions?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+        {
+          id: 'include_notes',
+          prompt: 'Include notes?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+        {
+          id: 'note_mode',
+          prompt: 'Which note scope?',
+          kind: 'choice',
+          choices: [{ label: 'Latest note only', value: 'latest' }, { label: 'All notes', value: 'all' }],
+          skipIf: answers => asString(answers.preset) !== 'custom' || !asYes(answers.include_notes),
+        },
+        {
+          id: 'include_overview',
+          prompt: 'Include overview and revenue?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+        {
+          id: 'include_projects',
+          prompt: 'Include projects?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+        {
+          id: 'include_opportunities',
+          prompt: 'Include opportunities?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+        {
+          id: 'include_people',
+          prompt: 'Include people and org coverage?',
+          kind: 'choice',
+          choices: [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }],
+          skipIf: answers => asString(answers.preset) !== 'custom',
+        },
+      ],
+      run: async (answers) => {
+        const account = resolveAccount(answers)
+        if (!account) return 'No account selected.'
+        const preset = asString(answers.preset)
+        let options: AccountExportOptions
+        if (preset === 'weekly') {
+          options = {
+            includeActions: true,
+            includeNotes: true,
+            noteMode: 'latest',
+            includeOverview: false,
+            includeProjects: false,
+            includeOpportunities: false,
+            includePeople: false,
+            useCaseLabel: 'Weekly brief',
+          }
+        } else if (preset === 'exec') {
+          options = {
+            includeActions: true,
+            includeNotes: true,
+            noteMode: 'latest',
+            includeOverview: true,
+            includeProjects: false,
+            includeOpportunities: true,
+            includePeople: false,
+            useCaseLabel: 'Executive readout',
+          }
+        } else if (preset === 'full') {
+          options = {
+            includeActions: true,
+            includeNotes: true,
+            noteMode: 'all',
+            includeOverview: true,
+            includeProjects: true,
+            includeOpportunities: true,
+            includePeople: true,
+            useCaseLabel: 'Full account plan',
+          }
+        } else {
+          options = {
+            includeActions: asYes(answers.include_actions),
+            includeNotes: asYes(answers.include_notes),
+            noteMode: asString(answers.note_mode) === 'all' ? 'all' : 'latest',
+            includeOverview: asYes(answers.include_overview),
+            includeProjects: asYes(answers.include_projects),
+            includeOpportunities: asYes(answers.include_opportunities),
+            includePeople: asYes(answers.include_people),
+            useCaseLabel: 'Custom export',
+          }
+        }
+        const doc = downloadAccountExport(data, account.account_id, options)
+        return `Downloaded ${doc.fileName}. It is a print-ready HTML export for ${account.account_name}; open it in a browser and Print to save as PDF if needed.`
       },
     },
 

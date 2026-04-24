@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { today } from '@/lib/db'
 import type { AppState } from '@/types'
+import { describeAccountExportUseCase, downloadAccountExport } from '@/lib/accounts-export'
 
 interface Props {
   accountId: string
@@ -63,181 +63,17 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
   }
 
   const generate = () => {
-    const acct = data.accounts.find(a => a.account_id === accountId)
-    if (!acct) return
-    const bg = data.background.find(b => b.account_id === accountId && !b.engagement_id)
-    const curYr = new Date().getFullYear()
-    const esc = (s: string | null | undefined) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-    const style = [
-      '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap");',
-      'body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;color:#1a1a1a;max-width:720px;margin:0 auto;padding:40px}', // #1a1a1a = var(--color-text-primary)
-      'h1{font-size:22px;margin-bottom:4px}',
-      'h2{font-size:15px;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:28px}',
-      'h3{font-size:13px;margin-bottom:4px;margin-top:16px}',
-      '.owner-group{margin-bottom:14px}',
-      '.owner-name{font-weight:bold;font-size:13px;margin-bottom:4px}',
-      'ul{margin:0;padding-left:18px}',
-      'li{margin-bottom:3px}',
-      '.meta{color:#4a4a4e;font-size:11px;margin-bottom:24px}', // #4a4a4e = var(--color-text-secondary)
-      '@media print{body{padding:0}}',
-    ].join('\n')
-
-    const parts: string[] = []
-    parts.push('<h1>' + esc(acct.account_name) + '</h1>')
-    parts.push('<p class="meta">' + esc(fmtDate(today())) + '&nbsp;&nbsp;&bull;&nbsp;&nbsp;<span style="color:#4a4a4e">Confidential</span></p>') // #4a4a4e = var(--color-text-placeholder)
-
-    if (inclActions) {
-      const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const cutoff = sevenDaysAgo.toISOString().slice(0, 10)
-      const acts = data.actions.filter(a => a.account_id === accountId).filter(a => {
-        if (a.status === 'Open' || a.status === 'In Progress') return true
-        if (a.status === 'Done' && a.closed_date && a.closed_date >= cutoff) return true
-        return false
-      })
-      if (acts.length) {
-        parts.push('<h2>Actions</h2>')
-        const groups: Record<string, typeof acts> = {}
-        acts.forEach(a => {
-          const owner = (a.owner || '').trim() || '__unassigned__'
-          if (!groups[owner]) groups[owner] = []
-          groups[owner].push(a)
-        })
-        const ownerKeys = Object.keys(groups).filter(k => k !== '__unassigned__').sort()
-        if (groups['__unassigned__']) ownerKeys.push('__unassigned__')
-        ownerKeys.forEach(owner => {
-          parts.push('<div class="owner-group">')
-          parts.push('<div class="owner-name">' + esc(owner === '__unassigned__' ? 'No owner' : owner) + '</div>')
-          parts.push('<ul>')
-          groups[owner].forEach(a => {
-            const statusNote = a.status === 'Done' ? ' (Done)' : a.status === 'In Progress' ? ' (In Progress)' : ''
-            parts.push('<li>' + esc(a.description || '') + esc(statusNote) + '</li>')
-          })
-          parts.push('</ul></div>')
-        })
-      }
-    }
-
-    if (inclNotes && selectedNotes.size) {
-      const selNotes = data.notes.filter(n => n.account_id === accountId && selectedNotes.has(n.note_id)).sort((a, b) => b.date.localeCompare(a.date))
-      if (selNotes.length) {
-        parts.push('<h2>Notes</h2>')
-        selNotes.forEach(note => {
-          parts.push('<h3>' + esc(fmtDate(note.date)) + '</h3>')
-          parts.push('<p><strong>' + esc(note.title || '') + '</strong></p>')
-          let td: { sections?: Array<{ heading: string; bullets?: Array<{ text?: string; indent?: boolean }> }> } = { sections: [] }
-          try { td = JSON.parse(note.template_data) } catch { /* use body fallback */ }
-          if (td.sections?.length) {
-            td.sections.forEach(sec => {
-              if (!sec.bullets?.length) return
-              const nonEmpty = sec.bullets.filter(b => b.text?.trim())
-              if (!nonEmpty.length) return
-              if (sec.heading === 'Attendees') {
-                parts.push('<p><strong>Attendees:</strong> ' + nonEmpty.map(b => esc(b.text)).join(', ') + '</p>')
-              } else {
-                parts.push('<p><strong>' + esc(sec.heading) + '</strong></p><ul>')
-                nonEmpty.forEach(b => { parts.push('<li' + (b.indent ? ' style="margin-left:16px"' : '') + '>' + esc(b.text) + '</li>') })
-                parts.push('</ul>')
-              }
-            })
-          } else if (note.body) {
-            parts.push('<p>' + esc(note.body) + '</p>')
-          }
-        })
-      }
-    }
-
-    if (inclOverview && bg) {
-      parts.push('<h2>Overview</h2>')
-      const rows: [string, string][] = []
-      if (bg.account_tier) rows.push(['Account Tier', bg.account_tier])
-      const lastNote = data.notes.filter(n => n.account_id === accountId && n.date).sort((a, b) => b.date.localeCompare(a.date))[0]
-      if (lastNote) rows.push(['Last Activity', fmtDate(lastNote.date)])
-      const projRev = bg.revenue?.[curYr]?.projected || ''
-      const closedRev = bg.revenue?.[curYr - 1]?.closed || ''
-      if (projRev) rows.push(['Projected Revenue ' + curYr, projRev])
-      if (closedRev) rows.push(['Closed Revenue ' + (curYr - 1), closedRev])
-      if (bg.strategic_context) rows.push(['Account Notes', bg.strategic_context])
-      if (bg.account_team) rows.push(['Account Team', bg.account_team])
-      if (bg.account_director) rows.push(['Account Director', bg.account_director])
-      if (bg.account_manager) rows.push(['Account Manager', bg.account_manager])
-      if (rows.length) {
-        parts.push('<table style="width:100%;border-collapse:collapse;font-size:12px">')
-        rows.forEach(([label, val]) => {
-          parts.push('<tr><td style="padding:5px 10px 5px 0;color:#4a4a4e;font-weight:bold;width:200px;vertical-align:top">' + esc(label) + '</td><td style="padding:5px 0;vertical-align:top">' + esc(val) + '</td></tr>') // #4a4a4e = var(--color-text-secondary)
-        })
-        parts.push('</table>')
-      }
-    }
-
-    if (inclProjects) {
-      const projs = data.projects.filter(p => p.account_id === accountId && p.status === 'Active')
-      if (projs.length) {
-        parts.push('<h2>Active Projects</h2>')
-        projs.forEach(proj => {
-          parts.push('<h3>' + esc(proj.project_name || '') + '</h3>')
-          if (proj.year) parts.push('<p style="color:#4a4a4e;font-size:11px">Year: ' + esc(proj.year) + '</p>') // #4a4a4e = var(--color-text-secondary)
-          if (proj.notes) parts.push('<p>' + esc(proj.notes) + '</p>')
-          const csIds = Array.isArray(proj.client_stakeholder_ids) ? proj.client_stakeholder_ids : []
-          const csNames = csIds.map(id => data.stakeholders.find(s => s.stakeholder_id === id)?.name || '').filter(Boolean)
-          if (csNames.length) parts.push('<p style="color:#4a4a4e;font-size:11px">Client: ' + esc(csNames.join(', ')) + '</p>') // #4a4a4e = var(--color-text-secondary)
-        })
-      }
-    }
-
-    if (inclOpps) {
-      const opps = data.opportunities.filter(o => o.account_id === accountId)
-      if (opps.length) {
-        parts.push('<h2>Opportunities</h2><ul>')
-        opps.forEach(opp => {
-          parts.push('<li><strong>' + esc(opp.description || '') + '</strong>')
-          const oppParts: string[] = []
-          if (opp.status) oppParts.push(opp.status)
-          const owners = Array.isArray(opp.owners) ? opp.owners : []
-          if (owners.length) oppParts.push('Owner(s): ' + owners.join(', '))
-          if (oppParts.length) parts.push(' <span style="color:#4a4a4e;font-size:11px">(' + esc(oppParts.join(' \u00b7 ')) + ')</span>') // #4a4a4e = var(--color-text-secondary)
-          if (opp.notes) parts.push('<br><span style="color:#4a4a4e;font-size:11px">' + esc(opp.notes) + '</span>') // #4a4a4e = var(--color-text-secondary)
-          parts.push('</li>')
-        })
-        parts.push('</ul>')
-      }
-    }
-
-    if (inclPeople) {
-      const people = data.stakeholders.filter(s => s.account_id === accountId && (s.organization || '').toLowerCase() !== 'v.two')
-      if (people.length) {
-        const rank = (title: string) => {
-          const t = (title || '').toLowerCase()
-          if (/\b(ceo|cfo|cto|coo|ciso|cmo|cro|president|founder|owner|chief)\b/.test(t)) return 1
-          if (/\b(evp|svp|executive vice president|senior vice president)\b/.test(t)) return 2
-          if (/\bvp\b|vice president/.test(t)) return 3
-          if (/\bdirector\b/.test(t)) return 4
-          if (/\bmanager\b/.test(t)) return 5
-          if (title) return 6
-          return 7
-        }
-        people.sort((a, b) => { const ra = rank(a.title), rb = rank(b.title); return ra !== rb ? ra - rb : (a.name || '').localeCompare(b.name || '') })
-        parts.push('<h2>People</h2>')
-        parts.push('<table style="width:100%;border-collapse:collapse;font-size:11px">')
-        people.forEach(s => {
-          const titleDept = [s.title, s.department].filter(Boolean).join(' \u00b7 ')
-          parts.push('<tr style="border-bottom:1px solid #f0f0f1"><td style="padding:7px 8px 7px 0;vertical-align:top;width:55%"><strong>' + esc(s.name || '') + '</strong>') // #f0f0f1 = var(--color-bg-hover)
-          if (titleDept) parts.push('<br><span style="color:#4a4a4e;font-size:10px">' + esc(titleDept) + '</span>') // #4a4a4e = var(--color-text-secondary)
-          parts.push('</td><td style="padding:7px 0;vertical-align:top;font-size:10px;color:#4a4a4e">') // #4a4a4e = var(--color-text-secondary)
-          if (s.primary_owner) parts.push('Primary: <strong style="color:#1a1a1a">' + esc(s.primary_owner) + '</strong><br>') // #1a1a1a = var(--color-text-primary)
-          if (s.secondary_owner) parts.push('Secondary: <strong style="color:#1a1a1a">' + esc(s.secondary_owner) + '</strong>') // #1a1a1a = var(--color-text-primary)
-          parts.push('</td></tr>')
-        })
-        parts.push('</table>')
-      }
-    }
-
-    const bodyContent = parts.join('')
-    const fullDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(acct.account_name) + ' Account Plan</title><style>' + style + '</style></head><body>' + bodyContent + '</body></html>'
-    const blob = new Blob([fullDoc], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const w = window.open(url, '_blank')
-    if (w) { w.addEventListener('load', () => { w.focus(); w.print(); URL.revokeObjectURL(url) }) }
+    downloadAccountExport(data, accountId, {
+      includeActions: inclActions,
+      includeNotes: inclNotes,
+      noteMode: 'selected',
+      selectedNoteIds: Array.from(selectedNotes),
+      includeOverview: inclOverview,
+      includeProjects: inclProjects,
+      includeOpportunities: inclOpps,
+      includePeople: inclPeople,
+      useCaseLabel: 'Manual account export',
+    })
     onClose()
   }
 
@@ -246,6 +82,22 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
       <div ref={panelRef} className="export-panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <button className="export-panel-close" title="Close" aria-label="Close" onClick={onClose}>×</button>
         <div className="export-panel-title" id={titleId}>Export Account Plan</div>
+        <p style={{ marginTop: 'var(--spacing-sm)', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', lineHeight: 'var(--line-height-base)' }}>
+          Use this when you need a print-ready account brief outside the app. The download is HTML, not a popup print window.
+          Open it in a browser and use Print to save as PDF if needed.
+        </p>
+        <p style={{ marginTop: 'var(--spacing-xs)', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', lineHeight: 'var(--line-height-base)' }}>
+          Current selection: {describeAccountExportUseCase({
+            includeActions: inclActions,
+            includeNotes: inclNotes,
+            noteMode: 'selected',
+            selectedNoteIds: Array.from(selectedNotes),
+            includeOverview: inclOverview,
+            includeProjects: inclProjects,
+            includeOpportunities: inclOpps,
+            includePeople: inclPeople,
+          })}
+        </p>
 
         <div className="export-section">
           <div className="export-row">
@@ -312,7 +164,7 @@ export default function ExportPanel({ accountId, data, onClose }: Props) {
           </div>
         </div>
 
-        <button className="export-generate-btn" onClick={generate}>Generate PDF</button>
+        <button className="export-generate-btn" onClick={generate}>Download Print-Ready Plan</button>
       </div>
     </div>
   )
