@@ -22,6 +22,7 @@ export interface SlideComponentStyle {
 export interface SlideComponent {
   id: string
   type: SlideComponentType
+  sourceLabel?: string
   x: number
   y: number
   width: number
