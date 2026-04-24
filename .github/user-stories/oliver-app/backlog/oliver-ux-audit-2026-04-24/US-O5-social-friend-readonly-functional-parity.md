@@ -4,6 +4,7 @@ Title: Social Page — Friend's Collection View Must Have Full Functionality
 Status: Missing
 Verified: false
 Backdated: 2026-04-24
+Scope: Tesknota (not Oliver App)
 ---
 
 Current state:
@@ -12,9 +13,9 @@ Current state:
 
 Gap:
 - Entire feature surface is absent in this repo.
+- This should be moved to the Tesknota backlog and implemented there, not in Oliver.
 
 Backlog acceptance:
 - Create Social/friend-view route and data model.
 - Implement read-only functional parity (search/filter/pagination controls) for friend views.
 - Add access and authorization rules for read-only behavior.
-

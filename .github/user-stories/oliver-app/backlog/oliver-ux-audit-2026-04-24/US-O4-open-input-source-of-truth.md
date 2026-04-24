@@ -4,6 +4,7 @@ Title: All Open Text Inputs Must Mirror One Source of Truth
 Status: Partial
 Verified: false
 Backdated: 2026-04-24
+Scope: Cross-repo dependency (Oliver implementation, Tesknota canonical reference)
 ---
 
 Current state:
@@ -12,6 +13,7 @@ Current state:
 
 Constraint:
 - Requested "Compliments > Log a Compliment" source of truth is not present in current `oliver-app` codebase.
+- If canonical source remains Tesknota, the definitive style spec must be imported or documented in Oliver before enforcing parity here.
 
 Gap:
 - Input styling is not fully centralized to one canonical class system across all open text entry points.
@@ -20,4 +22,3 @@ Backlog acceptance:
 - Define the canonical input source in this repo (or import from shared package if applicable).
 - Inventory all input classes and migrate deviants to canonical style tokens/classes.
 - Add style-lint/test checks for placeholder typography/color parity.
-
