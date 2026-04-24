@@ -12,6 +12,17 @@ This audit read the story index, all story files, coverage audit, traceability m
 - CI commands: npm run typecheck, npm run check-tokens, npm run build
 - Browser smoke command: npm run test:smoke
 
+## Test Strength By Staging Group
+
+| Group | Story Range | Current Test Strength | Notes |
+| --- | --- | --- | --- |
+| Platform, Auth, Admin, and Infra | US-OLV-001..017, 099..108, 117, 118, 121, 126 | Medium | CI gates are strong; auth/admin behavior still needs more live-environment assertions. |
+| Accounts Workspace | US-OLV-018..055 | Low-Medium | Smoke covers shell and nav; deep mutation/import/export paths are mostly manual. |
+| OliverDock and AI Workflows | US-OLV-056..067, 109..112, 119 | Low | Runtime/API and provider fallback paths are still mostly manual. |
+| HR Workspace | US-OLV-068..088, 120 | Low-Medium | Smoke covers nav and representative controls; most mutation flows remain manual. |
+| SDR and CRM Workspace | US-OLV-089..098 | Low-Medium | SDR shell/detail/approval surfaces exist; full pipeline edit still incomplete and mostly manual. |
+| UI Consistency and QA Hardening | US-OLV-113..116, 122..125 | Medium-High | This is the strongest area due browser smoke and explicit deep-QA workflow docs. |
+
 | Story ID | Title | Status | Verification Path | Strength | Evidence | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | US-OLV-001 | Bootstrap app shell | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | Backdated from the initial Create Next App commit. |

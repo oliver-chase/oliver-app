@@ -1,5 +1,22 @@
 # Oliver App User Stories
 
+## Staging Workstream Groups
+
+These groups mirror the active `staging` delivery structure and are the
+current way to break down ownership and QA scope. `Milestone` remains as the
+historical backfill label; use these groups for current planning and audit.
+
+| Group | Scope | Story IDs |
+| --- | --- | --- |
+| Platform, Auth, Admin, and Infra | App shell, auth, permissions, admin tools, CI, token/runtime infra, docs | US-OLV-001..017, US-OLV-099..108, US-OLV-117, US-OLV-118, US-OLV-121, US-OLV-126 |
+| Accounts Workspace | Accounts route, portfolio/detail shell, section CRUD, imports/exports, sync, guards | US-OLV-018..055 |
+| OliverDock and AI Workflows | Cross-page chat behavior, command flows, chat persistence wiring, module refresh hooks | US-OLV-056..067, US-OLV-109..112, US-OLV-119 |
+| HR Workspace | HR navigation and workflows for hiring, onboarding/offboarding, devices, settings, reports | US-OLV-068..088, US-OLV-120 |
+| SDR and CRM Workspace | SDR workspace/detail/approval paths plus CRM placeholder/config | US-OLV-089..098 |
+| UI Consistency and QA Hardening | Responsive shell consistency, modals/popovers/pills, browser smoke and deep-QA process | US-OLV-113..116, US-OLV-122..125 |
+
+## Story Index
+
 | ID | Title | Status | Verified | Milestone | Backdated |
 | --- | --- | --- | --- | --- | --- |
 | US-OLV-001 | Bootstrap app shell | Code Present | false | Bootstrap static Next app and Accounts foundation | 2026-04-16 |
@@ -119,7 +136,7 @@
 | US-OLV-115 | Lock HR page shell spacing | Code Present | false | Build HR workflows and harden QA | 2026-04-20 |
 | US-OLV-116 | Standardize pill styling | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-117 | Maintain tech debt state docs | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
-| US-OLV-118 | Backfill user stories | Code Present | false | Add module chat flows and story backfill docs | 2026-04-23 |
+| US-OLV-118 | Backfill user stories | Code Present | true | Add module chat flows and story backfill docs | 2026-04-23 |
 | US-OLV-119 | Import HR candidate lists with AI intake | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-120 | Copy operational values to clipboard | Code Present | false | Build HR workflows and harden QA | 2026-04-20 |
 | US-OLV-121 | Handle token override load failures | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
