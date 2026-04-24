@@ -1,20 +1,22 @@
 ---
 ID: US-O3
-Title: Topbar Account Name Placeholder Text
-Status: Missing
+Title: Topbar Company Name Placeholder Semantics
+Status: Superseded
 Verified: false
 Backdated: 2026-04-24
 ---
 
+As an account strategy user  
+I want account naming edits to happen in one clear location  
+So topbar context remains stable and placeholder behavior is unambiguous.
+
 Current state:
-- Topbar fallback title is `'Account'` / `'All Accounts'` in [Topbar.tsx](/Users/oliver/projects/oliver-app/src/components/layout/Topbar.tsx).
-- `Company Name` placeholder exists in AccountView editable field, not topbar, in [AccountView.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/AccountView.tsx).
+- Topbar now intentionally keeps stable context text (`Account Strategy`) in [Topbar.tsx](/Users/oliver/projects/oliver-app/src/components/layout/Topbar.tsx).
+- Editable account short/long names are in page header fields in [AccountView.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/AccountView.tsx).
+- This request is superseded by [US-O10](/Users/oliver/projects/oliver-app/.github/user-stories/oliver-app/backlog/oliver-requirements-2026-04-24/US-O10-account-naming-source-of-truth.md).
 
-Gap:
-- Topbar does not show `Company Name` placeholder behavior when account name is empty/unset.
-- Topbar editable label is not aligned to placeholder semantics requested.
-
-Backlog acceptance:
-- Implement explicit `Company Name` placeholder behavior in topbar account field when empty.
-- Align typography/color treatment to canonical placeholder style tokens.
-
+Acceptance Criteria:
+- [x] Topbar does not carry editable account-name placeholder behavior.
+- [x] Account short and long names are editable in page-header fields.
+- [x] Placeholder semantics for empty names are handled in page-header inputs, not the topbar.
+- [x] Story is tracked as superseded to avoid duplicate implementation.

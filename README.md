@@ -20,7 +20,7 @@ Next.js 15 rewrite of the vanilla-JS ops dashboard. Static-export SPA deployed t
 npm install
 npm run dev          # localhost:3000
 npm run build        # produces out/
-npm run lint
+npm run lint         # token policy + story schema checks
 npm run typecheck
 npm run test:smoke   # starts/uses localhost:3001 automatically
 ```
@@ -30,6 +30,7 @@ Environment variables (`.env.local`):
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://tjaowjiccowofzisdfhr.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_DISABLED_MODULES=crm,slides   # optional CSV of hub modules to hide
 ```
 
 Never commit `.env.local`.
@@ -70,6 +71,7 @@ src/
     accounts/           CSS only — accounts page UI lives in src/components/accounts.
     hr/                 HR page shell + hr.css
     sdr/                SDR page shell + sdr.css
+    slides/             Slide editor shell + slides.css (HTML import scaffold)
     crm/ admin/ login/ design-system/
     page.tsx            Hub (module landing page)
     layout.tsx          Root layout
@@ -83,6 +85,7 @@ src/
   hooks/                useAccountsData, useFilterSync, useSoftDelete
   lib/                  supabase client, db helpers, export utilities
   context/              AuthContext + mounted UserContext
+  modules/              Shared module registry + Oliver config defaults
   types/                Table schemas (auth, HR, accounts, SDR)
   tech-debt/            Living docs: margin-scale, token-violations, qa-*, migration-audit
 

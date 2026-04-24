@@ -1,21 +1,21 @@
 ---
 ID: US-O7
-Title: Mobile Responsiveness Must Inherit Web Design System
+Title: Mobile Responsiveness Inherits Web Design System
 Status: Partial
 Verified: false
 Backdated: 2026-04-24
 ---
 
+As a mobile user  
+I want responsive layouts to keep the same component system and token semantics as desktop  
+So mobile interactions feel like the same product, not a divergent fork.
+
 Current state:
-- Mobile breakpoints exist in multiple module styles (for example [hub.module.css](/Users/oliver/projects/oliver-app/src/app/hub.module.css), [sdr.css](/Users/oliver/projects/oliver-app/src/app/sdr/sdr.css), interactive styles in [components-interactive.css](/Users/oliver/projects/oliver-app/src/app/components-interactive.css)).
+- Mobile breakpoints exist in multiple module styles (for example [hub.module.css](/Users/oliver/projects/oliver-app/src/app/hub.module.css), [sdr.css](/Users/oliver/projects/oliver-app/src/app/sdr/sdr.css), [components-interactive.css](/Users/oliver/projects/oliver-app/src/app/components-interactive.css)).
 - Shared design tokens are centralized in [tokens.css](/Users/oliver/projects/oliver-app/src/app/tokens.css).
 
-Gap:
-- No explicit automated parity audit proving mobile always inherits same component system as web.
-- Some module-specific component variants may drift without centralized enforcement.
-
-Backlog acceptance:
-- Add a mobile-vs-desktop parity checklist per module.
-- Add browser smoke viewport coverage for key shared components.
-- Enforce token/component consistency with lint/tests where possible.
-
+Acceptance Criteria:
+- [ ] Each module has a mobile parity checklist tied to shared component primitives.
+- [ ] Smoke coverage includes small viewport checks for shared controls and nav shells.
+- [ ] Mobile styles do not introduce raw values outside token policy.
+- [ ] Component behavior parity (open/close/focus/input) is validated for at least Hub, Accounts, and Slides.

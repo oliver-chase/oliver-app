@@ -9,7 +9,7 @@ Scope: current `oliver-app` codebase only (`src/`, `functions/`, `supabase/`, `t
 | --- | --- | --- | --- |
 | US-O1 | Pills Are Dropdowns — Not Click-Through Selects | Partial | Oliver App |
 | US-O2 | Actions Page — Owner & Project Pills Must Match People Pills | Partial | Oliver App |
-| US-O3 | Topbar Account Name Placeholder Text | Missing | Oliver App |
+| US-O3 | Topbar Account Name Placeholder Text | Superseded | Oliver App |
 | US-O4 | All Open Text Inputs Must Mirror One Source of Truth | Partial | Cross-repo dependency (canonical reference is Tesknota) |
 | US-O5 | Social Page — Friend's Collection View Must Have Full Functionality | Missing | Tesknota (not Oliver App) |
 | US-O6 | Wishlist Item — Click Opens Edit Modal with Full Design Style | Missing | Tesknota (not Oliver App) |

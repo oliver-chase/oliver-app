@@ -1,21 +1,22 @@
 ---
 ID: US-O5
-Title: Social Page — Friend's Collection View Must Have Full Functionality
+Title: Social Friend Read-Only Functional Parity
 Status: Missing
 Verified: false
 Backdated: 2026-04-24
 Scope: Tesknota (not Oliver App)
 ---
 
+As a social user  
+I want friend collection views to preserve key browse interactions in read-only mode  
+So I can explore another profile without edit permissions.
+
 Current state:
-- No Social route or friend profile collection view found in current route tree under [src/app](/Users/oliver/projects/oliver-app/src/app).
-- Existing routes are operations modules (`accounts/hr/sdr/crm/admin/design-system`).
+- No Social/friend collection routes exist in this repository (`oliver-app`).
+- Feature belongs to Tesknota scope.
 
-Gap:
-- Entire feature surface is absent in this repo.
-- This should be moved to the Tesknota backlog and implemented there, not in Oliver.
-
-Backlog acceptance:
-- Create Social/friend-view route and data model.
-- Implement read-only functional parity (search/filter/pagination controls) for friend views.
-- Add access and authorization rules for read-only behavior.
+Acceptance Criteria:
+- [ ] Story is tracked in the correct repo backlog (Tesknota) with owner assignment.
+- [ ] Friend read-only route supports search/filter/pagination parity with owner view.
+- [ ] Authorization rules enforce read-only behavior for non-owners.
+- [ ] Automated coverage validates blocked write actions in friend view.

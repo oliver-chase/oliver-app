@@ -1,24 +1,22 @@
 ---
 ID: US-O2
-Title: Actions Page — Owner & Project Pills Must Match People Pills
+Title: Actions Owner/Project Pills Match People Controls
 Status: Partial
 Verified: false
 Backdated: 2026-04-24
 ---
 
+As an account strategy user  
+I want Owner and Project pills in Actions to behave like People controls  
+So I get one predictable interaction pattern for assignment edits.
+
 Current state:
 - Actions Owner/Project cells use `EngPickerBtn` in [ActionsSection.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/ActionsSection.tsx).
-- People section uses different control patterns (`Picker`, `Popover`, filter controls) in [PeopleSection.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/PeopleSection.tsx).
-- Dropdown overlay implementation differs:
-  - `Picker` uses portal-based fixed overlay via [Popover.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/Popover.tsx).
-  - `EngPickerBtn` renders inline absolute `.app-popover` in-row.
+- People controls use picker/popover patterns in [PeopleSection.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/PeopleSection.tsx).
+- Overlay strategy differs (`EngPickerBtn` inline vs `Picker` portal-based popover).
 
-Gap:
-- Owner/Project pill visual and behavior are not guaranteed identical to People controls.
-- Owner/Project dropdowns are not using the same overlay/portal strategy as canonical picker popovers.
-
-Backlog acceptance:
-- Unify Owner/Project pills to the same component and token treatment used by People.
-- Move Owner/Project dropdown rendering to canonical portal overlay behavior.
-- Add smoke assertions for overlay positioning and parity.
-
+Acceptance Criteria:
+- [ ] Owner and Project pills share the same visual token treatment as People picker controls.
+- [ ] Owner and Project dropdowns use the canonical overlay strategy (portal/fixed popover behavior).
+- [ ] Keyboard navigation and focus behavior match People picker behavior.
+- [ ] Smoke coverage validates placement and parity for Owner and Project dropdowns.

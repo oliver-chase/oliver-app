@@ -5,11 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "npm run check-tokens",
+    "lint": "npm run check-tokens && npm run check-stories",
     "test:smoke": "playwright test",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "check-tokens": "node scripts/check-tokens.mjs"
+    "check-tokens": "node scripts/check-tokens.mjs",
+    "check-stories": "node scripts/check-user-stories.mjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.7.0",
