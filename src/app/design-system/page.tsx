@@ -8,6 +8,7 @@ import SyncDot from '@/components/shared/SyncDot'
 import CustomPicker from '@/components/shared/CustomPicker'
 import ConfirmModal from '@/components/shared/ConfirmModal'
 import { useAppModal } from '@/components/shared/AppModal'
+import { copyToClipboard } from '@/lib/clipboard'
 import './ds.css'
 
 // ── Copy helper ─────────────────────────────────────────────────────────────
@@ -82,11 +83,11 @@ function DeadTokenAudit() {
 
 function CopyToken({ name }: { name: string }) {
   const [copied, setCopied] = useState(false)
-  const copy = useCallback(() => {
-    navigator.clipboard.writeText(name).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    }).catch(() => {})
+  const copy = useCallback(async () => {
+    const ok = await copyToClipboard(name)
+    if (!ok) return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }, [name])
   return (
     <button className={'swatchName copyToken' + (copied ? ' copied' : '')} onClick={copy} title="Click to copy">
@@ -512,7 +513,7 @@ export default function DesignSystemPage() {
 
       <div className="topbar">
         <Link href="/" className="back">&larr; Hub</Link>
-        <div className="pageTitle">Design System</div>
+        <h1 className="pageTitle">Design System</h1>
       </div>
 
       <nav className="anchorNav" aria-label="Design system sections">

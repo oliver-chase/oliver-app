@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useMemo, useRef, Component } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect, Component } from 'react'
 import { useAccountsData } from '@/hooks/useAccountsData'
 import { deleteAccountCascade } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
@@ -98,6 +98,7 @@ export default function AccountsApp() {
   const [filterIncomplete, setFilterIncomplete] = useState(false)
   const [filterVTwoOwner, setFilterVTwoOwner] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState('overview')
   const { modal, showModal } = useAppModal()
 
   const handleSelectAccount = useCallback((id: string) => {
@@ -331,6 +332,53 @@ export default function AccountsApp() {
 
   useRegisterOliver(oliverConfig)
 
+  useEffect(() => {
+    if (!currentAccountId) {
+      setActiveSection('overview')
+      return
+    }
+
+    const sectionIds = ['overview', 'people', 'actions', 'opportunities', 'projects', 'notes']
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => !!el)
+
+    if (!sections.length) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hashSection = window.location.hash.replace('#', '')
+        if (hashSection) {
+          setActiveSection(hashSection)
+          return
+        }
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
+        if (!visible.length) return
+        setActiveSection(visible[0].target.id)
+      },
+      {
+        rootMargin: '-120px 0px -55% 0px',
+        threshold: [0.2, 0.4, 0.6],
+      },
+    )
+
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [currentAccountId])
+
+  useEffect(() => {
+    if (!currentAccountId) return
+    const syncHashSection = () => {
+      const hashSection = window.location.hash.replace('#', '')
+      if (hashSection) setActiveSection(hashSection)
+    }
+    syncHashSection()
+    window.addEventListener('hashchange', syncHashSection)
+    return () => window.removeEventListener('hashchange', syncHashSection)
+  }, [currentAccountId])
+
   const topbarTitle = currentAccountId ? (currentAccount?.account_name || 'Account') : 'All Accounts'
   const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
   const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'
@@ -364,6 +412,8 @@ export default function AccountsApp() {
           currentAccountId={currentAccountId}
           syncStatus={syncStatus}
           syncText={syncText}
+          activeSection={currentAccountId ? activeSection : undefined}
+          onSectionSelect={currentAccountId ? setActiveSection : undefined}
           onExportClick={() => setExportOpen(true)}
           onHamburgerClick={() => setSidebarOpen(s => !s)}
           sidebarOpen={sidebarOpen}

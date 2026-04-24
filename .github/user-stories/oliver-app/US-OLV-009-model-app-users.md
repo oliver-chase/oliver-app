@@ -15,5 +15,5 @@ Acceptance Criteria:
 - [ ] User types represent admin/user roles and module permissions.
 - [ ] User lookup APIs can fetch by user_id or email.
 
-Notes: Schema and API code exist; UserProvider is not currently mounted.
+Notes: Schema, users API, and mounted UserProvider exist; live validation still depends on Azure identity claims and the users API path.
 ---

@@ -14,15 +14,16 @@ import styles from './admin.module.css'
 type Tab = 'users' | 'tokens' | 'components'
 
 export default function AdminPage() {
-  const { isAdmin, appUser } = useUser()
+  const { isAdmin, appUser, isLoading, loadError } = useUser()
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('users')
+  const canAccessAdmin = !isLoading && !loadError && !!appUser && isAdmin
 
   useEffect(() => {
-    if (appUser !== null && !isAdmin) {
+    if (!isLoading && !canAccessAdmin) {
       router.replace('/')
     }
-  }, [isAdmin, appUser, router])
+  }, [canAccessAdmin, isLoading, router])
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = [
@@ -45,7 +46,7 @@ export default function AdminPage() {
 
   useRegisterOliver(oliverConfig)
 
-  if (appUser !== null && !isAdmin) return null
+  if (!canAccessAdmin) return null
 
   return (
     <div className={styles.page}>

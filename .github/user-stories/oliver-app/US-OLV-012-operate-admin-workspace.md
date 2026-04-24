@@ -1,7 +1,7 @@
 ---
 ID: US-OLV-012
 Title: Operate admin workspace
-Status: Broken
+Status: Code Present
 Verified: false
 Backdated: 2026-04-17
 Milestone: Add auth, permissions, admin, and HR migration
@@ -15,5 +15,5 @@ Acceptance Criteria:
 - [ ] Selecting a tab swaps the active admin panel without leaving the page.
 - [ ] Non-admin app users are redirected to the hub.
 
-Notes: The route exists, but admin identity depends on the unmounted UserContext.
+Notes: The route now checks the mounted `UserProvider`; live access still depends on `/api/users` and a seeded admin row in `app_users`.
 ---

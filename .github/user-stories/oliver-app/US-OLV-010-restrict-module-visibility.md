@@ -1,7 +1,7 @@
 ---
 ID: US-OLV-010
 Title: Restrict module visibility
-Status: Broken
+Status: Code Present
 Verified: false
 Backdated: 2026-04-17
 Milestone: Add auth, permissions, admin, and HR migration
@@ -11,9 +11,9 @@ I want module cards hidden unless a user has permission
 So that employees only enter approved workspaces
 
 Acceptance Criteria:
-- [ ] Hub filters non-coming-soon modules by hasPermission when permissions are ready.
+- [ ] Hub filters non-coming-soon modules by `hasPermission` when an `app_users` record has loaded for the signed-in user.
 - [ ] The empty state appears when no modules are assigned.
 - [ ] CRM remains admin-only while marked coming soon.
 
-Notes: UserContext currently returns default null user and hasPermission false; hub bypass shows modules before permissions are ready.
+Notes: `UserProvider` now loads `app_users` data from `/api/users`, but live behavior still depends on Azure identity claims and the users API being configured.
 ---

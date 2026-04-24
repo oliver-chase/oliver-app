@@ -153,29 +153,20 @@ No silent-failure supabase writes remain in `src/`.
 - `components-base.css`: `.btn-link` — added `text-decoration: none` (+ Add / + Add attendee / + Add project underline removed)
 - `layout/Topbar.tsx` + `AccountsApp.tsx`: topbar account name now contentEditable with blur-save via `onAccountNameChange` prop
 
-### P2 — UserProvider not mounted (intentional deferral)
-`UserContext.tsx` exports `UserProvider` but it is never imported or mounted in `layout.tsx`.
-`useUser()` in hub page, admin page, and PageGuard returns default context (null user, no permissions).
-Hub currently shows all modules to everyone via intentional bypass:
-```tsx
-const permissionsReady = appUser !== null  // always false → show all
-```
-**Do not fix until app_users table is seeded in Supabase and Azure/CF Access is configured.**
-To activate: wrap `{children}` in `<UserProvider>` in `src/app/layout.tsx`.
+### P2 — UserProvider restored
+`UserProvider` is now mounted in `layout.tsx` and resolves the signed-in Azure user through `/api/users`.
+If the users API is available, it auto-upserts a default `app_users` row and enables real permission/admin checks.
+If the users API is unavailable, the hub falls back to the unrestricted module view for compatibility.
 
-### P3 — Dead auth artifacts
-These files exist but are completely unwired. Remove when permissions system is activated:
-- `src/components/auth/AuthGuard.tsx`
-- `src/components/auth/PageGuard.tsx`
-- `src/context/AuthContext.tsx`
-- `src/app/login/page.tsx` + `src/app/login/login.module.css`
-- `src/lib/msalConfig.ts`
+### P3 — Auth state changed after the initial migration audit
+`AuthGuard`, `AuthContext`, `src/app/login/`, and `src/lib/msalConfig.ts` are active again in the current tree.
+Treat the earlier "dead auth artifacts" note as historical context, not a current deletion list.
 
 ---
 
 ## Known intentional patterns (not bugs)
 
 - `ExportPanel.tsx`: hardcoded hex values in inline print HTML strings — CSS vars don't work in `window.print()` blobs. Each hex has a `// = var(--token)` comment.
-- `UserProvider` unmounted: bypass is intentional until Supabase `app_users` table is seeded.
-- Hub shows all modules when `appUser === null`: same bypass, same condition.
-- `PageGuard` exists but unused: removed from layouts intentionally, will be re-wired with UserProvider.
+- `UserProvider` is mounted again: compatibility fallback still shows unrestricted Hub modules when `/api/users` cannot resolve the signed-in user.
+- Hub can still show all modules when `appUser === null`: this is the current compatibility fallback, not a missing mount.
+- `PageGuard` exists but remains unused; route protection currently comes from `AuthGuard` plus page-level admin/user checks.

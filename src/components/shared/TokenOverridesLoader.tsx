@@ -4,9 +4,7 @@ import { applyTokenOverrides } from '@/lib/tokens'
 
 export default function TokenOverridesLoader() {
   useEffect(() => {
-    applyTokenOverrides().catch(err => {
-      console.error('[TokenOverridesLoader]', err instanceof Error ? err.message : String(err))
-    })
+    applyTokenOverrides().catch(() => {})
   }, [])
   return null
 }

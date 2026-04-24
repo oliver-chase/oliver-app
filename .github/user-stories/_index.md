@@ -11,9 +11,9 @@
 | US-OLV-007 | Preserve auth session | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
 | US-OLV-008 | Guard private routes | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
 | US-OLV-009 | Model app users | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
-| US-OLV-010 | Restrict module visibility | Broken | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
-| US-OLV-011 | Expose admin shortcuts | Broken | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
-| US-OLV-012 | Operate admin workspace | Broken | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
+| US-OLV-010 | Restrict module visibility | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
+| US-OLV-011 | Expose admin shortcuts | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
+| US-OLV-012 | Operate admin workspace | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
 | US-OLV-013 | Proxy app user CRUD | Code Present | false | Operationalize design system, CI, and security | 2026-04-22 |
 | US-OLV-014 | Enforce app users RLS | Code Present | false | Operationalize design system, CI, and security | 2026-04-22 |
 | US-OLV-015 | Show module directory | Code Present | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
@@ -95,7 +95,7 @@
 | US-OLV-091 | Filter SDR prospects | Code Present | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
 | US-OLV-092 | Inspect SDR prospect detail | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-093 | Show queued SDR drafts badge | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
-| US-OLV-094 | Approve or reject SDR drafts | Broken | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
+| US-OLV-094 | Approve or reject SDR drafts | Code Present | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
 | US-OLV-095 | Review SDR outreach sends | Code Present | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
 | US-OLV-096 | Edit SDR pipeline | In Progress | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
 | US-OLV-097 | Show CRM placeholder | Not Started | false | Port Accounts UX and complete module hub shell | 2026-04-16 |
@@ -110,7 +110,7 @@
 | US-OLV-106 | Scan token drift | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
 | US-OLV-107 | Run build and typecheck | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
 | US-OLV-108 | Pin Node runtime for builds | Code Present | false | Add auth, permissions, admin, and HR migration | 2026-04-17 |
-| US-OLV-109 | Persist chat history schema | In Progress | false | Add module chat flows and story backfill docs | 2026-04-22 |
+| US-OLV-109 | Persist chat history schema | Code Present | false | Add module chat flows and story backfill docs | 2026-04-22 |
 | US-OLV-110 | Handle page-aware AI chat | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-111 | Refresh module data from Oliver | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-112 | Open password security settings | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
@@ -120,6 +120,11 @@
 | US-OLV-116 | Standardize pill styling | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-117 | Maintain tech debt state docs | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
 | US-OLV-118 | Backfill user stories | Code Present | false | Add module chat flows and story backfill docs | 2026-04-23 |
-| US-OLV-119 | Import HR candidate lists with AI intake | Broken | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
+| US-OLV-119 | Import HR candidate lists with AI intake | Code Present | false | Introduce shared OliverDock and upload flows | 2026-04-20 |
 | US-OLV-120 | Copy operational values to clipboard | Code Present | false | Build HR workflows and harden QA | 2026-04-20 |
 | US-OLV-121 | Handle token override load failures | Code Present | false | Operationalize design system, CI, and security | 2026-04-20 |
+| US-OLV-122 | Maintain browser regression smoke suite | Code Present | true | Build HR workflows and harden QA | 2026-04-23 |
+| US-OLV-123 | Preserve cross-page shell and heading consistency | Code Present | true | Normalize design tokens and responsive behavior | 2026-04-23 |
+| US-OLV-124 | Preserve primary navigation and action targets | Code Present | true | Build HR workflows and harden QA | 2026-04-23 |
+| US-OLV-125 | Standardize interactive controls and placeholder states | Code Present | true | Normalize design tokens and responsive behavior | 2026-04-23 |
+| US-OLV-126 | Document repeatable deep QA workflow | Code Present | true | Operationalize design system, CI, and security | 2026-04-23 |

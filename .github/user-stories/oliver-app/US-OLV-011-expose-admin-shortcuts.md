@@ -1,7 +1,7 @@
 ---
 ID: US-OLV-011
 Title: Expose admin shortcuts
-Status: Broken
+Status: Code Present
 Verified: false
 Backdated: 2026-04-17
 Milestone: Add auth, permissions, admin, and HR migration
@@ -15,5 +15,5 @@ Acceptance Criteria:
 - [ ] Admin links do not render for non-admin users.
 - [ ] Admin link styling matches the hub action buttons.
 
-Notes: isAdmin comes from an unmounted/default UserContext, so these links are not expected to appear in normal current state.
+Notes: Admin links now depend on the mounted `UserProvider` resolving an admin role from `app_users`.
 ---

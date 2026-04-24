@@ -1,15 +1,16 @@
 # Oliver App Verification Audit
 
-This audit read the story index, all story files, coverage audit, traceability matrix, CI workflow, package scripts, and searched for test/spec files. No unit, integration, or e2e test suite is present in this repo. CI currently provides typecheck, CSS token scan, and static Next build only.
+This audit read the story index, all story files, coverage audit, traceability matrix, CI workflow, package scripts, and searched for test/spec files. The repo now includes a committed Playwright browser smoke suite in `tests/e2e/frontend-smoke.spec.ts` alongside CI's typecheck, CSS token scan, and static Next build gates.
 
 ## Verification Summary
 
 - Total stories: 121
-- Strong verification path: 6
-- Weak verification path: 109
-- No meaningful verification path: 6
-- Automated test files found: 0
+- Strong verification path: 7
+- Weak verification path: 114
+- No meaningful verification path: 0
+- Automated test files found: 1
 - CI commands: npm run typecheck, npm run check-tokens, npm run build
+- Browser smoke command: npm run test:smoke
 
 | Story ID | Title | Status | Verification Path | Strength | Evidence | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -21,10 +22,10 @@ This audit read the story index, all story files, coverage audit, traceability m
 | US-OLV-006 | Provide Microsoft login | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code is present in AuthProvider/AuthGuard/login; end-to-end Azure env behavior is not human-verified. |
 | US-OLV-007 | Preserve auth session | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Depends on configured Azure client and tenant environment variables. |
 | US-OLV-008 | Guard private routes | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Code present; historical docs conflict with current MSAL reintroduction. |
-| US-OLV-009 | Model app users | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Schema and API code exist; UserProvider is not currently mounted. |
-| US-OLV-010 | Restrict module visibility | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | UserContext currently returns default null user and hasPermission false; hub bypass shows modules before permissions are ready. |
-| US-OLV-011 | Expose admin shortcuts | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | isAdmin comes from an unmounted/default UserContext, so these links are not expected to appear in normal current state. |
-| US-OLV-012 | Operate admin workspace | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | The route exists, but admin identity depends on the unmounted UserContext. |
+| US-OLV-009 | Model app users | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Schema and API code exist; UserProvider is mounted and resolves the signed-in Azure user through `/api/users`, but live validation still depends on seeded `app_users` data. |
+| US-OLV-010 | Restrict module visibility | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implementation now loads `app_users` through UserProvider; live validation still depends on Azure identity claims and users API configuration. |
+| US-OLV-011 | Expose admin shortcuts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Admin links now depend on UserProvider resolving an admin role from `app_users`. |
+| US-OLV-012 | Operate admin workspace | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Admin route now checks the mounted UserProvider; real access still depends on seeded admin data. |
 | US-OLV-013 | Proxy app user CRUD | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Direct client access is intentionally avoided in src/lib/users.ts. |
 | US-OLV-014 | Enforce app users RLS | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Implementation exists in migration/API; database application was not verified here. |
 | US-OLV-015 | Show module directory | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | CRM exists as a stub route. |
@@ -106,7 +107,7 @@ This audit read the story index, all story files, coverage audit, traceability m
 | US-OLV-091 | Filter SDR prospects | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Prospect edit depth depends on current SdrProspects implementation. |
 | US-OLV-092 | Inspect SDR prospect detail | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Queued draft badge and refresh button were added later. |
 | US-OLV-093 | Show queued SDR drafts badge | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backdated from sdr/detail queued-drafts commit. |
-| US-OLV-094 | Approve or reject SDR drafts | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Client calls /api/sdr-approve, but no matching function file was found in functions/api during inspection. |
+| US-OLV-094 | Approve or reject SDR drafts | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Backend function now exists; production behavior still depends on deployed Supabase credentials and the current table schema. |
 | US-OLV-095 | Review SDR outreach sends | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | No send mutation path was identified in current files. |
 | US-OLV-096 | Edit SDR pipeline | In Progress | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Read and inspect paths are clear; full mutation coverage was hard to confirm from current files. |
 | US-OLV-097 | Show CRM placeholder | Not Started | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | The placeholder exists; CRM feature implementation itself has not started. |
@@ -121,7 +122,7 @@ This audit read the story index, all story files, coverage audit, traceability m
 | US-OLV-106 | Scan token drift | Code Present | Build/lint/typecheck | Strong | scripts/check-tokens.mjs; .github/workflows/ci.yml | CI also runs the scanner. |
 | US-OLV-107 | Run build and typecheck | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | No unit test script is present. |
 | US-OLV-108 | Pin Node runtime for builds | Code Present | Build/lint/typecheck | Strong | .github/workflows/ci.yml; package.json; next.config.ts | Backdated from build blocker fixes. |
-| US-OLV-109 | Persist chat history schema | In Progress | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Schema file exists, but current OliverDock stores conversation in local component state only. |
+| US-OLV-109 | Persist chat history schema | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | OliverDock now reads/writes through `/api/chat-messages`; live validation still depends on the updated schema being applied in Supabase. |
 | US-OLV-110 | Handle page-aware AI chat | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | CRM has no contextPayload beyond static config. |
 | US-OLV-111 | Refresh module data from Oliver | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Refresh behavior is callback-based per module. |
 | US-OLV-112 | Open password security settings | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Named change-pw in command registries. |
@@ -131,9 +132,14 @@ This audit read the story index, all story files, coverage audit, traceability m
 | US-OLV-116 | Standardize pill styling | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Pill sizing was adjusted across Apr 20 and Apr 22 commits. |
 | US-OLV-117 | Maintain tech debt state docs | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | These docs can become stale and should be updated with code changes. |
 | US-OLV-118 | Backfill user stories | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | This story describes the backfill artifact itself. |
-| US-OLV-119 | Import HR candidate lists with AI intake | Broken | None | None | Traceability matrix marks this behavior Partial/Missing or Broken | Broken: AIIntakeModal currently sends FormData to /api/parse-image and text/plain to /api/parse-document, but those functions expect JSON bodies. |
+| US-OLV-119 | Import HR candidate lists with AI intake | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Tabular files are parsed client-side; image uploads still depend on configured AI provider access. |
 | US-OLV-120 | Copy operational values to clipboard | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Clipboard behavior is present in several components but has limited user-visible failure feedback. |
 | US-OLV-121 | Handle token override load failures | Code Present | Manual review | Weak | Story acceptance criteria plus source/manual review path in _traceability-matrix.md | Failure path is console-only; there is no in-app alert for token override load failures. |
+| US-OLV-122 | Maintain browser regression smoke suite | Code Present | Browser smoke | Strong | tests/e2e/frontend-smoke.spec.ts; playwright.config.ts | Verified locally on 2026-04-23 with 10 passing smoke tests. |
+| US-OLV-123 | Preserve cross-page shell and heading consistency | Code Present | Browser smoke + manual review | Weak | tests/e2e/frontend-smoke.spec.ts; src/tech-debt/locked.md | Representative shell/heading checks exist, but not full visual regression coverage. |
+| US-OLV-124 | Preserve primary navigation and action targets | Code Present | Browser smoke + manual review | Weak | tests/e2e/frontend-smoke.spec.ts | Top-level route/action coverage exists; destructive and deep action paths remain manual. |
+| US-OLV-125 | Standardize interactive controls and placeholder states | Code Present | Browser smoke + manual review | Weak | tests/e2e/frontend-smoke.spec.ts | Pickers, modal opening, copy control, representative placeholder states, and role-restricted navigation are covered at smoke level. |
+| US-OLV-126 | Document repeatable deep QA workflow | Code Present | Manual review | Weak | src/tech-debt/deep-qa-workflow.md; README.md | Process is now committed in-repo; its correctness still depends on keeping it current. |
 
 ## Strong Verification
 
@@ -145,6 +151,7 @@ These stories have a credible automated gate through CI build, TypeScript, or to
 - US-OLV-106 Scan token drift: scripts/check-tokens.mjs; .github/workflows/ci.yml
 - US-OLV-107 Run build and typecheck: .github/workflows/ci.yml; package.json; next.config.ts
 - US-OLV-108 Pin Node runtime for builds: .github/workflows/ci.yml; package.json; next.config.ts
+- US-OLV-122 Maintain browser regression smoke suite: tests/e2e/frontend-smoke.spec.ts; playwright.config.ts
 
 ## Weak Verification
 
@@ -259,22 +266,19 @@ These stories can currently be checked only by manual review/manual browser vali
 - US-OLV-118 Backfill user stories: Manual review.
 - US-OLV-120 Copy operational values to clipboard: Manual review.
 - US-OLV-121 Handle token override load failures: Manual review.
+- US-OLV-123 Preserve cross-page shell and heading consistency: Browser smoke + manual review.
+- US-OLV-124 Preserve primary navigation and action targets: Browser smoke + manual review.
+- US-OLV-125 Standardize interactive controls and placeholder states: Browser smoke + manual review.
+- US-OLV-126 Document repeatable deep QA workflow: Manual review.
 
 ## No Verification Path
 
-These stories describe broken, incomplete, or schema-only behavior where no meaningful validation can pass until implementation work occurs.
-
-- US-OLV-010 Restrict module visibility: UserContext currently returns default null user and hasPermission false; hub bypass shows modules before permissions are ready.
-- US-OLV-011 Expose admin shortcuts: isAdmin comes from an unmounted/default UserContext, so these links are not expected to appear in normal current state.
-- US-OLV-012 Operate admin workspace: The route exists, but admin identity depends on the unmounted UserContext.
-- US-OLV-094 Approve or reject SDR drafts: Client calls /api/sdr-approve, but no matching function file was found in functions/api during inspection.
-- US-OLV-109 Persist chat history schema: Schema file exists, but current OliverDock stores conversation in local component state only.
-- US-OLV-119 Import HR candidate lists with AI intake: Broken: AIIntakeModal currently sends FormData to /api/parse-image and text/plain to /api/parse-document, but those functions expect JSON bodies.
+No stories currently remain in the "no meaningful verification path" bucket after the latest code pass, but many still require manual or environment-backed validation.
 
 ## Missing High-Risk Verification
 
-- Auth and permissions: MSAL login/session/guard behavior has no e2e test, and permission/admin stories are broken because UserContext is not wired to app_users.
-- Input validation: parse-document, parse-image, confirm-write, users, and admin keys endpoints have no API contract tests for invalid JSON, missing fields, size limits, unsupported media types, and service-role/env failures.
+- Auth and permissions: MSAL login/session/guard behavior has no e2e test, and permission/admin stories now depend on live `app_users` resolution through `/api/users`.
+- Input validation: chat-messages, parse-document, parse-image, confirm-write, users, and admin keys endpoints have no API contract tests for invalid JSON, missing fields, size limits, unsupported media types, and service-role/env failures.
 - Config/secrets assumptions: Azure env, Supabase public env, Supabase service role, Anthropic ai_config, fallback key, and ANTHROPIC_API_KEY are not covered by runtime config tests.
 - Error/retry paths: Anthropic fallback retry, OliverDock network errors, token override load failures, Supabase write failures, soft-delete expiry failures, and clipboard failures lack automated assertions.
 - Loading/empty/fallback states: Accounts, HR, SDR, design-system, CRM placeholder, empty module list, and no-data tables are mostly manual-only.
@@ -285,10 +289,10 @@ These stories describe broken, incomplete, or schema-only behavior where no mean
 
 ## Recommended Next Tests
 
-1. Add Playwright smoke tests for login guard redirects, hub navigation, Accounts portfolio/detail, HR navigation/search, SDR tabs/detail, Admin/design-system access, and CRM placeholder.
+1. Extend the existing Playwright smoke suite to cover login guard redirects, more destructive/confirm flows, and env-backed permission behavior on staging.
 2. Add API contract tests for Cloudflare functions: /api/chat, /api/parse-document, /api/parse-image, /api/confirm-write, /api/users, and /api/admin/keys with valid and invalid payloads.
 3. Add unit tests for transcript-parser, receipt-parser, fuzzy scoring, check-tokens, dbWrite/dbWriteMulti, and conflict detection/write summary logic extracted from confirm-write.
 4. Add mutation integration tests with mocked Supabase for account cascade delete, opportunity/project promotion, HR quick-add rollback, device assignment/return, candidate stage changes, token overrides, and app_users service-role proxy.
-5. Add e2e import/export tests for account transcript import review/dry-run/commit, org-chart image rejection paths, ExportPanel print blob creation, Oliver conversation export, and HR Candidate Intake after its API contract is fixed.
+5. Add e2e import/export tests for account transcript import review/dry-run/commit, org-chart image rejection paths, ExportPanel print blob creation, Oliver conversation export, and HR Candidate Intake.
 6. Add browser capability tests/mocks for SpeechRecognition unsupported state and clipboard success/failure states.
 7. Add a lint/test guard for story support files so audit docs do not conflict with prompt-lint story-file validation.

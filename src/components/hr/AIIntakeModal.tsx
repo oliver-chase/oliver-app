@@ -30,35 +30,106 @@ async function xlsxToCsv(file: File): Promise<string> {
   return xlsx.utils.sheet_to_csv(sheet)
 }
 
+function detectDelimiter(line: string) {
+  const counts = [
+    { delimiter: ',', count: line.split(',').length },
+    { delimiter: '\t', count: line.split('\t').length },
+    { delimiter: ';', count: line.split(';').length },
+  ].sort((a, b) => b.count - a.count)
+  return counts[0]?.count > 1 ? counts[0].delimiter : ','
+}
+
+function normalizeHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function getFieldIndex(headers: string[], aliases: string[]) {
+  const normalized = headers.map(normalizeHeader)
+  return normalized.findIndex((header) => aliases.includes(header))
+}
+
+function parseCandidateText(text: string): ParsedCandidate[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (lines.length === 0) return []
+
+  const delimiter = detectDelimiter(lines[0])
+  const headers = lines[0].split(delimiter).map((cell) => cell.trim())
+
+  const nameIndex = getFieldIndex(headers, ['name', 'fullname', 'candidate', 'candidatename'])
+  if (nameIndex === -1) {
+    return lines.map((line) => ({ name: line, source: 'Candidate Intake' })).filter((row) => row.name)
+  }
+
+  const roleIndex = getFieldIndex(headers, ['role', 'title', 'position'])
+  const seniorityIndex = getFieldIndex(headers, ['seniority', 'level'])
+  const deptIndex = getFieldIndex(headers, ['dept', 'department', 'team'])
+  const cityIndex = getFieldIndex(headers, ['city'])
+  const stateIndex = getFieldIndex(headers, ['state', 'province', 'region'])
+  const emailIndex = getFieldIndex(headers, ['email', 'emailaddress'])
+  const sourceIndex = getFieldIndex(headers, ['source', 'channel'])
+
+  return lines.slice(1).map((line) => {
+    const cells = line.split(delimiter).map((cell) => cell.trim())
+    return {
+      name: cells[nameIndex] || '',
+      role: roleIndex >= 0 ? cells[roleIndex] || '' : '',
+      seniority: seniorityIndex >= 0 ? cells[seniorityIndex] || '' : '',
+      dept: deptIndex >= 0 ? cells[deptIndex] || '' : '',
+      city: cityIndex >= 0 ? cells[cityIndex] || '' : '',
+      state: stateIndex >= 0 ? cells[stateIndex] || '' : '',
+      email: emailIndex >= 0 ? cells[emailIndex] || '' : '',
+      source: sourceIndex >= 0 ? cells[sourceIndex] || 'Candidate Intake' : 'Candidate Intake',
+    }
+  }).filter((row) => row.name)
+}
+
+async function readAsBase64(file: File) {
+  const buffer = await file.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
 async function callParseApi(file: File, signal: AbortSignal): Promise<{ candidates: ParsedCandidate[]; model?: string }> {
   const isImage = file.type.startsWith('image/')
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
   const isXlsx = ext === 'xlsx' || ext === 'xls'
 
-  let body: BodyInit
-  let endpoint: string
-  let headers: HeadersInit
-
-  if (isImage) {
-    endpoint = '/api/parse-image'
-    const fd = new FormData(); fd.append('file', file)
-    body = fd
-    headers = {}
-  } else if (isXlsx) {
-    endpoint = '/api/parse-document'
-    body = await xlsxToCsv(file)
-    headers = { 'Content-Type': 'text/plain' }
-  } else {
-    endpoint = '/api/parse-document'
-    body = await file.text()
-    headers = { 'Content-Type': 'text/plain' }
+  if (!isImage) {
+    const text = isXlsx ? await xlsxToCsv(file) : await file.text()
+    const candidates = parseCandidateText(text)
+    if (!candidates.length) throw new Error('Could not extract candidate rows from this file')
+    return { candidates, model: isXlsx ? 'client-side-xlsx' : 'client-side-text' }
   }
 
-  const res = await fetch(endpoint, { method: 'POST', body, headers, signal })
-  if (!res.ok) throw new Error('Parse failed: HTTP ' + res.status)
-  const data = await res.json()
-  if (!data || !Array.isArray(data.candidates)) throw new Error('Parse returned no candidates')
-  return data
+  const imageBase64 = await readAsBase64(file)
+  const res = await fetch('/api/parse-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64, mediaType: file.type }),
+    signal,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'Parse failed: HTTP ' + res.status)
+
+  const people = (data as { result?: { people?: Array<Record<string, string | null>> } }).result?.people || []
+  const candidates = people.map((person) => ({
+    name: person.name || '',
+    role: person.title || '',
+    dept: person.department || '',
+    source: 'AI Intake',
+  })).filter((candidate) => candidate.name)
+
+  if (!candidates.length) throw new Error('Parse returned no candidates')
+  return { candidates, model: (data as { model?: string }).model }
 }
 
 export default function AIIntakeModal({ onCancel, onConfirm }: Props) {

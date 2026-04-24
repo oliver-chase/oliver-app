@@ -24,6 +24,7 @@ interface TopbarProps {
   onHamburgerClick?: () => void;
   sidebarOpen?: boolean;
   activeSection?: string;
+  onSectionSelect?: (section: string) => void;
   onAccountNameChange?: (name: string) => void;
 }
 
@@ -37,6 +38,7 @@ export default function Topbar({
   onHamburgerClick,
   sidebarOpen,
   activeSection,
+  onSectionSelect,
   onAccountNameChange,
 }: TopbarProps) {
   const titleRef = useRef<HTMLDivElement>(null);
@@ -103,6 +105,7 @@ export default function Topbar({
             key={href}
             href={href}
             className={activeSection === href.slice(1) ? 'active' : undefined}
+            onClick={() => onSectionSelect?.(href.slice(1))}
           >
             {label}
           </a>

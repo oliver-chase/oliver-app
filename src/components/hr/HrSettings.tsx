@@ -102,8 +102,22 @@ export default function HrSettings({ db, setDb, setSyncState }: Props) {
       <div className="page-body">
 
       <div className="tabs">
-        <div className={'tab' + (tab === 'dropdowns' ? ' active' : '')} onClick={() => setTab('dropdowns')}>Dropdowns</div>
-        <div className={'tab' + (tab === 'data' ? ' active' : '')} onClick={() => setTab('data')}>Data &amp; Export</div>
+        <button
+          type="button"
+          className={'tab' + (tab === 'dropdowns' ? ' active' : '')}
+          aria-pressed={tab === 'dropdowns'}
+          onClick={() => setTab('dropdowns')}
+        >
+          Dropdowns
+        </button>
+        <button
+          type="button"
+          className={'tab' + (tab === 'data' ? ' active' : '')}
+          aria-pressed={tab === 'data'}
+          onClick={() => setTab('data')}
+        >
+          Data &amp; Export
+        </button>
       </div>
 
       {tab === 'dropdowns' && (

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { copyToClipboard } from '@/lib/clipboard'
 import type { SdrProspect, SdrSend, SdrApprovalItem } from './types'
 import { PROSPECT_STATUS_LABEL, TRACK_LABEL } from './types'
 
@@ -50,7 +51,7 @@ export default function SdrProspectDetail({ prospect, sends, approvalItems = [],
   const queuedCount = pQueued.length
 
   function copyEmail() {
-    if (p.em) navigator.clipboard.writeText(p.em).catch(() => null)
+    if (p.em) void copyToClipboard(p.em)
   }
 
   return (

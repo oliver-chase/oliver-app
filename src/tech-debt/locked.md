@@ -52,12 +52,12 @@ If re-opening, add a dated note under the entry with the reason.
 - `src/components/accounts/ChatbotUpload.tsx` logic — folded into OliverDock chat mode upload zone.
 - `#cp-fab` FAB + related CSS — removed.
 
-### Dead auth artifacts (intentional bypass confirmed)
-- Deleted in commit `b37e602`: `AuthGuard`, `PageGuard`, `AuthContext`, `msalConfig`, `src/app/login/`.
-- `UserContext.tsx` rewritten to default-only (no provider mounted). `useUser()` returns `{ appUser: null, isAdmin: false, hasPermission: ()=>false }`.
-- Hub bypass: `src/app/page.tsx` uses `permissionsReady = appUser !== null` to show all modules when bypass is active.
-- Admin bypass: `src/app/admin/page.tsx` renders when `appUser === null` OR `isAdmin === true`. Redirect only fires when a real non-admin user is loaded.
-- To activate real permissions: mount `UserProvider` around `children` in `src/app/layout.tsx`, seed Supabase `app_users`, wire actual admin.
+### Auth + permissions wiring (restored 2026-04-23)
+- `AuthProvider`, `AuthGuard`, `msalConfig`, and `src/app/login/` are present and mounted again.
+- `UserProvider` is mounted in `src/app/layout.tsx` and resolves the signed-in Azure user through `/api/users`.
+- When `/api/users` is available, the provider auto-upserts a default `app_users` row keyed by Azure AD `oid` and enables real role/permission checks in Hub and Admin.
+- When `/api/users` is unavailable, the hub falls back to the unrestricted module view for compatibility, and admin access remains config-dependent.
+- Real admin behavior still requires at least one seeded admin row in `app_users`.
 
 ### JSX unicode-escape hygiene (Audit #1 issue #1)
 - All `\uXXXX` usages now live in JS string contexts (JS string literals or JSX expression children `{ '…' }`), never raw JSX text or double-quoted attribute values.
@@ -103,4 +103,4 @@ If re-opening, add a dated note under the entry with the reason.
 - Design-system page rebuild to Tesknota layout + live-usage data — tracked as task #3.
 - `sdr.css` remaining minor token cases (if any surface).
 - Live-chat backend (Intercom/Crisp). OliverDock currently falls back to `mailto:support@v-two.com` in no-match state.
-- Mounting `UserProvider` and seeding `app_users` — unblocks real permissions; requires Supabase DDL + CF Access work.
+- Seeding `app_users` and validating `/api/users` in a live environment — required to prove real permissions/admin behavior end to end.

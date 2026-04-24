@@ -1,7 +1,7 @@
 ---
 ID: US-OLV-109
 Title: Persist chat history schema
-Status: In Progress
+Status: Code Present
 Verified: false
 Backdated: 2026-04-22
 Milestone: Add module chat flows and story backfill docs
@@ -13,8 +13,8 @@ So that conversations can persist beyond one panel session
 Acceptance Criteria:
 - [ ] supabase/chat_messages.sql defines a chat_messages schema.
 - [ ] Rows can represent module/page conversation messages.
-- [ ] The schema can associate messages with user/session context.
-- [ ] OliverDock reads/writes chat history through implemented code.
+- [ ] The schema can associate messages with app-level user context and page/module context.
+- [ ] OliverDock reads, rewrites, and clears chat history through implemented code.
 
-Notes: Schema file exists, but current OliverDock stores conversation in local component state only.
+Notes: Persistence now goes through `/api/chat-messages` plus local fallback; live validation still depends on the updated `chat_messages` schema being applied in Supabase.
 ---

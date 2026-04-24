@@ -17,6 +17,34 @@ const AuthContext = createContext<AuthContextType>({
   isReady: false,
 })
 
+const E2E_AUTH_BYPASS = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
+
+function getBypassAccount(): AccountInfo {
+  if (typeof window !== 'undefined') {
+    const raw = window.localStorage.getItem('qa-auth-account')
+    if (raw) {
+      try {
+        return JSON.parse(raw) as AccountInfo
+      } catch {
+        window.localStorage.removeItem('qa-auth-account')
+      }
+    }
+  }
+
+  return {
+    homeAccountId: 'qa-home-account',
+    environment: 'qa.local',
+    tenantId: 'qa-tenant',
+    username: 'qa-admin@example.com',
+    localAccountId: 'qa-local-account',
+    name: 'QA Admin',
+    idTokenClaims: {
+      oid: 'qa-admin-user',
+      sub: 'qa-admin-user',
+    },
+  } as AccountInfo
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState<AccountInfo | null>(null)
   const [isReady, setIsReady] = useState(false)
@@ -26,6 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false
 
     async function init() {
+      if (E2E_AUTH_BYPASS) {
+        setAccount(getBypassAccount())
+        setIsReady(true)
+        return
+      }
+
       const { PublicClientApplication } = await import('@azure/msal-browser')
       const { getMsalConfig } = await import('@/lib/msalConfig')
       const instance = new PublicClientApplication(getMsalConfig())
@@ -54,12 +88,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function login() {
+    if (E2E_AUTH_BYPASS) return
     if (!msalRef.current) return
     const { LOGIN_SCOPES } = await import('@/lib/msalConfig')
     await msalRef.current.loginRedirect({ scopes: LOGIN_SCOPES })
   }
 
   async function logout() {
+    if (E2E_AUTH_BYPASS) {
+      setAccount(null)
+      return
+    }
     if (!msalRef.current) return
     await msalRef.current.logoutRedirect()
   }

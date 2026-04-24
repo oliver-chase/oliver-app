@@ -49,11 +49,9 @@ const ALL_MODULES: Module[] = [
 ]
 
 export default function HubPage() {
-  const { appUser, isAdmin, hasPermission } = useUser()
+  const { appUser, isAdmin, hasPermission, isLoading, loadError } = useUser()
   const { account, logout } = useAuth()
 
-  // TODO: remove bypass once app_users table is created in Supabase and permissions are configured.
-  // Run: scripts/setup-app-users.sql, then seed the current user as admin via /admin.
   const permissionsReady = appUser !== null
   const visibleModules = useMemo(
     () => ALL_MODULES.filter(m => {
@@ -82,8 +80,16 @@ export default function HubPage() {
       <div className={styles.hub}>
         <div className={styles.brand}>
           <div className={styles.wordmark}>V.Two Ops</div>
-          <div className={styles.subtitle}>Internal Operations Hub</div>
+          <div className={styles.subtitle}>
+            {isLoading ? 'Loading module access…' : 'Internal Operations Hub'}
+          </div>
         </div>
+
+        {loadError && (
+          <p className={styles.empty}>
+            Permissions service unavailable. Falling back to the unrestricted module view for this session.
+          </p>
+        )}
 
         <div className={styles.cards}>
           {visibleModules.map(m => (

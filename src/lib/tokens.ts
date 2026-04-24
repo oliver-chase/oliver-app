@@ -12,7 +12,13 @@ export async function listTokenOverrides(): Promise<DesignToken[]> {
     .from('design_tokens')
     .select('*')
     .order('category')
-  if (error) throw new Error('listTokenOverrides: ' + error.message)
+  if (error) {
+    const message = error.message || ''
+    if (error.code === 'PGRST205' || message.includes("Could not find the table 'public.design_tokens'")) {
+      return []
+    }
+    throw new Error('listTokenOverrides: ' + message)
+  }
   return data ?? []
 }
 

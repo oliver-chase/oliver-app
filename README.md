@@ -21,6 +21,8 @@ npm install
 npm run dev          # localhost:3000
 npm run build        # produces out/
 npm run lint
+npm run typecheck
+npm run test:smoke   # starts/uses localhost:3001 automatically
 ```
 
 Environment variables (`.env.local`):
@@ -34,7 +36,7 @@ Never commit `.env.local`.
 
 ## Branch workflow
 
-Default branch is `staging`. Never commit directly to `main`.
+Day-to-day work happens on `staging`. `main` is the production branch.
 
 ```bash
 # ship to staging
@@ -49,7 +51,16 @@ git push origin main                         # auto-deploys to oliver-app.pages.
 git checkout staging
 ```
 
-CI verifies on every push. Do not run `npm test` as a blocking local gate.
+CI verifies on every push. Local QA should use `npm run typecheck`, `npm run lint`,
+`npm run build`, and `npm run test:smoke` for browser smoke coverage.
+
+## QA workflow
+
+- Static gates: `npm run typecheck`, `npm run lint`, `npm run build`
+- Browser smoke: `npm run test:smoke` (Playwright manages the local server on `127.0.0.1:3001`)
+- Current smoke spec: `tests/e2e/frontend-smoke.spec.ts`
+- Deep-pass checklist: `src/tech-debt/deep-qa-workflow.md`
+- Generated browser artifacts must stay uncommitted: `test-results/`, `playwright-report/`
 
 ## Layout
 
@@ -71,7 +82,7 @@ src/
     sdr/ crm/ admin/ layout/ shared/ auth/
   hooks/                useAccountsData, useFilterSync, useSoftDelete
   lib/                  supabase client, db helpers, export utilities
-  context/              UserContext (currently unmounted — see below)
+  context/              AuthContext + mounted UserContext
   types/                Table schemas (auth, HR, accounts, SDR)
   tech-debt/            Living docs: margin-scale, token-violations, qa-*, migration-audit
 
@@ -89,7 +100,9 @@ public/                 Static assets
 
 ## Auth
 
-`src/context/UserContext.tsx` exists but is intentionally unmounted. Cloudflare Access handles auth at the network layer for now; the Hub shows all modules to everyone via bypass until the Supabase `app_users` table is seeded. To activate, wrap children in `<UserProvider>` inside `src/app/layout.tsx`.
+`src/context/AuthContext.tsx` and `src/components/auth/AuthGuard.tsx` are mounted in `src/app/layout.tsx`, so the app currently expects Azure MSAL login for route access.
+
+`src/context/UserContext.tsx` is also mounted. It resolves the signed-in Azure user through `/api/users`, auto-upserting a default `app_users` row when that backend is available. If the users API is unavailable, the hub falls back to the unrestricted module view and admin behavior remains config-dependent.
 
 ## Tech-debt inventory
 
@@ -98,6 +111,7 @@ public/                 Static assets
 - `migration-audit.md` — full record of the vanilla → Next.js migration, commit by commit
 - `margin-scale.md` — canonical top-margin scale (source of truth)
 - `token-violations.md` — outstanding off-token values
+- `deep-qa-workflow.md` — repeatable full-repo QA sequence
 - `qa-*.md` — per-page visual QA checklists run against staging
 
 ## Related

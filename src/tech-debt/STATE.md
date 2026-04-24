@@ -1,7 +1,7 @@
 # OliverApp — Current State
 
-**Snapshot:** 2026-04-21, branch `staging`, working tree tracked in git (nothing
-untracked, nothing uncommitted after the commit containing this file).
+**Snapshot:** 2026-04-23, branch `staging`, working tree may contain in-progress
+changes; read `git status --short --branch` before assuming a clean baseline.
 
 A brand-new task session should read this file end-to-end before touching code.
 It answers: *what's shipped, what's load-bearing, what can I change freely, what
@@ -70,9 +70,10 @@ Exemptions:
 If you need a raw value, add a semantic token to `tokens.css` first. Never
 inline. 16 stylesheets scan clean currently.
 
-There are no unit tests. Functional verification is: `npm run typecheck` +
-`npm run check-tokens` + `npm run build` locally, then push to staging and
-verify in a browser at the staging URL.
+There are still no unit tests. Local verification now includes:
+`npm run typecheck` + `npm run check-tokens` + `npm run build` +
+`npm run test:smoke` (Playwright starts/uses local app on port `3001`). Deep-pass procedure
+is documented in `src/tech-debt/deep-qa-workflow.md`.
 
 ---
 
@@ -183,9 +184,11 @@ list is a pointer, not a replacement.
   via `useRegisterOliver`. Do not spawn additional chatbot components.
 - **Retired components** — never re-introduce: `CommandPalette`,
   `HrAgentPanel`, `ChatbotPanel`, `ChatbotUpload`, `#cp-fab`.
-- **Dead auth artifacts** — MSAL/AuthGuard/PageGuard/AuthContext/login route
-  deleted in `b37e602`. `UserContext` keeps only the default `useUser()`.
-  Hub/Admin show everything via intentional bypass until `app_users` is seeded.
+- **Auth and users API** — MSAL/AuthGuard/login route are active again.
+  `UserContext` is mounted and resolves the signed-in Azure user through
+  `/api/users`, auto-upserting a default `app_users` row when that backend is
+  available. Hub/Admin still need seeded `app_users` data for real permission
+  and admin behavior.
 - **JSX unicode-escape hygiene** — `\uXXXX` only appears inside JS string
   contexts (expressions, string literals), never as raw JSX text.
 - **Design-system runtime color resolution** — `<ResolvedValue token fallback>`
@@ -202,7 +205,7 @@ list is a pointer, not a replacement.
 
 ### Hub (`/`)
 - Permission-aware module grid (bypass active until `app_users` seeded).
-- Admin links visible when `isAdmin` (currently always false under bypass).
+- Admin links visible when `isAdmin`; this now depends on `app_users` data resolving through `/api/users`.
 - Registers Oliver config (navigation + quickConvos). No upload.
 
 ### Accounts (`/accounts`)
@@ -343,9 +346,9 @@ list is a pointer, not a replacement.
 - **User permissions seed**. Supabase `app_users` DDL is written but not
   seeded. CF Access needs to be wired. When ready:
   1. Run `scripts/setup-app-users.sql` (if present) or write it.
-  2. Mount `<UserProvider>` in `src/app/layout.tsx` around `children`.
-  3. Configure CF Access at network edge.
-  4. Admin bypass in `/admin` flips from "render always" to real `isAdmin`.
+  2. Seed at least one admin row and verify role/permission resolution.
+  3. Configure CF Access at network edge if network-layer gating is required.
+  4. Remove the remaining compatibility fallback once `/api/users` is guaranteed.
 
 ### Task #3 — Design-system Tesknota parity (complete as of e645929)
 What's shipped: anchor nav, dead-token audit card, token usages for colors /
@@ -355,17 +358,16 @@ AppChip focus note, AppBadge hover note), token editor live preview (CSS var
 applied on each keystroke, reverts on cancel, preview banner active while editing).
 
 ### Latent / minor
-- `@azure/msal-browser` removed from `package.json` in `e645929`.
+- MSAL packages and route guards are active again in the current tree; treat earlier auth-removal notes as historical only.
 - Historical `qa-*.md` + `token-violations.md` already moved to
   `src/tech-debt/archive/` with a `README.md` explaining archival.
 - No tests. All verification is TSC + scanner + browser dogfood on staging.
   When there's budget, set up Playwright E2E against the staging URL.
 
 ### Intentional deferrals / known-OK
-- `UserProvider` is deliberately not mounted. `useUser()` returns the default
-  `{ appUser: null, isAdmin: false }`. Hub + Admin handle this via bypass.
-  Do not wire `UserProvider` without seeding `app_users` first — Admin would
-  redirect real users to `/`.
+- `UserProvider` is mounted, but compatibility fallback still exists when
+  `/api/users` cannot resolve the signed-in user. Hub falls back to the
+  unrestricted module view in that case.
 - `--spacing-3` (3px) has 10+ consumers in `accounts.css` — design-system
   page's hand-curated usages array catalogues them.
 - SDR `.sdr-stat-value` rounded 28→26 and `.sdr-detail-close` 18→17 in
@@ -430,7 +432,7 @@ applied on each keystroke, reverts on cancel, preview banner active while editin
 - **No new CSS values.** If `tokens.css` doesn't have an exact value, pick
   the closest token and accept a ≤2px visual shift, or add a new semantic
   token to `tokens.css` first.
-- **Don't mount `UserProvider`.** Bypass is deliberate until `app_users` is seeded.
+- **Keep `UserProvider` mounted.** Current Hub/Admin behavior depends on it. Compatibility fallback still exists while `app_users` seeding and `/api/users` rollout are incomplete.
 - **Don't re-introduce retired components.** Section §4 lists them.
 
 ---

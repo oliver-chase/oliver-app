@@ -95,6 +95,8 @@
   font-size: var(--font-size-2xs);
   color: var(--color-nav-text-muted);
   letter-spacing: var(--letter-spacing-wide);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .disabled {
@@ -109,6 +111,7 @@
   right: var(--spacing-lg);
   display: flex;
   gap: var(--spacing-sm);
+  z-index: 2;
 }
 
 .sessionBar {
@@ -118,7 +121,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  z-index: 10;
+  z-index: 2;
 }
 
 .sessionEmail {

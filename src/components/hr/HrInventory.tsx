@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { runWrites } from '@/lib/db-helpers'
 import { useAppModal } from '@/components/shared/AppModal'
+import { copyToClipboard } from '@/lib/clipboard'
 import CustomPicker from '@/components/shared/CustomPicker'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import type { HrDB, Device } from './types'
@@ -305,7 +306,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
               <div className="detail-row"><span className="detail-key">Serial #</span>
                 <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                   <span className="device-serial-val">{focusDev.serial || '—'}</span>
-                  {focusDev.serial && <button className="btn btn-sm btn-secondary copy-btn" onClick={() => navigator.clipboard.writeText(focusDev.serial)}>Copy</button>}
+                  {focusDev.serial && <button className="btn btn-sm btn-secondary copy-btn" onClick={() => { void copyToClipboard(focusDev.serial) }}>Copy</button>}
                 </div>
               </div>
               <div className="detail-row"><span className="detail-key">Status</span><StatusPill s={focusDev.status} /></div>
@@ -316,7 +317,7 @@ export default function HrInventory({ db, setDb, setSyncState, pendingEditId, on
                 <div className="detail-row"><span className="detail-key">Order #</span>
                   <div className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                     <span className="device-serial-val">{focusDev.orderNumber}</span>
-                    <button className="btn btn-sm btn-secondary copy-btn" onClick={() => navigator.clipboard.writeText(focusDev.orderNumber)}>Copy</button>
+                    <button className="btn btn-sm btn-secondary copy-btn" onClick={() => { void copyToClipboard(focusDev.orderNumber) }}>Copy</button>
                   </div>
                 </div>
               )}

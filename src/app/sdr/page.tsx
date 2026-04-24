@@ -97,7 +97,7 @@ export default function SdrPage() {
         currentTab: tabRef.current,
         summary: {
           prospects: prospectsRef.current.length,
-          drafts_pending: approvalItemsRef.current.filter(a => a.status === 'pending').length,
+          drafts_pending: approvalItemsRef.current.filter(a => a.status === 'pending_approval').length,
           sends_total: sendsRef.current.length,
         },
       }),

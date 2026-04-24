@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { upsertNote, upsertBackground, deleteRecord, newId, today } from '@/lib/db'
 import { useAppModal } from '@/components/shared/AppModal'
+import { copyToClipboard } from '@/lib/clipboard'
 import { useSoftDelete } from '@/hooks/useSoftDelete'
 import { useSyncReport } from '@/lib/sync-context'
 import type { Note, Background, AppState } from '@/types'
@@ -261,13 +262,12 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
   const bodyRef = useRef<HTMLDivElement>(null)
   const [attendees, setAttendeesState] = useState<string[]>(() => getAttendees(note.template_data))
 
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(noteToMarkdown(note))
-      if (copiedTimer.current) clearTimeout(copiedTimer.current)
-      setCopied(true)
-      copiedTimer.current = setTimeout(() => setCopied(false), 2000)
-    } catch { /* no clipboard access */ }
+  const handleCopyToClipboard = async () => {
+    const copiedOk = await copyToClipboard(noteToMarkdown(note))
+    if (!copiedOk) return
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    setCopied(true)
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000)
   }
 
   const saveAttendees = async (newList: string[]) => {
@@ -313,7 +313,7 @@ function NoteCard({ note, teamNames, onSave, onDelete, onAddPersonToTeam }: {
           className="note-copy-btn"
           title="Copy to clipboard"
           aria-label="Copy to clipboard"
-          onClick={e => { e.stopPropagation(); copyToClipboard() }}
+          onClick={e => { e.stopPropagation(); void handleCopyToClipboard() }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />

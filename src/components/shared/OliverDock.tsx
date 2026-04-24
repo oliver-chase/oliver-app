@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction, OliverFlow } from './OliverContext'
 import { fuzzyFilter } from '@/lib/fuzzy'
+import { useUser } from '@/context/UserContext'
+import { useAuth } from '@/context/AuthContext'
 import TranscriptReviewModal from './TranscriptReviewModal'
 import { ChatbotTopbar } from './ChatbotTopbar'
 import { ChatbotInputBar } from './ChatbotInputBar'
@@ -18,8 +20,26 @@ type ChatItem =
   | { id: number; kind: 'parse-result'; title: string; summary: string; model: string; payload: unknown }
   | { id: number; kind: 'write-prompt'; text: string; hasConflicts: boolean; payload: unknown }
 
+type PersistedMessage = Extract<ChatItem, { kind: 'msg' }>
+
+type HistoryRow = {
+  role: 'user' | 'assistant'
+  text: string
+  kind?: string
+}
+
+function getAccountUserId(account: { idTokenClaims?: unknown; localAccountId?: string; homeAccountId?: string; username?: string } | null) {
+  if (!account) return null
+  const claims = account.idTokenClaims as Record<string, unknown> | undefined
+  if (typeof claims?.oid === 'string' && claims.oid) return claims.oid
+  if (typeof claims?.sub === 'string' && claims.sub) return claims.sub
+  return account.localAccountId || account.homeAccountId || account.username || null
+}
+
 export default function OliverDock() {
   const { config, openSignal } = useOliverContext()
+  const { appUser } = useUser()
+  const { account } = useAuth()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [items, setItems] = useState<ChatItem[]>([])
@@ -36,8 +56,49 @@ export default function OliverDock() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
+  const historyLoadKeyRef = useRef<string | null>(null)
+  const [historyReadyKey, setHistoryReadyKey] = useState<string | null>(null)
 
   const nextId = () => ++idRef.current
+  const historyUserId = appUser?.user_id || getAccountUserId(account)
+  const historyKey = historyUserId && config ? 'oliver-history:' + historyUserId + ':' + config.pageLabel : null
+
+  const msgItems = useMemo(
+    () => items.filter((item): item is PersistedMessage => item.kind === 'msg'),
+    [items],
+  )
+
+  const historyRows = useMemo<HistoryRow[]>(
+    () => msgItems.map((item) => ({ role: item.role, text: item.text, kind: item.kind })),
+    [msgItems],
+  )
+
+  const replaceHistory = useCallback((rows: HistoryRow[]) => {
+    idRef.current = rows.length
+    setItems(rows.map((row, index) => ({
+      id: index + 1,
+      kind: 'msg',
+      role: row.role === 'user' ? 'user' : 'assistant',
+      text: row.text,
+    })))
+  }, [])
+
+  const persistHistory = useCallback(async (rows: HistoryRow[]) => {
+    if (!historyKey) return
+    window.localStorage.setItem(historyKey, JSON.stringify(rows))
+    if (!historyUserId || !config?.pageLabel) return
+    try {
+      await fetch('/api/chat-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: historyUserId,
+          page_label: config.pageLabel,
+          messages: rows,
+        }),
+      })
+    } catch {}
+  }, [config?.pageLabel, historyKey, historyUserId])
 
   // Register upload trigger so page actions can call triggerOliverUpload().
   useEffect(() => {
@@ -71,6 +132,50 @@ export default function OliverDock() {
   useEffect(() => {
     if (openSignal > 0) setOpen(true)
   }, [openSignal])
+
+  useEffect(() => {
+    if (!config || !historyKey) return
+    if (historyLoadKeyRef.current === historyKey) return
+    historyLoadKeyRef.current = historyKey
+    setHistoryReadyKey(null)
+
+    const localRaw = window.localStorage.getItem(historyKey)
+    if (localRaw) {
+      try {
+        replaceHistory(JSON.parse(localRaw) as HistoryRow[])
+      } catch {
+        window.localStorage.removeItem(historyKey)
+      }
+    } else {
+      replaceHistory([])
+    }
+
+    if (!historyUserId) return
+    ;(async () => {
+      try {
+        const res = await fetch('/api/chat-messages?user_id=' + encodeURIComponent(historyUserId) + '&page_label=' + encodeURIComponent(config.pageLabel))
+        if (!res.ok) return
+        const rows = await res.json() as Array<{ role: string; text: string }>
+        if (!Array.isArray(rows)) return
+        const normalized: HistoryRow[] = rows
+          .filter((row) => typeof row.text === 'string' && row.text.trim())
+          .map((row) => ({ role: row.role === 'user' ? 'user' : 'assistant', text: row.text, kind: 'msg' }))
+        if (normalized.length > 0) {
+          window.localStorage.setItem(historyKey, JSON.stringify(normalized))
+          replaceHistory(normalized)
+        }
+      } catch {
+      } finally {
+        setHistoryReadyKey(historyKey)
+      }
+    })()
+    if (!historyUserId) setHistoryReadyKey(historyKey)
+  }, [config, historyKey, historyUserId, replaceHistory])
+
+  useEffect(() => {
+    if (!historyKey || historyReadyKey !== historyKey) return
+    void persistHistory(historyRows)
+  }, [historyKey, historyReadyKey, historyRows, persistHistory])
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 40)
@@ -207,6 +312,12 @@ export default function OliverDock() {
     setFlowState(null)
     setItems([])
     setInput('')
+    if (historyKey) window.localStorage.removeItem(historyKey)
+    if (historyUserId && config?.pageLabel) {
+      void fetch('/api/chat-messages?user_id=' + encodeURIComponent(historyUserId) + '&page_label=' + encodeURIComponent(config.pageLabel), {
+        method: 'DELETE',
+      }).catch(() => {})
+    }
   }
 
   function toggleMic() {
