@@ -82,8 +82,8 @@ export default function SlidesPage() {
       flows,
       quickConvos: [
         'What HTML structure imports best?',
-        'How do I map classes to component types?',
-        'What export mode should I use for clients?',
+        'How are unsupported units and transforms handled?',
+        'How do I interpret parser warnings before save?',
       ],
       contextPayload: () => ({
         imported_components: result?.components.length ?? 0,
@@ -130,7 +130,7 @@ export default function SlidesPage() {
           <section className="slides-card">
             <h1 className="slides-title">HTML to Editable Components</h1>
             <p className="slides-subtitle">
-              Import existing slide HTML and convert it into component JSON for the upcoming drag-and-drop editor.
+              Import existing slide HTML and convert it into component JSON. Canvas editing and export are in the editor backlog (coming soon).
             </p>
 
             <div className="slides-actions">

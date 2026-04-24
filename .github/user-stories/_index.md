@@ -15,6 +15,18 @@ historical backfill label; use these groups for current planning and audit.
 | SDR and CRM Workspace | SDR workspace/detail/approval paths plus CRM placeholder/config | US-OLV-089..098 |
 | UI Consistency and QA Hardening | Responsive shell consistency, modals/popovers/pills, browser smoke and deep-QA process | US-OLV-113..116, US-OLV-122..125 |
 
+## Backlog Bundles (Active)
+
+These backlog bundles are tracked artifacts that extend canonical coverage and
+are used for active planning even when not merged into the flat `US-OLV-*`
+index table yet.
+
+| Bundle | Scope | Story IDs |
+| --- | --- | --- |
+| oliver-requirements-2026-04-24 | Validated net-new requirements and directional changes | US-O8..US-O17 |
+| oliver-ux-audit-2026-04-24 | UX audit findings and cross-repo clarifications | US-O1..US-O7 |
+| slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-036 |
+
 ## Story Index
 
 | ID | Title | Status | Verified | Milestone | Backdated |

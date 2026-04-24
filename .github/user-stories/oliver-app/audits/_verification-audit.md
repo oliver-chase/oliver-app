@@ -4,10 +4,11 @@ This audit read the story index, all story files, coverage audit, traceability m
 
 ## Verification Summary
 
-- Total stories: 121
-- Strong verification path: 7
-- Weak verification path: 114
-- No meaningful verification path: 0
+- Total canonical index stories (`US-OLV-*`): 126
+- Additional backlog stories (`US-O*`, `US-SLD-*`): 39
+- Strong verification path (canonical): 7
+- Weak verification path (canonical): 119
+- No meaningful verification path (canonical): 0
 - Automated test files found: 1
 - CI commands: npm run typecheck, npm run check-tokens, npm run build
 - Browser smoke command: npm run test:smoke
@@ -22,6 +23,17 @@ This audit read the story index, all story files, coverage audit, traceability m
 | HR Workspace | US-OLV-068..088, 120 | Low-Medium | Smoke covers nav and representative controls; most mutation flows remain manual. |
 | SDR and CRM Workspace | US-OLV-089..098 | Low-Medium | SDR shell/detail/approval surfaces exist; full pipeline edit still incomplete and mostly manual. |
 | UI Consistency and QA Hardening | US-OLV-113..116, 122..125 | Medium-High | This is the strongest area due browser smoke and explicit deep-QA workflow docs. |
+| Slides Module Backfill (Backlog) | US-SLD-001..005 | Low-Medium | Slide shell/import parser behavior now has explicit backlog coverage; broader editor/persistence/export remains net-new. |
+
+## Slides Backfill Stories (`US-SLD-001..005`)
+
+| Story ID | Title | Status | Verification Path | Strength | Evidence | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| US-SLD-001 | Backfill Slide Module Shell and Access Contract | Code Present | Browser smoke + manual review | Weak | tests/e2e/frontend-smoke.spec.ts; src/app/slides/page.tsx | `/slides` route shell and permission gate behavior are implemented. |
+| US-SLD-002 | Backfill HTML Import Command and Flow Contract | Code Present | Browser smoke + manual review | Weak | src/app/slides/commands.ts; src/app/slides/flows.ts; tests/e2e/frontend-smoke.spec.ts | Import-file and parse-pasted action wiring exists. |
+| US-SLD-003 | Promote Slide Parser Security and Normalization Stories to Canonical Coverage | Partial | Manual review | Weak | .github/user-stories/oliver-app/backlog/oliver-requirements-2026-04-24/US-O13-*.md..US-O16-*.md; src/components/slides/html-import.ts | Implemented parser behavior exists; canonical story/audit alignment was updated in this pass. |
+| US-SLD-004 | Align Slide Module Copy With Current Capabilities | Missing | None | Weak | src/modules/registry.ts; src/app/slides/page.tsx | Copy still implies capabilities beyond current import-first surface. |
+| US-SLD-005 | Include Slides in Coverage and Verification Audits | Code Present | Manual review | Weak | .github/user-stories/_index.md; audits/_coverage-audit.md; audits/_traceability-matrix.md | Audit/index inclusion is now explicit. |
 
 | Story ID | Title | Status | Verification Path | Strength | Evidence | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -294,6 +306,7 @@ No stories currently remain in the "no meaningful verification path" bucket afte
 - Error/retry paths: Anthropic fallback retry, OliverDock network errors, token override load failures, Supabase write failures, soft-delete expiry failures, and clipboard failures lack automated assertions.
 - Loading/empty/fallback states: Accounts, HR, SDR, design-system, CRM placeholder, empty module list, and no-data tables are mostly manual-only.
 - Imports/exports: account transcript/document/image import, conflict dry-run, commit-write side effects, ExportPanel print blob, Oliver conversation export, HR Candidate Intake, and receipt parsing have no automated tests.
+- Slides module: parser smoke exists, but there are no integration tests yet for persisted slide CRUD, template library flows, autosave, export pipeline, or conflict recovery.
 - Syncs and data mutation side effects: account cascade delete, opportunity/project promotion, HR offboarding run creation, device assignment/return, candidate promotion/rejection, SDR prospect edits, and token override writes are manual-only.
 - Webhooks/background jobs: none implemented; absence is documented but not enforced by tests.
 - Edge inputs: large documents, malformed AI JSON, circular org relationships, duplicate imports, missing Supabase rows, and unsupported browser APIs are not covered by automated tests.

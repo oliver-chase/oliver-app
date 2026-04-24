@@ -46,11 +46,11 @@ const MODULES: ModuleDefinition[] = [
   {
     id: 'slides',
     name: 'Slide Editor',
-    description: 'Template-based slide editing with HTML/PDF export and HTML import conversion.',
+    description: 'Import-first slide conversion: parse HTML into component JSON with warnings and sanitization.',
     href: '/slides',
     pageLabel: 'Slide Editor',
-    defaultPlaceholder: 'Import a slide HTML file or ask about the editor workflow...',
-    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. Import HTML or start from a template.",
+    defaultPlaceholder: 'Import or paste slide HTML to parse into component JSON...',
+    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. HTML import is live; canvas editing and export are coming soon.",
   },
   {
     id: 'crm',
@@ -105,4 +105,3 @@ export function isModuleEnabled(id: ModuleId): boolean {
 export function getHubModules(): ModuleDefinition[] {
   return getPermissionModules().filter(module => isModuleEnabled(module.id))
 }
-

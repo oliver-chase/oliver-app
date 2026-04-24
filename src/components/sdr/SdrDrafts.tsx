@@ -22,20 +22,31 @@ function approvalBatches(items: SdrApprovalItem[]): Batch[] {
 interface Props {
   approvalItems: SdrApprovalItem[]
   onItemsChange: (items: SdrApprovalItem[]) => void
+  actor?: {
+    userId?: string
+    userEmail?: string
+  }
 }
 
-export default function SdrDrafts({ approvalItems, onItemsChange }: Props) {
+export default function SdrDrafts({ approvalItems, onItemsChange, actor }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const pending = approvalItems.filter(x => x.status === 'pending_approval').length
   const batches = approvalBatches(approvalItems)
 
   async function handleAction(itemId: string, action: 'approve' | 'reject') {
     setLoading(itemId + action)
+    setError(null)
     try {
       const r = await fetch('/api/sdr-approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId, action }),
+        body: JSON.stringify({
+          item_id: itemId,
+          action,
+          user_id: actor?.userId || undefined,
+          user_email: actor?.userEmail || undefined,
+        }),
       })
       if (!r.ok) {
         const d = await r.json().catch(() => ({}))
@@ -45,6 +56,8 @@ export default function SdrDrafts({ approvalItems, onItemsChange }: Props) {
         x.id === itemId ? { ...x, status: action === 'approve' ? 'approved' : 'rejected' } : x
       ))
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Draft action failed.'
+      setError(msg)
       console.error('[SDR] draft action:', e)
     } finally {
       setLoading(null)
@@ -58,6 +71,7 @@ export default function SdrDrafts({ approvalItems, onItemsChange }: Props) {
           <div>
             <div className="page-title">Drafts</div>
             {pending > 0 && <div className="page-subtitle">{pending} pending approval</div>}
+            {error && <div className="iv-date-past" style={{ marginTop: 'var(--spacing-xs)' }}>{error}</div>}
           </div>
         </div>
       </div>

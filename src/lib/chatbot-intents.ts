@@ -5,6 +5,9 @@ interface ModuleIntentPattern {
   pattern: RegExp
 }
 
+const PROFILE_INTENT_PATTERN =
+  /\b(my profile|profile settings|change (?:my )?(?:password|email|name)|update (?:my )?(?:password|email|name)|edit (?:my )?(?:password|email|name)|security info|security settings|sign-?in settings|personal info|account security|manage (?:my )?(?:password|email|name))\b/i
+
 const MODULE_INTENT_PATTERNS: readonly ModuleIntentPattern[] = [
   { moduleId: 'slides', pattern: /\b(slide|slides|presentation|deck|html import|component json)\b/i },
   { moduleId: 'admin', pattern: /\b(admin|permission|access control|design token|token editor|component library|user manager)\b/i },
@@ -43,4 +46,8 @@ export function detectPathScopeViolation(
   const scopeText = currentPath.allowedTopics.join(', ')
   const message = `You are in ${currentPath.label}. I can help with ${scopeText}. For ${requested.label}, open that module first.`
   return { requested, message }
+}
+
+export function detectProfileIntent(text: string): boolean {
+  return PROFILE_INTENT_PATTERN.test(text.trim())
 }

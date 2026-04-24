@@ -14,6 +14,7 @@ import { SDR_COMMANDS } from '@/app/sdr/commands'
 import { buildSdrFlows } from '@/app/sdr/flows'
 import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
+import { useUser } from '@/context/UserContext'
 import type { SdrProspect, SdrApprovalItem, SdrSend, SdrTab, SdrFilters } from '@/components/sdr/types'
 
 const TABS: { id: SdrTab; label: string }[] = [
@@ -31,6 +32,7 @@ async function fetchTable<T>(table: string): Promise<T[]> {
 
 export default function SdrPage() {
   const { allowRender } = useModuleAccess('sdr')
+  const { appUser } = useUser()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen]         = useState(false)
   const [tab, setTab]                         = useState<SdrTab>('overview')
@@ -70,10 +72,40 @@ export default function SdrPage() {
     closeSidebar()
   }
 
+  const saveProspectPatch = useCallback(async (
+    prospectId: string,
+    patch: Partial<Pick<SdrProspect, 'st' | 'tr' | 'nfu' | 'lc'>>,
+  ) => {
+    setSyncState('syncing')
+    const update = { ...patch, lu: new Date().toISOString() }
+    const res = await fetch('/api/sdr-prospects', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: prospectId,
+        patch: update,
+        user_id: appUser?.user_id || undefined,
+        user_email: appUser?.email || undefined,
+      }),
+    })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      setSyncState('error')
+      throw new Error((payload as { error?: string }).error || 'Failed to save prospect changes')
+    }
+    await loadData()
+    setSyncState('ok')
+  }, [appUser?.email, appUser?.user_id, loadData])
+
   const prospectsRef = useRef(prospects);         prospectsRef.current = prospects
   const approvalItemsRef = useRef(approvalItems); approvalItemsRef.current = approvalItems
   const sendsRef = useRef(sends);                 sendsRef.current = sends
   const tabRef = useRef(tab);                     tabRef.current = tab
+  const approvalActorRef = useRef<{ userId: string; userEmail: string }>({ userId: '', userEmail: '' })
+  approvalActorRef.current = {
+    userId: appUser?.user_id || '',
+    userEmail: appUser?.email || '',
+  }
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = SDR_COMMANDS.map(c => {
@@ -82,6 +114,8 @@ export default function SdrPage() {
         case 'log-call':      run = () => navTo('prospects'); break
         case 'add-opp':       run = () => navTo('prospects'); break
         case 'view-pipeline': run = () => navTo('prospects'); break
+        case 'open-drafts':   run = () => navTo('drafts'); break
+        case 'open-outreach': run = () => navTo('outreach'); break
         case 'open-profile':  run = () => { router.push('/profile') }; break
         default:              run = () => {}
       }
@@ -90,6 +124,7 @@ export default function SdrPage() {
     const flows = buildSdrFlows({
       prospects: prospectsRef.current,
       approvalItems: approvalItemsRef.current,
+      actor: approvalActorRef.current,
       refetch: loadData,
     })
     return buildModuleOliverConfig('sdr', {
@@ -193,6 +228,7 @@ export default function SdrPage() {
                 <SdrDrafts
                   approvalItems={approvalItems}
                   onItemsChange={setApprovalItems}
+                  actor={approvalActorRef.current}
                 />
               )}
               {tab === 'outreach' && <SdrOutreach sends={sends} />}
@@ -207,6 +243,7 @@ export default function SdrPage() {
         approvalItems={approvalItems}
         onClose={() => setSelectedProspect(null)}
         onRefresh={loadData}
+        onSaveProspect={saveProspectPatch}
       />
     </div>
   )

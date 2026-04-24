@@ -41,9 +41,17 @@ Cloudflare Pages Function env vars (set in Pages project settings for each envir
 SUPABASE_URL=https://tjaowjiccowofzisdfhr.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role key>   # preferred
 # SUPABASE_SERVICE_KEY can be used as an alias if your environment already uses that name.
+
+# SDR draft approvals (/api/sdr-approve -> v-two-sdr approval-handler.yml)
+SDR_GITHUB_PAT=<github token with actions:write on oliver-chase/v-two-sdr>
+SDR_GITHUB_REPO=oliver-chase/v-two-sdr          # optional override
+SDR_GITHUB_REF=main                             # optional override
+SDR_GITHUB_WORKFLOW=approval-handler.yml        # optional override
+# SDR_APPROVAL_TRUST_CLIENT_IDENTITY=1          # dev-only fallback (keep unset in staging/prod)
 ```
 
 If these server-side vars are missing, the hub will show a permissions-service warning and fall back to unrestricted module visibility.
+`/api/sdr-approve` expects Cloudflare Access identity headers in staging/prod and checks `app_users` for admin or `sdr` permission before dispatching approval workflows.
 
 ## Branch workflow
 
@@ -83,6 +91,16 @@ Use grouped commits tied to story IDs and include QA gate outcomes.
 - Commit grouping policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
 - Release traceability log: `src/tech-debt/release-traceability.md`
 - Generated browser artifacts must stay uncommitted: `test-results/`, `playwright-report/`
+
+## Chatbot contract
+
+If work changes frontend behavior or any user flow, OliverDock must be updated in the same change. Do not treat chatbot wiring as optional follow-up.
+
+- Every user-facing chatbot action must ship with fuzzy aliases.
+- Every module route must register a `conversationPath` so cross-module asks fail cleanly instead of dead-ending.
+- Structured writes or multi-step tasks must use a chatbot flow that gathers the needed information inside the dock.
+- Do not add chatbot redirects or popup-driven flows unless the user is explicitly asking for profile/security settings.
+- If a route or workflow is added, changed, renamed, hidden, or moved, update chatbot commands, flows, aliases, and smoke coverage in the same PR.
 
 ## Layout
 

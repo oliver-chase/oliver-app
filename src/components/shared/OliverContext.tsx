@@ -8,6 +8,11 @@ export interface OliverAction {
   label: string
   group: 'Create' | 'Search' | 'Quick' | 'Edit'
   hint?: string
+  /**
+   * Required synonyms for fuzzy routing. Every user-facing action must have
+   * at least one alias so frontend/user-flow changes stay discoverable in chat.
+   */
+  aliases: string[]
   /** If true, action is hidden from the chip row and only surfaces via fuzzy typeahead. */
   granular?: boolean
   run: () => void | Promise<void>

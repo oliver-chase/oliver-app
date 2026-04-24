@@ -8,11 +8,13 @@ export const SLIDES_COMMANDS: CommandMeta[] = [
     label: 'Import HTML File',
     group: 'Create',
     hint: 'Upload a local HTML slide export',
+    aliases: ['import slides html', 'upload html', 'slide html file'],
   },
   {
     id: 'slides-parse-pasted',
     label: 'Parse Pasted HTML',
     group: 'Edit',
     hint: 'Convert the HTML currently in the editor',
+    aliases: ['parse html', 'convert pasted html', 'slides parser'],
   },
 ]

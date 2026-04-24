@@ -92,7 +92,7 @@ is documented in `src/tech-debt/deep-qa-workflow.md`.
 
 ### Per-module command registries (emerging pattern)
 Each route now ships a `commands.ts` listing its `OliverAction` metadata (id,
-label, group, hint) as `CommandMeta[]` — the page component composes these
+label, group, hint, aliases) as `CommandMeta[]` — the page component composes these
 with live `run` closures when registering its Oliver config. Keeps the action
 catalogue declarative and easy to diff.
 
@@ -106,6 +106,8 @@ catalogue declarative and easy to diff.
   root layout. Renders trigger button + popup panel with messages, fuzzy
   suggestions, and optional upload zone (when `config.upload` is set).
   Exports `triggerOliverUpload()` so page actions can fire the file picker.
+  Global profile/security intents route to `/profile`; all other route changes
+  stay inside-module unless the user explicitly asked to leave.
 - `src/components/shared/OliverContext.tsx` — `OliverProvider` + `useRegisterOliver(config)`.
   Each route registers its own `OliverConfig` (pageLabel, placeholder, greeting,
   actions, quickConvos, contextPayload, upload, onChatRefresh).
@@ -182,6 +184,11 @@ list is a pointer, not a replacement.
   at the top of `src/app/page.tsx`.
 - **OliverDock is mounted once** in `src/app/layout.tsx`. Each page registers
   via `useRegisterOliver`. Do not spawn additional chatbot components.
+- **Chatbot shipping contract** — if frontend behavior or user flow changes,
+  the chatbot must be updated in the same change: aliases for fuzzy match,
+  `conversationPath` coverage, flow coverage for structured tasks, and smoke
+  coverage for the new path. Non-profile chatbot actions must not redirect or
+  spawn popup-driven dead ends.
 - **Retired components** — never re-introduce: `CommandPalette`,
   `HrAgentPanel`, `ChatbotPanel`, `ChatbotUpload`, `#cp-fab`.
 - **Auth and users API** — MSAL/AuthGuard/login route are active again.

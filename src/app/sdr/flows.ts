@@ -5,16 +5,19 @@
  * reject-draft, log-call (note on prospect).
  *
  * Prospects and drafts come from the already-loaded SdrPage state; writes
- * go through the existing Supabase tables (sdr_prospects, sdr_approval_items)
- * and the /api/sdr-approve endpoint for draft approval.
+ * go through the existing Supabase tables (sdr_prospects) and the
+ * /api/sdr-approve endpoint for approve/reject orchestration.
  */
 import type { OliverFlow } from '@/components/shared/OliverContext'
 import type { SdrProspect, SdrApprovalItem } from '@/components/sdr/types'
-import { supabase } from '@/lib/supabase'
 
 type Ctx = {
   prospects: SdrProspect[]
   approvalItems: SdrApprovalItem[]
+  actor?: {
+    userId?: string
+    userEmail?: string
+  }
   refetch: () => Promise<void> | void
 }
 
@@ -23,7 +26,7 @@ const asText = (v: unknown) => (v == null ? '' : String(v).trim())
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
-  const { prospects, approvalItems, refetch } = ctx
+  const { prospects, approvalItems, actor, refetch } = ctx
 
   return [
     {
@@ -73,8 +76,19 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
           lu: ts,
           created_at: ts,
         }
-        const { error } = await supabase.from('sdr_prospects').insert(prospect)
-        if (error) return 'Insert failed: ' + error.message
+        const res = await fetch('/api/sdr-prospects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prospect,
+            user_id: actor?.userId || undefined,
+            user_email: actor?.userEmail || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          return ((payload as { error?: string }).error || 'Insert failed.')
+        }
         await refetch()
         return `Opportunity added for ${prospect.nm} (${prospect.co}).`
       },
@@ -106,11 +120,20 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
         const id = String(answers.prospect_id)
         const field = String(answers.field)
         const value = String(answers.value)
-        const { error } = await supabase
-          .from('sdr_prospects')
-          .update({ [field]: value, lu: now() })
-          .eq('id', id)
-        if (error) return 'Update failed: ' + error.message
+        const res = await fetch('/api/sdr-prospects', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            patch: { [field]: value, lu: now() },
+            user_id: actor?.userId || undefined,
+            user_email: actor?.userEmail || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          return ((payload as { error?: string }).error || 'Update failed.')
+        }
         await refetch()
         return `Updated ${field} on that prospect.`
       },
@@ -132,11 +155,20 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
         const p = prospects.find(x => x.id === id)
         const prev = p?.lc ?? ''
         const merged = prev ? `${prev}\n---\n${new Date().toLocaleDateString()} — ${note}` : note
-        const { error } = await supabase
-          .from('sdr_prospects')
-          .update({ lc: merged, lu: now() })
-          .eq('id', id)
-        if (error) return 'Update failed: ' + error.message
+        const res = await fetch('/api/sdr-prospects', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            patch: { lc: merged, lu: now() },
+            user_id: actor?.userId || undefined,
+            user_email: actor?.userEmail || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          return ((payload as { error?: string }).error || 'Update failed.')
+        }
         await refetch()
         return 'Call logged.'
       },
@@ -158,11 +190,19 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
         const res = await fetch('/api/sdr-approve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, action: 'approve' }),
+          body: JSON.stringify({
+            id,
+            action: 'approve',
+            user_id: actor?.userId || undefined,
+            user_email: actor?.userEmail || undefined,
+          }),
         })
-        if (!res.ok) return 'Approval failed.'
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          return ((payload as { error?: string }).error || 'Approval failed.')
+        }
         await refetch()
-        return 'Draft approved — will send on the next batch.'
+        return 'Draft approved and queued for send processing.'
       },
     },
     {
@@ -180,13 +220,22 @@ export function buildSdrFlows(ctx: Ctx): OliverFlow[] {
       ],
       run: async (answers) => {
         const id = String(answers.draft_id)
-        const { error } = await supabase
-          .from('sdr_approval_items')
-          .update({ status: 'rejected' })
-          .eq('id', id)
-        if (error) return 'Update failed: ' + error.message
+        const res = await fetch('/api/sdr-approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            action: 'reject',
+            user_id: actor?.userId || undefined,
+            user_email: actor?.userEmail || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}))
+          return ((payload as { error?: string }).error || 'Rejection failed.')
+        }
         await refetch()
-        return 'Draft rejected.'
+        return 'Draft rejected and state restoration queued.'
       },
     },
   ]

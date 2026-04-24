@@ -4,10 +4,10 @@ Generated from story files, aggregate story index, coverage audit, README/config
 
 ## Summary
 
-- Fully traced behaviors: 34
+- Fully traced behaviors: 38
 - Partially traced behaviors: 4
-- Missing acceptance coverage / uncovered behaviors: 2
-- Story files considered: 121
+- Missing acceptance coverage / uncovered behaviors: 3
+- Story files considered: 165
 - Orphan stories: 0
 - Orphan behaviors: 2
 
@@ -55,8 +55,13 @@ Generated from story files, aggregate story index, coverage audit, README/config
 | B-038 | Browser smoke coverage for primary routes and core controls | tests/e2e/frontend-smoke.spec.ts; playwright.config.ts | US-OLV-122, US-OLV-124, US-OLV-125 | Full | Browser smoke | tests/e2e/frontend-smoke.spec.ts | Covers route shells, top-level navigation, representative module interactions, non-admin visibility/access behavior, and redirect/render regressions. |
 | B-039 | Clipboard copy support | design-system/page.tsx; HrInventory.tsx; NotesSection.tsx; SdrProspectDetail.tsx | US-OLV-120 | Full | Manual review | src/components/hr/HrInventory.tsx | Clipboard failure handling is limited. |
 | B-040 | User story backfill artifacts |  .github/user-stories/_index.md; .github/user-stories/oliver-app | US-OLV-118 | Full | Manual review | .github/user-stories/_index.md | Backfill artifact traced. |
-| B-041 | Coverage audit artifact |  .github/user-stories/oliver-app/audits/_coverage-audit.md | (none) | Missing | None | .github/user-stories/oliver-app/audits/_coverage-audit.md | Orphan behavior: audit doc has no story, and is stored outside the flat story directory so prompt-lint does not treat it as story markdown. |
-| B-042 | Analytics, notifications, webhooks, scheduled jobs | repo-wide search; _coverage-audit.md | (none) | Missing | None | .github/user-stories/oliver-app/audits/_coverage-audit.md | Orphan behavior category: explicitly absent; no implemented surface found. |
+| B-041 | Slide module shell route, access guard, and hub registration | src/app/slides/page.tsx; src/modules/use-module-access.ts; src/modules/registry.ts; tests/e2e/frontend-smoke.spec.ts | US-SLD-001 | Full | Browser smoke + manual review | src/app/slides/page.tsx | Route shell and permission gating are implemented; feature surface is currently import-first. |
+| B-042 | Slide HTML import command and flow wiring | src/app/slides/commands.ts; src/app/slides/flows.ts; src/app/slides/page.tsx | US-SLD-002 | Full | Manual review + browser smoke | src/app/slides/flows.ts | Import-file and parse-pasted flows are implemented and connected to the slides page actions. |
+| B-043 | Slide parser warnings, sanitization, normalization, and regression checks | src/components/slides/html-import.ts; tests/e2e/frontend-smoke.spec.ts; .github/user-stories/oliver-app/backlog/oliver-requirements-2026-04-24/US-O13-*.md..US-O16-*.md | US-SLD-003, US-O13, US-O14, US-O15, US-O16 | Full | Browser smoke + manual review | tests/e2e/frontend-smoke.spec.ts | Parser behavior is implemented and smoke-covered; canonicalization in story index/audits was the tracking gap. |
+| B-044 | Slide module UX copy accuracy vs current shipped capability | src/modules/registry.ts; src/app/slides/page.tsx | US-SLD-004 | Missing | None | src/modules/registry.ts | Current copy still references template/export workflows beyond current import-first implementation. |
+| B-045 | Slide coverage/verification artifacts included in canonical audits | .github/user-stories/_index.md; .github/user-stories/oliver-app/audits/_coverage-audit.md; _verification-audit.md; _traceability-matrix.md | US-SLD-005 | Full | Manual review | .github/user-stories/oliver-app/audits/_traceability-matrix.md | Audits and index now include explicit slide-module coverage paths and backlog bundle references. |
+| B-046 | Coverage audit artifact |  .github/user-stories/oliver-app/audits/_coverage-audit.md | (none) | Missing | None | .github/user-stories/oliver-app/audits/_coverage-audit.md | Orphan behavior: audit doc has no story, and is stored outside the flat story directory so prompt-lint does not treat it as story markdown. |
+| B-047 | Analytics, notifications, webhooks, scheduled jobs | repo-wide search; _coverage-audit.md | (none) | Missing | None | .github/user-stories/oliver-app/audits/_coverage-audit.md | Orphan behavior category: explicitly absent; no implemented surface found. |
 
 ## Orphan Stories
 
@@ -64,12 +69,13 @@ None.
 
 ## Orphan Behaviors
 
-- B-041 Coverage audit artifact: Orphan behavior: audit doc has no story, and prompt-lint treats it as invalid story markdown.
-- B-042 Analytics, notifications, webhooks, scheduled jobs: Orphan behavior category: explicitly absent; no implemented surface found.
+- B-046 Coverage audit artifact: Orphan behavior: audit doc has no story, and prompt-lint treats it as invalid story markdown.
+- B-047 Analytics, notifications, webhooks, scheduled jobs: Orphan behavior category: explicitly absent; no implemented surface found.
 
 ## Highest-Risk Gaps
 
 - Permission and admin stories now have implementation coverage, but they still need manual validation in an environment with service-role users API access and seeded admin data.
 - Chat history persistence now has code coverage, but still needs manual validation against a Supabase project with the updated schema applied.
+- Slide module has parser-level implementation coverage, but end-to-end editor/library/save/export behavior remains a product gap.
 - The coverage audit is an orphan behavior and is stored under `audits/` because prompt-lint treats every markdown file in the flat story folder as a story.
 - Automated browser smoke now covers the primary shells and representative controls, but the majority of behavior still relies on manual review or environment-backed validation.

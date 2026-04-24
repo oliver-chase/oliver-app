@@ -44,6 +44,12 @@ If re-opening, add a dated note under the entry with the reason.
 - Post-write UI refresh: `config.onChatRefresh?.()` fires after commit (closes tech-debt #13 from Audit #2).
 - ID collisions resolved via component-scoped `useRef(0)`.
 - `Cmd/Ctrl+K` opens dock in command mode; `Esc` closes; `/` still drives HR `GlobalSearch` (separate surface, kept).
+- Chatbot shipping contract:
+  - Every user-facing action ships with fuzzy aliases.
+  - Every module route keeps a `conversationPath`.
+  - Structured tasks collect required information in-chat via a flow before they are considered complete.
+  - Redirects/popups are banned for chatbot actions unless the user is explicitly asking for profile/security settings.
+  - Any frontend or user-flow change must update chatbot commands/flows/tests in the same change.
 
 ### Retired components (do not re-introduce)
 - `src/components/hr/CommandPalette.tsx` — merged into OliverDock command mode.

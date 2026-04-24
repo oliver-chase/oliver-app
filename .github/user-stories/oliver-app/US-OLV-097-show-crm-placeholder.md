@@ -1,8 +1,8 @@
 ---
 ID: US-OLV-097
 Title: Show CRM placeholder
-Status: Not Started
-Verified: false
+Status: Code Present
+Verified: true
 Backdated: 2026-04-16
 Milestone: Port Accounts UX and complete module hub shell
 
@@ -11,10 +11,10 @@ I want to see that CRM is planned but not yet implemented
 So that I understand why the CRM module is unavailable
 
 Acceptance Criteria:
-- [ ] /crm renders a coming-soon panel.
-- [ ] The CRM sidebar has an Overview item.
-- [ ] The route links back to the hub.
-- [ ] No real CRM CRUD controls are presented.
+- [x] /crm renders a coming-soon panel.
+- [x] The CRM sidebar has an Overview item.
+- [x] The route links back to the hub.
+- [x] No real CRM CRUD controls are presented.
 
-Notes: The placeholder exists; CRM feature implementation itself has not started.
+Notes: CRM remains intentionally placeholder-only while preserving explicit navigation and non-CRUD constraints.
 ---

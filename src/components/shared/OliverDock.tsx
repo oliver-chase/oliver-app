@@ -1,11 +1,12 @@
 'use client'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction, OliverFlow } from './OliverContext'
 import { fuzzyFilter, fuzzyScore } from '@/lib/fuzzy'
 import { useUser } from '@/context/UserContext'
 import { useAuth } from '@/context/AuthContext'
-import { detectPathScopeViolation } from '@/lib/chatbot-intents'
+import { detectPathScopeViolation, detectProfileIntent } from '@/lib/chatbot-intents'
 import TranscriptReviewModal from './TranscriptReviewModal'
 import { ChatbotTopbar } from './ChatbotTopbar'
 import { ChatbotInputBar } from './ChatbotInputBar'
@@ -41,6 +42,7 @@ export default function OliverDock() {
   const { config, openSignal } = useOliverContext()
   const { appUser } = useUser()
   const { account } = useAuth()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [items, setItems] = useState<ChatItem[]>([])
@@ -186,6 +188,26 @@ export default function OliverDock() {
   // Granular per-entity actions (edit person X) stay hidden from chips and only
   // surface via fuzzy typeahead.
   const fabActions = useMemo(() => config?.actions.filter(a => !a.granular) ?? [], [config])
+  const profileAction = useMemo<OliverAction>(() => ({
+    id: 'global-profile-settings',
+    label: 'Profile Settings',
+    group: 'Quick',
+    hint: 'Manage password, email, name, and sign-in settings',
+    aliases: [
+      'change password',
+      'update password',
+      'security settings',
+      'security info',
+      'change email',
+      'change name',
+      'profile',
+      'my account',
+      'personal info',
+      'sign-in settings',
+    ],
+    granular: true,
+    run: () => { router.push('/profile') },
+  }), [router])
   const commandPool = useMemo<OliverAction[]>(() => {
     if (!config) return []
     const flowCommands: OliverAction[] = (config.flows ?? []).map(flow => ({
@@ -193,27 +215,23 @@ export default function OliverDock() {
       label: flow.label,
       group: 'Quick',
       hint: flow.hint,
+      aliases: flow.aliases ?? [],
       granular: true,
       run: () => {},
     }))
-    return [...config.actions, ...flowCommands]
-  }, [config])
-
-  const flowAliasesById = useMemo(() => {
-    if (!config?.flows) return new Map<string, string>()
-    return new Map(config.flows.map(flow => [flow.id, (flow.aliases ?? []).join(' ')]))
-  }, [config])
+    const hasProfileAction = config.actions.some(action => normalize(action.label) === normalize(profileAction.label))
+    return [...config.actions, ...flowCommands, ...(hasProfileAction ? [] : [profileAction])]
+  }, [config, profileAction])
 
   // Fuzzy suggestions driven by input (top 3, ≤2 edits).
   const suggestions = useMemo(() => {
     if (!config || !input.trim()) return []
     return fuzzyFilter(input, commandPool, a => {
-      const aliases = flowAliasesById.get(a.id) ?? ''
-      return a.label + ' ' + (a.hint ?? '') + ' ' + aliases
+      return a.label + ' ' + (a.hint ?? '') + ' ' + a.aliases.join(' ')
     })
       .slice(0, 3)
       .map(h => h.item)
-  }, [commandPool, config, flowAliasesById, input])
+  }, [commandPool, config, input])
 
   function normalize(text: string) {
     return text.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -388,6 +406,10 @@ export default function OliverDock() {
         supplyFlowAnswer(resolved)
         return
       }
+    }
+    if (detectProfileIntent(text)) {
+      void executeAction(profileAction)
+      return
     }
     // Execute top fuzzy match; fall through to chat if none found.
     if (suggestions.length > 0) {

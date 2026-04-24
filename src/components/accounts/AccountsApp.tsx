@@ -231,7 +231,11 @@ export default function AccountsApp() {
         case 'export-data':       run = () => {
           const accountId = ensureAccountSelected()
           if (!accountId) return
-          setExportOpen(true)
+          setTimeout(() => {
+            const button = document.getElementById('btn-export-plan')
+            button?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            ;(button as HTMLButtonElement | null)?.focus()
+          }, 120)
         }; break
         default:                  run = () => {}
       }

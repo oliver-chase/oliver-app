@@ -126,6 +126,22 @@ test.describe('frontend smoke', () => {
     await expect(page.locator('#notes')).toBeVisible()
   })
 
+  test('accounts chatbot fuzzy aliases start flows and profile intents route to profile', async ({ page }) => {
+    await gotoAndSettle(page, '/accounts')
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+
+    await input.fill('add client')
+    await input.press('Enter')
+    await expect(page.getByText(/Short name\?/)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Start over' }).click()
+    await input.fill('change password')
+    await input.press('Enter')
+    await expect(page).toHaveURL(/\/profile\/?$/)
+  })
+
   test('hr sidebar and section navigation work', async ({ page }) => {
     await gotoAndSettle(page, '/hr')
 
@@ -210,6 +226,38 @@ test.describe('frontend smoke', () => {
     await expect(page.getByText(/Loading|Synced|Error/).first()).toBeVisible()
   })
 
+  test('sdr chatbot quick commands route to intended tabs', async ({ page }) => {
+    await gotoAndSettle(page, '/sdr')
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    await page.getByRole('button', { name: 'Open Draft Queue' }).first().click()
+    await expect(page.locator('.page-title').filter({ hasText: 'Drafts' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Open Outreach' }).first().click()
+    await expect(page.getByText('Outreach').nth(1)).toBeVisible()
+  })
+
+  test('sdr prospect detail exposes pipeline edit controls', async ({ page }) => {
+    await gotoAndSettle(page, '/sdr')
+
+    await page.locator('.app-sidebar-item', { hasText: 'Prospects' }).click()
+    const prospectCards = page.locator('.sdr-prospect-card')
+    const count = await prospectCards.count()
+    if (count === 0) return
+    await prospectCards.first().click()
+    await expect(page.locator('[data-testid="sdr-pipeline-editor"]')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save Pipeline Changes' })).toBeVisible()
+  })
+
+  test('crm route stays in explicit coming-soon mode without CRUD controls', async ({ page }) => {
+    await gotoAndSettle(page, '/crm')
+
+    await expect(page.getByText('Coming Soon')).toBeVisible()
+    await expect(page.locator('.app-sidebar-item.active').getByText('Overview')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Back to Hub/ })).toBeVisible()
+    await expect(page.locator('#main-content').locator('input, textarea, [role="combobox"]')).toHaveCount(0)
+  })
+
   test('admin tabs switch and design system link works', async ({ page }) => {
     await gotoAndSettle(page, '/admin')
 
@@ -265,10 +313,11 @@ test.describe('frontend smoke', () => {
     await expect(page.getByText('Component Contract Catalog')).toBeVisible()
   })
 
-  test('slides module parses pasted html into component json', async ({ page }) => {
+  test('US-SLD-003 slides module parses pasted html into component json', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
     await expect(page.getByRole('heading', { name: 'HTML to Editable Components' })).toBeVisible()
+    await expect(page.getByText(/Canvas editing and export are in the editor backlog \(coming soon\)\./)).toBeVisible()
     const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
       <h1 style="position:absolute;left:100px;top:120px;width:800px;font-size:64px;color:#FEFFFF;">Hello</h1>
       <div class="card" style="position:absolute;left:120px;top:260px;width:420px;">Card Body</div>
@@ -282,7 +331,7 @@ test.describe('frontend smoke', () => {
     await expect(page.locator('.slides-code')).toContainText('"type": "card"')
   })
 
-  test('slides import sanitizes markup and warns on unsupported units/transforms', async ({ page }) => {
+  test('US-SLD-003 slides import sanitizes markup and warns on unsupported units/transforms', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
     const rawHtml = `<div class="slide-canvas" style="width:1280px;height:720px;">
@@ -308,7 +357,7 @@ test.describe('frontend smoke', () => {
     expect(String(parsedComponents[0]?.content || '')).not.toContain('javascript:')
   })
 
-  test('slides import normalizes coordinates and applies simple translate offsets', async ({ page }) => {
+  test('US-SLD-003 slides import normalizes coordinates and applies simple translate offsets', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
     const rawHtml = `<div class="slide-canvas" style="width:1280px;height:720px;">
