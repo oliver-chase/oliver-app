@@ -26,6 +26,8 @@ const UserContext = createContext<UserContextType>({
 
 const E2E_AUTH_BYPASS = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
 const USER_LOAD_RETRY_DELAYS_MS = [0, 1200, 3000]
+const BUILTIN_OWNER_EMAILS = new Set(['kiana.micari@vtwo.co'])
+const OWNER_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides']
 
 function getAccountOid(account: AccountInfo | null) {
   if (!account) return null
@@ -40,6 +42,30 @@ function getAccountOid(account: AccountInfo | null) {
 function getAccountName(account: AccountInfo | null) {
   if (!account) return ''
   return account.name || account.username || ''
+}
+
+function normalizeEmail(value: string | null | undefined) {
+  return (value || '').trim().toLowerCase()
+}
+
+function isBuiltinOwnerAccount(account: AccountInfo | null) {
+  return BUILTIN_OWNER_EMAILS.has(normalizeEmail(account?.username))
+}
+
+function getBuiltinOwnerUser(account: AccountInfo | null, userId?: string | null): AppUser {
+  const now = new Date().toISOString()
+  return {
+    user_id: userId || account?.localAccountId || account?.homeAccountId || 'kiana-micari-owner',
+    email: normalizeEmail(account?.username) || 'kiana.micari@vtwo.co',
+    name: getAccountName(account) || 'Kiana Micari',
+    role: 'admin',
+    page_permissions: OWNER_PERMISSIONS,
+    created_at: now,
+    updated_at: now,
+    is_owner: true,
+    effective_role: 'admin',
+    effective_page_permissions: OWNER_PERMISSIONS,
+  }
 }
 
 function getBypassUser(account: AccountInfo | null): AppUser {
@@ -94,6 +120,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     const userId = getAccountOid(account)
     if (!userId) {
+      if (isBuiltinOwnerAccount(account)) {
+        setAppUser(getBuiltinOwnerUser(account))
+        setLoadError(null)
+        setIsLoading(false)
+        return
+      }
       setAppUser(null)
       setLoadError('Missing Azure user identifier')
       setIsLoading(false)
@@ -125,6 +157,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           lastError = err
         }
+      }
+
+      if (isBuiltinOwnerAccount(account)) {
+        setAppUser(getBuiltinOwnerUser(account, userId))
+        setLoadError(null)
+        return
       }
 
       setAppUser(null)
