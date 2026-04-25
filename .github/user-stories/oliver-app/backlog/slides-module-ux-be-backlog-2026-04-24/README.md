@@ -14,6 +14,7 @@ Goal: create one actionable backlog that covers:
 - Save/autosave, revision conflict handling, draft recovery, HTML export metadata, PDF print contract, and audit feed are implemented.
 - Core editor UX now includes resize handles with guardrails, inline text edit mode, style toolbar controls, multi-select alignment/distribution tools, undo/redo history, and keyboard-first shortcut support.
 - Locked-layer guardrails now enforce immutability for protected components across keyboard, pointer, resize, and toolbar styling/alignment actions.
+- Library search now has explicit no-match guidance across My Slides/templates/activity and template visibility is constrained server-side before query limiting.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
 
 ## Epic Breakdown
@@ -25,6 +26,7 @@ Goal: create one actionable backlog that covers:
 | S2 | Core Editor UX (Frontend) | `US-SLD-020`..`US-SLD-025` | Net-new |
 | S2.1 | Visual Regression Hardening | `US-SLD-026` | Net-new |
 | S2.2 | Interaction Safety Hardening | `US-SLD-027` | Net-new |
+| S2.3 | Library Search Hardening | `US-SLD-028` | Net-new |
 | S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
 
 ## Epic Status (Current Branch)
@@ -36,6 +38,7 @@ Goal: create one actionable backlog that covers:
 | S2 | Complete (`US-SLD-020`..`US-SLD-025`) | Ready to commit as one epic milestone |
 | S2.1 | Complete (`US-SLD-026`) | Ready to commit as one epic milestone |
 | S2.2 | Complete (`US-SLD-027`) | Ready to commit as one epic milestone |
+| S2.3 | Complete (`US-SLD-028`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion

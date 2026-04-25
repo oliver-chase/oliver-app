@@ -255,8 +255,27 @@ export default function SlidesPage() {
     user_email: appUser?.email || 'qa-admin@example.com',
   }), [appUser])
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
+  const trimmedSearchValue = searchValue.trim()
+  const searchLabel = workspaceTab === 'activity' ? 'Search activity' : 'Search library'
+  const searchPlaceholder = workspaceTab === 'activity' ? 'Search activity events' : 'Search slides or templates'
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
+  const filteredAudits = useMemo(() => {
+    const query = trimmedSearchValue.toLowerCase()
+    if (!query) return audits
+    return audits.filter((event) => {
+      const haystack = [
+        event.action,
+        event.entity_type,
+        event.entity_id,
+        event.outcome,
+        event.error_class || '',
+        event.actor_email || '',
+        event.actor_user_id,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [audits, trimmedSearchValue])
   const canvasDimensions = useMemo(() => {
     const width = result?.canvas.width || CANVAS_DEFAULT_WIDTH
     const height = result?.canvas.height || CANVAS_DEFAULT_HEIGHT
@@ -1810,13 +1829,13 @@ export default function SlidesPage() {
 
             <div className="slides-toolbar-row">
               <label className="slides-search-wrap" htmlFor="slides-search">
-                <span className="slides-search-label">Search library</span>
+                <span className="slides-search-label">{searchLabel}</span>
                 <input
                   id="slides-search"
                   type="search"
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
-                  placeholder="Search slides or templates"
+                  placeholder={searchPlaceholder}
                   className="slides-search"
                 />
               </label>
@@ -2372,7 +2391,11 @@ export default function SlidesPage() {
               <div className="slides-library-section">
                 <h2>My Slides</h2>
                 {slides.length === 0 && (
-                  <p className="slides-empty">No saved slides yet. Parse HTML and click Save Slide to create your first record.</p>
+                  <p className="slides-empty">
+                    {trimmedSearchValue
+                      ? `No slides match "${trimmedSearchValue}". Clear or update search to continue.`
+                      : 'No saved slides yet. Parse HTML and click Save Slide to create your first record.'}
+                  </p>
                 )}
                 {slides.map((slide) => (
                   <article key={slide.id} className="slides-library-card">
@@ -2397,7 +2420,11 @@ export default function SlidesPage() {
               <div className="slides-library-section">
                 <h2>Template Library</h2>
                 {templates.length === 0 && (
-                  <p className="slides-empty">No templates available yet.</p>
+                  <p className="slides-empty">
+                    {trimmedSearchValue
+                      ? `No templates match "${trimmedSearchValue}". Clear or update search to continue.`
+                      : 'No templates available yet.'}
+                  </p>
                 )}
                 {templates.map((template) => (
                   <article key={template.id} className="slides-library-card">
@@ -2425,10 +2452,14 @@ export default function SlidesPage() {
             {workspaceTab === 'activity' && (
               <div className="slides-library-section">
                 <h2>Slide Operations</h2>
-                {audits.length === 0 && (
-                  <p className="slides-empty">No audit events found yet.</p>
+                {filteredAudits.length === 0 && (
+                  <p className="slides-empty">
+                    {trimmedSearchValue
+                      ? `No activity events match "${trimmedSearchValue}". Clear or update search to continue.`
+                      : 'No audit events found yet.'}
+                  </p>
                 )}
-                {audits.map((event) => (
+                {filteredAudits.map((event) => (
                   <article key={event.id} className="slides-library-card">
                     <div>
                       <h3>{event.action}</h3>

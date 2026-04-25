@@ -483,6 +483,48 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card')).toHaveCount(3)
   })
 
+  test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Search Test Slide</h1></div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.locator('#slides-title').fill('Library Search Smoke')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await expect(page.getByText('Library Search Smoke')).toBeVisible()
+
+    await page.locator('#slides-search').fill('zz-no-slide-match')
+    await expect(page.locator('.slides-library-card')).toHaveCount(0)
+    await expect(page.getByText('No slides match "zz-no-slide-match". Clear or update search to continue.')).toBeVisible()
+
+    await page.locator('#slides-search').fill('')
+    await expect(page.getByText('Library Search Smoke')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Template Library' }).click()
+    await expect(page.getByText('Hero + Metric Row')).toBeVisible()
+
+    await page.locator('#slides-search').fill('zz-no-template-match')
+    await expect(page.locator('.slides-library-card')).toHaveCount(0)
+    await expect(page.getByText('No templates match "zz-no-template-match". Clear or update search to continue.')).toBeVisible()
+
+    await page.locator('#slides-search').fill('')
+    await expect(page.getByText('Hero + Metric Row')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await expect(page.getByText('save').first()).toBeVisible()
+
+    await page.locator('#slides-search').fill('zz-no-activity-match')
+    await expect(page.locator('.slides-library-card')).toHaveCount(0)
+    await expect(page.getByText('No activity events match "zz-no-activity-match". Clear or update search to continue.')).toBeVisible()
+
+    await page.locator('#slides-search').fill('save')
+    await expect(page.getByText('save').first()).toBeVisible()
+  })
+
   test('US-SLD-034, US-SLD-035, and US-SLD-036 draft recovery and activity feed surface save/export events', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

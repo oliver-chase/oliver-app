@@ -670,6 +670,9 @@ export async function onRequestGet(context) {
 
   if (resource === 'templates') {
     let path = '/rest/v1/slide_templates?is_archived=eq.false&select=*&order=updated_at.desc&limit=' + String(limit);
+    if (actor.role !== 'admin') {
+      path += '&or=' + encodeURIComponent(`(is_shared.eq.true,owner_user_id.eq.${actor.user_id})`);
+    }
     path = addSearch(path, 'name', search);
 
     const response = await supabaseFetch(env, path);
