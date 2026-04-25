@@ -1174,8 +1174,9 @@ export default function SlidesPage() {
   }, [searchValue, auditActionFilter, auditOutcomeFilter, auditEntityTypeFilter, auditDateFrom, auditDateTo])
 
   useEffect(() => {
+    if (!allowRender) return
     void refreshLibraryData()
-  }, [refreshLibraryData])
+  }, [allowRender, refreshLibraryData])
 
   useEffect(() => {
     if (isSlidesAdmin) return

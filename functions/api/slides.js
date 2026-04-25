@@ -8,6 +8,8 @@ import { jsonResponse, errorResponse } from './_shared/ai.js';
 const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
+const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
+const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides'];
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
@@ -64,6 +66,54 @@ function assertSupabaseConfigured(env) {
 function normalizeEmail(value) {
   if (typeof value !== 'string') return '';
   return value.trim().toLowerCase();
+}
+
+function normalizeUserId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function parseOwnerPolicy(env) {
+  const ownerEmails = new Set(
+    [...DEFAULT_OWNER_EMAILS, ...(env.OWNER_EMAILS || '').split(',')]
+      .map((item) => normalizeEmail(item))
+      .filter(Boolean),
+  );
+  const ownerUserIds = new Set(
+    (env.OWNER_USER_IDS || '')
+      .split(',')
+      .map((item) => normalizeUserId(item))
+      .filter(Boolean),
+  );
+  return { ownerEmails, ownerUserIds };
+}
+
+function isOwnerIdentity(identity, ownerPolicy) {
+  if (!identity || !ownerPolicy) return false;
+  const email = normalizeEmail(identity.email || '');
+  const userId = normalizeUserId(identity.userId || '');
+  if (email && ownerPolicy.ownerEmails.has(email)) return true;
+  if (userId && ownerPolicy.ownerUserIds.has(userId)) return true;
+  return false;
+}
+
+function enforceOwnerInvariant(appUser, identity, ownerPolicy) {
+  const owner = isOwnerIdentity({
+    email: appUser?.email || identity?.email || '',
+    userId: appUser?.user_id || identity?.userId || '',
+  }, ownerPolicy);
+
+  if (!owner) return appUser || null;
+
+  const userId = normalizeUserId(appUser?.user_id || identity?.userId || 'owner');
+  const email = normalizeEmail(appUser?.email || identity?.email || '');
+  return {
+    ...(appUser || {}),
+    user_id: userId || 'owner',
+    email,
+    role: 'admin',
+    page_permissions: [...ALL_PAGE_PERMISSIONS],
+  };
 }
 
 function normalizeActorBody(raw) {
@@ -138,7 +188,9 @@ async function fetchActorAppUser(env, identity) {
   const supabaseUrl = resolveSupabaseUrl(env);
   let path = '';
 
-  if (identity.email) {
+  if (identity.email && identity.userId) {
+    path = '/rest/v1/app_users?or=(email.eq.' + encodeURIComponent(identity.email) + ',user_id.eq.' + encodeURIComponent(identity.userId) + ')&select=user_id,email,role,page_permissions&limit=1';
+  } else if (identity.email) {
     path = '/rest/v1/app_users?email=eq.' + encodeURIComponent(identity.email) + '&select=user_id,email,role,page_permissions&limit=1';
   } else if (identity.userId) {
     path = '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(identity.userId) + '&select=user_id,email,role,page_permissions&limit=1';
@@ -173,35 +225,39 @@ function isAuthorizedSlidesActor(appUser) {
   if (!appUser) return false;
   if (appUser.role === 'admin') return true;
   if (!Array.isArray(appUser.page_permissions)) return false;
-  return appUser.page_permissions.includes('slides');
+  return appUser.page_permissions.some((permission) => typeof permission === 'string' && permission.toLowerCase() === 'slides');
 }
 
 async function authorizeActor(request, body, env) {
   const identity = resolveActorIdentity(request, body, env);
   if (!identity) return { ok: false, status: 401, error: 'Unauthorized slide write request. Missing verified actor identity.' };
+  const ownerPolicy = parseOwnerPolicy(env);
 
   const actorLookup = await fetchActorAppUser(env, identity);
   if (!actorLookup.ok) return actorLookup;
+  const actor = enforceOwnerInvariant(actorLookup.row, identity, ownerPolicy);
 
-  if (!isAuthorizedSlidesActor(actorLookup.row)) {
+  if (!isAuthorizedSlidesActor(actor)) {
     return { ok: false, status: 403, error: 'Forbidden. Slides permission required.' };
   }
 
-  return { ok: true, actor: actorLookup.row };
+  return { ok: true, actor };
 }
 
 async function authorizeActorForRead(request, env) {
   const identity = resolveActorIdentityFromQuery(request, env);
   if (!identity) return { ok: false, status: 401, error: 'Unauthorized slide read request. Missing verified actor identity.' };
+  const ownerPolicy = parseOwnerPolicy(env);
 
   const actorLookup = await fetchActorAppUser(env, identity);
   if (!actorLookup.ok) return actorLookup;
+  const actor = enforceOwnerInvariant(actorLookup.row, identity, ownerPolicy);
 
-  if (!isAuthorizedSlidesActor(actorLookup.row)) {
+  if (!isAuthorizedSlidesActor(actor)) {
     return { ok: false, status: 403, error: 'Forbidden. Slides permission required.' };
   }
 
-  return { ok: true, actor: actorLookup.row };
+  return { ok: true, actor };
 }
 
 function isObject(value) {
