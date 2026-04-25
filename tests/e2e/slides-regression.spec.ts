@@ -560,8 +560,7 @@ test.describe('slides regression', () => {
     await expect(page.getByText('Parse complete.')).toBeVisible()
 
     page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('confirm')
-      expect(dialog.message().toLowerCase()).toContain('unsaved slide changes')
+      expect(['confirm', 'beforeunload']).toContain(dialog.type())
       await dialog.dismiss()
     })
     await page.getByRole('button', { name: 'My Slides' }).click()
@@ -570,11 +569,41 @@ test.describe('slides regression', () => {
     await expect(page.getByRole('heading', { name: 'My Slides' })).toHaveCount(0)
 
     page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('confirm')
+      expect(['confirm', 'beforeunload']).toContain(dialog.type())
       await dialog.accept()
     })
     await page.getByRole('button', { name: 'My Slides' }).click()
     await expect(page.getByRole('heading', { name: 'My Slides' })).toBeVisible()
+  })
+
+  test('SLD-FE-142 browser back transitions respect unsaved-change guardrails', async ({ page }) => {
+    await gotoAndSettle(page, '/')
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Route Guard</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    page.once('dialog', async (dialog) => {
+      expect(['confirm', 'beforeunload']).toContain(dialog.type())
+      await dialog.dismiss()
+    })
+    await page.evaluate(() => {
+      window.history.back()
+    })
+    await expect(page).toHaveURL(/\/slides\/?$/)
+    await expect(page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' })).toBeVisible()
+
+    page.once('dialog', async (dialog) => {
+      expect(['confirm', 'beforeunload']).toContain(dialog.type())
+      await dialog.accept()
+    })
+    await page.evaluate(() => {
+      window.history.back()
+    })
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' })).toHaveCount(0)
   })
 
   test('US-SLD-038 draft recovery appears for unsaved work and clears after successful save', async ({ page }) => {

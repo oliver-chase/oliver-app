@@ -89,6 +89,12 @@ interface CanvasEditorNotice {
   text: string
 }
 
+function readHistoryIndex(state: unknown): number | null {
+  if (!state || typeof state !== 'object') return null
+  const candidate = (state as { idx?: unknown }).idx
+  return typeof candidate === 'number' ? candidate : null
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -249,6 +255,8 @@ export default function SlidesPage() {
   const canvasDragMovedRef = useRef(false)
   const canvasResizeMovedRef = useRef(false)
   const canvasContentRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const historyIndexRef = useRef<number | null>(null)
+  const historyBounceRef = useRef(false)
 
   const actor = useMemo(() => ({
     user_id: appUser?.user_id || 'qa-admin-user',
@@ -1175,6 +1183,49 @@ export default function SlidesPage() {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    historyIndexRef.current = readHistoryIndex(window.history.state)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handlePopState = (event: PopStateEvent) => {
+      const nextIndex = readHistoryIndex(event.state)
+
+      if (historyBounceRef.current) {
+        historyBounceRef.current = false
+        historyIndexRef.current = nextIndex
+        return
+      }
+
+      if (!hasUnsavedChanges) {
+        historyIndexRef.current = nextIndex
+        return
+      }
+
+      const approved = window.confirm(UNSAVED_CHANGES_CONFIRM_TEXT)
+      if (approved) {
+        historyIndexRef.current = nextIndex
+        return
+      }
+
+      const previousIndex = historyIndexRef.current
+      historyBounceRef.current = true
+
+      if (previousIndex != null && nextIndex != null && nextIndex > previousIndex) {
+        window.history.back()
+        return
+      }
+
+      window.history.forward()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [hasUnsavedChanges])
 
   useEffect(() => {

@@ -8,8 +8,8 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Journey Stage | Current Behavior | Gap / Risk | Ticket(s) |
 | --- | --- | --- | --- |
 | Start from template | Template duplication works, then opens in Import workspace. | No thumbnail, no visual picker quality signal; template choice is mostly text-only. | SLD-FE-210, SLD-BE-210 |
-| Edit imported slide | Scaled 16:9 canvas renderer, baseline inline layer editing, and bounded drag/nudge controls are now available. | Resize handles and advanced edit controls are still missing. | SLD-FE-320 through SLD-FE-330 |
-| Save + leave safely | Save, conflict handling, draft recovery, autosave, and retry queue/backoff now exist. | Browser back route transitions still need full guard coverage for all navigation surfaces. | SLD-FE-142 |
+| Edit imported slide | Scaled 16:9 canvas renderer, resize handles, inline text editing, and bounded drag/nudge controls are available. | Advanced snapping/guides are still missing for precision layouts. | TBD |
+| Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | TBD |
 | Template publishing | Publish from My Slides works. | No template visibility controls (private/shared) or ownership governance workflows. | SLD-FE-400, SLD-BE-400 |
 | Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
 | Audit and compliance | Save/export/delete actions are logged. | No admin-grade filter/search/export for audit events; troubleshooting remains manual. | SLD-FE-420, SLD-BE-420 |
@@ -17,8 +17,8 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 ## Dead / Incomplete / Debt Findings
 
 1. `src/app/slides/page.tsx` is a 1k+ line orchestrator combining parser UX, persistence, export, conflict handling, and tab UI. This is high coupling debt and slows feature delivery.
-2. Oliver Dock command coverage is still narrow (import/parse only), creating a disconnected assistant journey for save/export/library operations.
-3. No confirmed dead code in the slides subtree right now; debt is mostly incomplete workflow coverage and oversized UI composition.
+2. No confirmed dead code in the slides subtree right now; debt is mostly oversized UI composition and missing operational tooling.
+3. Activity feed is read-only and lacks structured filter controls and export support for admin investigation workflows.
 
 ## Epic and Ticket Backlog
 
@@ -31,7 +31,7 @@ KPI: Unsaved-data loss incidents trend to zero and save-success rate remains >= 
 | SLD-FE-121 | Unsaved-change protection for leave/navigation | Frontend | P0 | Done (2026-04-25) | Confirm dialog on unsafe workspace navigation and hub leave; browser unload prompt when draft is unsaved. |
 | SLD-FE-123 | Draft lifecycle hardening (persist unsaved only, per-user keying) | Frontend | P0 | Done (2026-04-25) | Recovery appears only for unsaved drafts; saved/clean state clears recovery snapshot; per-user storage scope enforced. |
 | SLD-FE-140 | Offline retry queue with exponential backoff | Frontend | P1 | Done (2026-04-25) | Failed autosaves queue with exponential backoff, retry on reconnect/manual trigger, and surface queue health state in UI. |
-| SLD-FE-142 | Browser back/forward route guard coverage | Frontend | P1 | Backlog | Back/forward route transitions respect unsaved guardrails without trap loops. |
+| SLD-FE-142 | Browser back/forward route guard coverage | Frontend | P1 | Done (2026-04-25) | Back/forward route transitions respect unsaved guardrails without trap loops. |
 
 ## EPIC SLD-E2: Core Editing Experience
 Goal: Close the workflow gap between import and publish/export by adding true slide editing.
@@ -41,8 +41,8 @@ KPI: 80%+ of edits completed without leaving the slide module.
 | --- | --- | --- | --- | --- | --- |
 | SLD-FE-300 | Canvas renderer for parsed component model | Frontend | P0 | Done (2026-04-25) | Parsed components render on a scaled 16:9 canvas with deterministic positioning and baseline inline content editing. |
 | SLD-FE-310 | Drag and nudge movement controls | Frontend | P0 | Done (2026-04-25) | Mouse drag updates coordinates in real time and marks dirty on release; keyboard nudge supports 1px and Shift+10px movement with bounds clamping. |
-| SLD-FE-320 | Resize handles + bounds constraints | Frontend | P1 | Backlog | Width/height edits via handles with minimum-size and canvas bounds enforcement. |
-| SLD-FE-330 | Inline text editing with content sanitization parity | Frontend | P1 | Backlog | Text edit mode preserves sanitization guarantees and updates saved component content. |
+| SLD-FE-320 | Resize handles + bounds constraints | Frontend | P1 | Done (2026-04-25) | Width/height edits via handles with minimum-size and canvas bounds enforcement. |
+| SLD-FE-330 | Inline text editing with content sanitization parity | Frontend | P1 | Done (2026-04-25) | Text edit mode preserves sanitization guarantees and updates saved component content. |
 
 ## EPIC SLD-E3: Library and Governance
 Goal: Make shared templates and audits operationally usable for admins and teams.
@@ -67,6 +67,6 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 
 ## Next Features In Line
 
-1. SLD-FE-320: Add resize handles and bounds constraints so layer geometry can be edited directly on canvas.
-2. SLD-FE-400 + SLD-BE-400: Add template visibility/ownership controls so publish workflow is complete end-to-end.
-3. SLD-FE-142: Add browser back/forward route guard coverage across all slide navigation surfaces.
+1. SLD-FE-400 + SLD-BE-400: Add template visibility/ownership controls so publish workflow is complete end-to-end.
+2. SLD-FE-420 + SLD-BE-420: Add an operational audit explorer with server-side filtering and export.
+3. SLD-FE-500 + SLD-BE-500: Add native PPTX export flows with warnings reporting.
