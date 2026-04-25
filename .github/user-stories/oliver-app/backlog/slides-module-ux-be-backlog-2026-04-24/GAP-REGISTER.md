@@ -27,6 +27,13 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Backend ownership/collaborator governance actions with destination-user authorization | `SLD-BE-410` | S3.3 | Code Present |
 | Activity explorer filters + pagination + CSV export UX | `SLD-FE-420` | S3.2 | Code Present |
 | Audits API server-side filter/search/date pagination contract | `SLD-BE-420` | S3.2 | Code Present |
+| Template library visual picker with thumbnails and preview quality signals | `SLD-FE-210`, `SLD-BE-210` | S2.6 | Backlog Defined |
+| Precision canvas snapping and visual alignment guides | `SLD-FE-340` | S2.7 | Backlog Defined |
+| Unsaved-change/discard telemetry instrumentation and metrics | `SLD-FE-150`, `SLD-BE-150` | S1.5 | Backlog Defined |
+| Approval aging SLA indicators and stale-request escalation | `SLD-FE-440`, `SLD-BE-440` | S3.4 | Backlog Defined |
+| Saved audit filter presets and long-range asynchronous compliance exports | `SLD-FE-430`, `SLD-BE-430` | S3.5 | Backlog Defined |
+| Native PPTX export (single + multi) with warnings report and async job orchestration | `SLD-FE-500`, `SLD-BE-500`, `SLD-BE-510` | S4 | Backlog Defined |
+| Slides page orchestration decomposition for maintainability | `SLD-FE-610` | S6 | Backlog Defined |
 | Slide/template data model + RLS | `US-SLD-030` | S3 | Code Present |
 | Save API + autosave state contract | `US-SLD-031` | S3 | Code Present |
 | Template Library + My Slides FE/BE wiring | `US-SLD-032` | S3 | Code Present |

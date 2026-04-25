@@ -17,7 +17,11 @@ Goal: create one actionable backlog that covers:
 - Library search now has explicit no-match guidance across My Slides/templates/activity and template visibility is constrained server-side before query limiting.
 - Template publish workflow now supports private/shared visibility controls with owner/admin governance actions for visibility updates and archive.
 - Template library now surfaces current owner, supports ownership transfer handoff controls, and provides collaborator role management (editor/reviewer/viewer).
+- Template governance supports owner-submitted approvals and admin approve/reject resolution, but SLA aging/escalation automation is still pending.
 - Activity explorer now supports server-side pagination plus action/outcome/entity/date filters and CSV export for current filtered view.
+- Activity workflow lacks saved filter presets and long-range asynchronous export jobs for compliance operations.
+- Export platform still lacks native PPTX generation and multi-slide PPTX controls.
+- Template selection remains text-first with no preview thumbnails.
 - Slides chatbot coverage now includes parse/save/export/navigation command intents with guarded zero-step flow runtime handling.
 - Slides chatbot now supports direct HTML export download command execution to remove export dead-end follow-ups.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
@@ -34,10 +38,16 @@ Goal: create one actionable backlog that covers:
 | S2.3 | Library Search Hardening | `US-SLD-028` | Net-new |
 | S2.4 | Chat Command Parity Hardening | `US-SLD-029` | Net-new |
 | S2.5 | Chat Export Execution Hardening | `US-SLD-040` | Net-new |
+| S2.6 | Template Visual Selection Hardening | `SLD-FE-210`, `SLD-BE-210` | Net-new |
 | S3.1 | Template Governance + ACL Hardening | `SLD-FE-400`, `SLD-BE-400` | Net-new |
 | S3.3 | Template Delegation Hardening | `SLD-FE-410`, `SLD-BE-410` | Net-new |
 | S3.2 | Audit Explorer + Query Hardening | `SLD-FE-420`, `SLD-BE-420` | Net-new |
+| S3.4 | Approval SLA and Escalation Hardening | `SLD-FE-440`, `SLD-BE-440` | Net-new |
+| S3.5 | Audit Ops Presets + Long-Range Exports | `SLD-FE-430`, `SLD-BE-430` | Net-new |
 | S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
+| S1.5 | Reliability Telemetry Hardening | `SLD-FE-150`, `SLD-BE-150` | Net-new |
+| S2.7 | Precision Layout Hardening | `SLD-FE-340` | Net-new |
+| S6 | Maintainability Decomposition | `SLD-FE-610` | Net-new |
 
 ## Epic Status (Current Branch)
 
@@ -51,16 +61,25 @@ Goal: create one actionable backlog that covers:
 | S2.3 | Complete (`US-SLD-028`) | Ready to commit as one epic milestone |
 | S2.4 | Complete (`US-SLD-029`) | Ready to commit as one epic milestone |
 | S2.5 | Complete (`US-SLD-040`) | Ready to commit as one epic milestone |
+| S2.6 | Backlog (`SLD-FE-210`, `SLD-BE-210`) | Story definitions complete; implementation pending |
 | S3.1 | Complete (`SLD-FE-400`, `SLD-BE-400`) | Ready to commit as one epic milestone |
 | S3.3 | Complete (`SLD-FE-410`, `SLD-BE-410`) | Ownership/collaborator governance now includes approval submission + admin resolution workflow |
 | S3.2 | Complete (`SLD-FE-420`, `SLD-BE-420`) | Ready to commit as one epic milestone |
+| S3.4 | Backlog (`SLD-FE-440`, `SLD-BE-440`) | Story definitions complete; implementation pending |
+| S3.5 | Backlog (`SLD-FE-430`, `SLD-BE-430`) | Story definitions complete; implementation pending |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
+| S1.5 | Backlog (`SLD-FE-150`, `SLD-BE-150`) | Story definitions complete; implementation pending |
+| S2.7 | Backlog (`SLD-FE-340`) | Story definitions complete; implementation pending |
+| S6 | Backlog (`SLD-FE-610`) | Story definitions complete; decomposition pending |
 
 ## Priority Suggestion
 
-1. Add PPTX export platform slice with warnings/reporting (`SLD-FE-500`, `SLD-BE-500`).
-2. Add saved activity filter presets and long-range audit export jobs as follow-up ops backlog.
-3. Add governance SLA/escalation handling for stale pending template approvals.
+1. Add PPTX export platform slice with warnings/reporting and async orchestration (`SLD-FE-500`, `SLD-BE-500`, `SLD-BE-510`).
+2. Add template visual selection previews (`SLD-FE-210`, `SLD-BE-210`).
+3. Add saved activity filter presets and long-range audit export jobs (`SLD-FE-430`, `SLD-BE-430`).
+4. Add governance SLA/escalation handling for stale pending template approvals (`SLD-FE-440`, `SLD-BE-440`).
+5. Add precision snapping and guide overlays (`SLD-FE-340`).
+6. Add reliability telemetry and discard analytics (`SLD-FE-150`, `SLD-BE-150`).
 
 ## Execution and Commit Model
 
