@@ -529,6 +529,74 @@ test.describe('frontend smoke', () => {
     await editWorkspace.getByRole('button', { name: 'Cancel' }).first().click()
   })
 
+  test('design system token edits persist across reload through backend contract', async ({ page }) => {
+    const tokenStore: Record<string, { token_name: string; token_value: string; category: string; updated_at: string }> = {
+      '--color-brand-purple': {
+        token_name: '--color-brand-purple',
+        token_value: '#171433',
+        category: 'brand',
+        updated_at: '2026-04-25T00:00:00.000Z',
+      },
+    }
+
+    await page.route('**/rest/v1/design_tokens**', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(Object.values(tokenStore)),
+        })
+        return
+      }
+
+      if (method === 'POST') {
+        const payload = request.postDataJSON() as { token_name?: string; token_value?: string; category?: string } | Array<{ token_name?: string; token_value?: string; category?: string }>
+        const records = Array.isArray(payload) ? payload : [payload]
+        for (const row of records) {
+          if (!row?.token_name || !row?.token_value) continue
+          tokenStore[row.token_name] = {
+            token_name: row.token_name,
+            token_value: row.token_value,
+            category: row.category || 'other',
+            updated_at: '2026-04-25T12:00:00.000Z',
+          }
+        }
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify(records),
+        })
+        return
+      }
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+
+    await gotoAndSettle(page, '/design-system')
+    await page.getByRole('link', { name: 'Admin Edit Workspace' }).click()
+    const editWorkspace = page.locator('#sec-admin-edit')
+
+    const purpleTokenName = editWorkspace.getByText('--color-brand-purple').first()
+    await expect(purpleTokenName).toBeVisible()
+    const purpleRow = purpleTokenName.locator('xpath=ancestor::div[1]')
+    await purpleRow.getByRole('button', { name: 'Edit' }).click()
+    await purpleRow.getByRole('textbox').fill('#123456')
+    await purpleRow.getByRole('button', { name: 'Save' }).click()
+
+    await expect
+      .poll(() => tokenStore['--color-brand-purple']?.token_value)
+      .toBe('#123456')
+
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForLoadState('networkidle')
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-brand-purple').trim()))
+      .toBe('#123456')
+  })
+
   test('design system renders dynamic inventories from registries', async ({ page }) => {
     await gotoAndSettle(page, '/design-system')
 
