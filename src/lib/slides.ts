@@ -331,6 +331,7 @@ function normalizeAuditActionFilter(value: string | undefined): SlideAuditAction
     'reject-approval',
     'export-html',
     'export-pdf',
+    'export-pptx',
   ]
   return allowed.includes(value as SlideAuditAction | 'all') ? (value as SlideAuditAction | 'all') : 'all'
 }
@@ -1473,7 +1474,7 @@ export async function recordExportEvent(
   actorInput: SlideActor,
   params: {
     slideId: string
-    format: 'html' | 'pdf'
+    format: 'html' | 'pdf' | 'pptx'
     outcome: 'success' | 'failure'
     errorClass?: string
   },
@@ -1496,7 +1497,12 @@ export async function recordExportEvent(
     },
     () => {
       const store = readLocalStore(actor)
-      const action: SlideAuditAction = params.format === 'html' ? 'export-html' : 'export-pdf'
+      const action: SlideAuditAction =
+        params.format === 'html'
+          ? 'export-html'
+          : params.format === 'pdf'
+            ? 'export-pdf'
+            : 'export-pptx'
       makeAuditEvent(
         store,
         actor,

@@ -42,6 +42,14 @@ export const SLIDES_COMMANDS: CommandMeta[] = [
     granular: true,
   },
   {
+    id: 'slides-download-pptx',
+    label: 'Download PPTX Export',
+    group: 'Quick',
+    hint: 'Export current slide as editable PPTX',
+    aliases: ['download pptx export', 'export pptx', 'save powerpoint'],
+    granular: true,
+  },
+  {
     id: 'slides-open-my-slides',
     label: 'Open My Slides',
     group: 'Quick',

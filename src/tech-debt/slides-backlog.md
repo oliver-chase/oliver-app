@@ -11,7 +11,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Edit imported slide | Scaled 16:9 canvas renderer, resize handles, inline text editing, and bounded drag/nudge controls are available. | Advanced snapping/guides are still missing for precision layouts. | SLD-FE-340 |
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | SLD-FE-150, SLD-BE-150 |
 | Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), and approval request/resolution workflow for governance changes. | No approval SLA/escalation automation yet for stale requests. | SLD-FE-440, SLD-BE-440 |
-| Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
+| Export for client delivery | HTML and print-to-PDF flows exist. PPTX export now supports current-slide and multi-slide selection with warnings surfaced in UI. | Async job orchestration and richer backend-native asset fallback pipeline are still missing for long-running enterprise exports. | SLD-FE-500, SLD-BE-500, SLD-BE-510 |
 | Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. Saved activity filter presets are now available (personal + shared/admin). | Long-range/full-history async export job is still missing for compliance spans beyond paged queries. | SLD-FE-430, SLD-BE-430 |
 
 ## Dead / Incomplete / Debt Findings
@@ -70,8 +70,8 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 
 | Ticket | Title | Layer | Priority | Status | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- |
-| SLD-FE-500 | PPTX export UX (single + multi-select) | Frontend | P1 | Backlog | User selects one/many slides and gets status + warnings report. |
-| SLD-BE-500 | PPTX generation service (native objects + fallback images) | Backend | P1 | Backlog | Text/shapes map to native PPT objects where supported; unsupported nodes fall back with warnings. |
+| SLD-FE-500 | PPTX export UX (single + multi-select) | Frontend | P1 | In Progress (2026-04-25) | Current-slide and selected My Slides exports are shipped; continue hardening status/warnings and selection UX. |
+| SLD-BE-500 | PPTX generation service (native objects + fallback images) | Backend | P1 | In Progress (2026-04-25) | Native text/shape mapping with warnings is shipped in current export path; image/logo fallback mapping remains. |
 | SLD-BE-510 | Export job model for long-running conversions | Backend | P2 | Backlog | Async jobs track status, retries, and downloadable artifacts. |
 
 ## EPIC SLD-E6: Maintainability and Decomposition

@@ -8,6 +8,7 @@ import type { CSSProperties, FocusEvent, PointerEvent as ReactPointerEvent } fro
 import type { SlideComponent, SlideComponentType, SlideImportResult } from '@/components/slides/types'
 import { convertHtmlToSlideComponents } from '@/components/slides/html-import'
 import { convertSlideComponentsToHtml } from '@/components/slides/html-export'
+import { convertSlidesToPptx } from '@/components/slides/pptx-export'
 import {
   classifyImportError,
   type SlideImportFailure,
@@ -320,6 +321,9 @@ export default function SlidesPage() {
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
+  const [pptxSelectedSlideIds, setPptxSelectedSlideIds] = useState<string[]>([])
+  const [pptxExportWarnings, setPptxExportWarnings] = useState<string[]>([])
+  const [pptxExportBusy, setPptxExportBusy] = useState(false)
 
   const [recoveryDraft, setRecoveryDraft] = useState<DraftSnapshot | null>(null)
 
@@ -1094,6 +1098,12 @@ export default function SlidesPage() {
     if (isSlidesAdmin) return
     setAuditPresetScope('personal')
   }, [isSlidesAdmin])
+
+  useEffect(() => {
+    setPptxSelectedSlideIds((previous) =>
+      previous.filter((slideId) => slides.some((slide) => slide.id === slideId)),
+    )
+  }, [slides])
 
   useEffect(() => {
     if (!selectedAuditPresetId) return
@@ -2109,8 +2119,7 @@ export default function SlidesPage() {
     return html
   }, [activeRevision, activeSlideId, result])
 
-  const downloadTextFile = useCallback((content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType })
+  const downloadBlobFile = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
@@ -2118,6 +2127,11 @@ export default function SlidesPage() {
     anchor.click()
     URL.revokeObjectURL(url)
   }, [])
+
+  const downloadTextFile = useCallback((content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType })
+    downloadBlobFile(blob, filename)
+  }, [downloadBlobFile])
 
   const handleExportAuditCsv = useCallback(() => {
     if (audits.length === 0) return
@@ -2205,6 +2219,121 @@ export default function SlidesPage() {
     }
   }, [activeSlideId, actor, exportHtml, generateExport, refreshLibraryData, result])
 
+  const runPptxExport = useCallback(async (
+    slidesToExport: Array<{ id: string; title: string; canvas: SlideRecord['canvas']; components: SlideRecord['components'] }>,
+    options?: { auditSlideIds?: string[]; filenamePrefix?: string },
+  ) => {
+    if (slidesToExport.length === 0) {
+      setSaveError('Select at least one slide to export as PPTX.')
+      return
+    }
+
+    setPptxExportBusy(true)
+    setPptxExportWarnings([])
+    setSaveError(null)
+    try {
+      const { blob, warnings, slideCount } = convertSlidesToPptx(
+        slidesToExport.map((slide) => ({
+          id: slide.id,
+          title: slide.title,
+          canvas: slide.canvas,
+          components: slide.components,
+        })),
+      )
+      const prefix = (options?.filenamePrefix || 'slides-export').replace(/\\s+/g, '-').toLowerCase()
+      downloadBlobFile(blob, `${prefix}.pptx`)
+      setPptxExportWarnings(warnings)
+
+      const auditSlideIds = options?.auditSlideIds || []
+      if (auditSlideIds.length > 0) {
+        await Promise.all(auditSlideIds.map(async (slideId) => {
+          try {
+            await recordExportEvent(actor, {
+              slideId,
+              format: 'pptx',
+              outcome: 'success',
+            })
+          } catch {
+            // Do not block user download if one audit event write fails.
+          }
+        }))
+        await refreshLibraryData()
+      }
+
+      setEditorNotice({
+        tone: 'info',
+        text: warnings.length > 0
+          ? `Exported ${slideCount} slide(s) to PPTX with ${warnings.length} warning(s).`
+          : `Exported ${slideCount} slide(s) to PPTX.`,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setSaveError(`PPTX export failed: ${message}`)
+      const auditSlideIds = options?.auditSlideIds || []
+      if (auditSlideIds.length > 0) {
+        await Promise.all(auditSlideIds.map(async (slideId) => {
+          try {
+            await recordExportEvent(actor, {
+              slideId,
+              format: 'pptx',
+              outcome: 'failure',
+              errorClass: message,
+            })
+          } catch {
+            // Keep surfacing the primary error.
+          }
+        }))
+        await refreshLibraryData()
+      }
+    } finally {
+      setPptxExportBusy(false)
+    }
+  }, [actor, downloadBlobFile, refreshLibraryData])
+
+  const handleExportCurrentAsPptx = useCallback(async () => {
+    if (!result) {
+      setSaveError('Parse HTML before exporting PPTX.')
+      return
+    }
+
+    await runPptxExport(
+      [{
+        id: activeSlideId || 'unsaved-slide',
+        title: slideTitle || 'Untitled Slide',
+        canvas: result.canvas,
+        components: result.components,
+      }],
+      {
+        auditSlideIds: activeSlideId ? [activeSlideId] : [],
+        filenamePrefix: slideTitle || 'slide-export',
+      },
+    )
+  }, [activeSlideId, result, runPptxExport, slideTitle])
+
+  const handleExportSelectedSlidesAsPptx = useCallback(async () => {
+    const selectedSlides = slides.filter((slide) => pptxSelectedSlideIds.includes(slide.id))
+    await runPptxExport(
+      selectedSlides.map((slide) => ({
+        id: slide.id,
+        title: slide.title,
+        canvas: slide.canvas,
+        components: slide.components,
+      })),
+      {
+        auditSlideIds: selectedSlides.map((slide) => slide.id),
+        filenamePrefix: selectedSlides.length === 1 ? selectedSlides[0].title : 'slides-export',
+      },
+    )
+  }, [pptxSelectedSlideIds, runPptxExport, slides])
+
+  const togglePptxSlideSelection = useCallback((slideId: string) => {
+    setPptxSelectedSlideIds((previous) => (
+      previous.includes(slideId)
+        ? previous.filter((id) => id !== slideId)
+        : [...previous, slideId]
+    ))
+  }, [])
+
   const handleConflictReload = useCallback(() => {
     if (!conflictServerSlide) return
     loadSlide(conflictServerSlide, { skipUnsavedConfirm: true })
@@ -2267,6 +2396,9 @@ export default function SlidesPage() {
         case 'slides-download-html':
           run = () => { void handleExportHtml() }
           break
+        case 'slides-download-pptx':
+          run = () => { void handleExportCurrentAsPptx() }
+          break
         case 'slides-open-my-slides':
           run = () => { handleWorkspaceTabChange('my-slides') }
           break
@@ -2300,6 +2432,13 @@ export default function SlidesPage() {
           ? 'Downloaded HTML export and recorded the export audit event.'
           : 'Downloaded HTML export.'
       },
+      downloadPptxExport: async () => {
+        if (!result) return 'No parsed slide is available. Parse HTML first, then export PPTX.'
+        await handleExportCurrentAsPptx()
+        return activeSlideId
+          ? 'Downloaded PPTX export and recorded the export audit event.'
+          : 'Downloaded PPTX export.'
+      },
       openWorkspaceTab: handleWorkspaceTabChange,
     })
 
@@ -2320,7 +2459,7 @@ export default function SlidesPage() {
         active_slide_id: activeSlideId,
       }),
     })
-  }, [activeSlideId, generateExport, handleExportHtml, handleSave, handleWorkspaceTabChange, openFilePicker, parseHtmlSync, rawHtml, result, runParseWithProgress, saveStatus])
+  }, [activeSlideId, generateExport, handleExportCurrentAsPptx, handleExportHtml, handleSave, handleWorkspaceTabChange, openFilePicker, parseHtmlSync, rawHtml, result, runParseWithProgress, saveStatus])
 
   useRegisterOliver(oliverConfig)
 
@@ -2915,7 +3054,21 @@ export default function SlidesPage() {
                       <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleExportPdf()}>
                         Export PDF (Print)
                       </button>
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleExportCurrentAsPptx()} disabled={pptxExportBusy}>
+                        {pptxExportBusy ? 'Exporting PPTX…' : 'Export PPTX (Current)'}
+                      </button>
                     </div>
+
+                    {pptxExportWarnings.length > 0 && (
+                      <div className="slides-warning-group" role="status" aria-live="polite">
+                        <h3>PPTX Export Warnings</h3>
+                        <ul className="slides-warning-list">
+                          {pptxExportWarnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="slides-component-grid" role="table" aria-label="Parsed component summary">
                       <div className="slides-component-grid-header" role="row">
@@ -2966,6 +3119,24 @@ export default function SlidesPage() {
             {workspaceTab === 'my-slides' && (
               <div className="slides-library-section">
                 <h2>My Slides</h2>
+                <div className="slides-inline-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => void handleExportSelectedSlidesAsPptx()}
+                    disabled={pptxExportBusy || pptxSelectedSlideIds.length === 0}
+                  >
+                    {pptxExportBusy ? 'Exporting PPTX…' : `Export Selected PPTX (${pptxSelectedSlideIds.length})`}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setPptxSelectedSlideIds([])}
+                    disabled={pptxSelectedSlideIds.length === 0 || pptxExportBusy}
+                  >
+                    Clear Selection
+                  </button>
+                </div>
                 {slides.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
@@ -2976,6 +3147,15 @@ export default function SlidesPage() {
                 {slides.map((slide) => (
                   <article key={slide.id} className="slides-library-card">
                     <div>
+                      <label className="slides-checkbox-row" htmlFor={`slides-pptx-select-${slide.id}`}>
+                        <input
+                          id={`slides-pptx-select-${slide.id}`}
+                          type="checkbox"
+                          checked={pptxSelectedSlideIds.includes(slide.id)}
+                          onChange={() => togglePptxSlideSelection(slide.id)}
+                        />
+                        Include in PPTX export
+                      </label>
                       <h3>{slide.title}</h3>
                       <p>Updated: {formatDateTime(slide.updated_at)} · Revision: {slide.revision}</p>
                       <p>Components: {slide.components.length}</p>
@@ -3405,6 +3585,7 @@ export default function SlidesPage() {
                       <option value="reject-approval">Reject Approval</option>
                       <option value="export-html">Export HTML</option>
                       <option value="export-pdf">Export PDF</option>
+                      <option value="export-pptx">Export PPTX</option>
                     </select>
                   </label>
                   <label className="slides-editor-field" htmlFor="slides-audit-outcome">

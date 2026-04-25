@@ -27,6 +27,7 @@ const AUDIT_ACTIONS = [
   'reject-approval',
   'export-html',
   'export-pdf',
+  'export-pptx',
 ];
 const AUDIT_OUTCOMES = ['success', 'failure'];
 const AUDIT_ENTITY_TYPES = ['slide', 'template'];
@@ -1493,7 +1494,7 @@ async function handleDeleteAuditPresetAction(env, actor, body) {
 
 async function handleRecordExportAction(env, actor, body) {
   const slideId = typeof body.slide_id === 'string' ? body.slide_id.trim() : '';
-  const format = body.format === 'pdf' ? 'pdf' : 'html';
+  const format = body.format === 'pdf' ? 'pdf' : body.format === 'pptx' ? 'pptx' : 'html';
   const outcome = body.outcome === 'failure' ? 'failure' : 'success';
   const errorClass = typeof body.error_class === 'string' ? body.error_class : null;
 
@@ -1504,7 +1505,7 @@ async function handleRecordExportAction(env, actor, body) {
     actor_email: actor.email || null,
     entity_type: 'slide',
     entity_id: slideId,
-    action: format === 'pdf' ? 'export-pdf' : 'export-html',
+    action: format === 'pdf' ? 'export-pdf' : format === 'pptx' ? 'export-pptx' : 'export-html',
     outcome,
     error_class: errorClass,
     details: { format },

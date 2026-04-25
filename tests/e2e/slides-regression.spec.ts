@@ -1113,6 +1113,108 @@ test.describe('slides regression', () => {
     await expect(page.locator('#slides-audit-preset-select')).not.toContainText('Failure Exports')
   })
 
+  test('SLD-FE-500 exports current slide to PPTX and surfaces unsupported-component warnings', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(
+      `<div class=\"slide-canvas\" style=\"width:1920px;height:1080px;\"><img class=\"brand-logo\" alt=\"Company Logo\" src=\"https://example.com/logo.png\" style=\"position:absolute;left:40px;top:40px;width:200px;height:80px;\" /><h1 style=\"position:absolute;left:120px;top:180px;width:1100px;\">Q2 Executive Narrative</h1></div>`,
+    )
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export PPTX (Current)' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.pptx$/)
+
+    await expect(page.getByText(/native logo\/image mapping not yet supported/i)).toBeVisible()
+  })
+
+  test('SLD-FE-500 exports selected My Slides rows to one PPTX and records export-pptx activity', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [
+          {
+            id: 'slide-pptx-1',
+            owner_user_id: 'qa-admin-user',
+            title: 'PPTX One',
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'pptx1-heading',
+                type: 'heading',
+                sourceLabel: '.heading',
+                x: 120,
+                y: 140,
+                width: 900,
+                content: 'PPTX Slide One',
+                style: { fontSize: 56, fontWeight: 700, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            revision: 1,
+            source: 'import',
+            source_template_id: null,
+            created_at: '2026-04-25T10:00:00.000Z',
+            updated_at: '2026-04-25T10:00:00.000Z',
+            last_edited_at: '2026-04-25T10:00:00.000Z',
+          },
+          {
+            id: 'slide-pptx-2',
+            owner_user_id: 'qa-admin-user',
+            title: 'PPTX Two',
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'pptx2-card',
+                type: 'card',
+                sourceLabel: '.card',
+                x: 160,
+                y: 220,
+                width: 640,
+                height: 260,
+                content: '<h3>Pipeline</h3><p>$4.2M</p>',
+                style: { fontSize: 28, color: '#111827', backgroundColor: '#f3f4f6' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            revision: 1,
+            source: 'import',
+            source_template_id: null,
+            created_at: '2026-04-25T10:00:00.000Z',
+            updated_at: '2026-04-25T10:00:00.000Z',
+            last_edited_at: '2026-04-25T10:00:00.000Z',
+          },
+        ],
+        templates: [],
+        collaborators: [],
+        approvals: [],
+        audits: [],
+        auditPresets: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'My Slides' }).click()
+
+    await page.locator('#slides-pptx-select-slide-pptx-1').check()
+    await page.locator('#slides-pptx-select-slide-pptx-2').check()
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export Selected PPTX (2)' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.pptx$/)
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await expect(page.getByText('export-pptx').first()).toBeVisible()
+  })
+
   test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

@@ -10,13 +10,14 @@ type Ctx = {
   saveSlide: (titleOverride?: string) => Promise<string>
   generateExport: () => string
   downloadHtmlExport: () => Promise<string>
+  downloadPptxExport: () => Promise<string>
   openWorkspaceTab: (tab: WorkspaceTab) => boolean
 }
 
 const asString = (v: unknown) => (v == null ? '' : String(v))
 
 export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
-  const { rawHtml, openFilePicker, parseHtml, saveSlide, generateExport, downloadHtmlExport, openWorkspaceTab } = ctx
+  const { rawHtml, openFilePicker, parseHtml, saveSlide, generateExport, downloadHtmlExport, downloadPptxExport, openWorkspaceTab } = ctx
 
   return [
     {
@@ -115,6 +116,14 @@ export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
       aliases: ['download html export', 'export html file', 'save html export'],
       steps: [],
       run: async () => downloadHtmlExport(),
+    },
+    {
+      id: 'slides-download-pptx',
+      label: 'Download PPTX Export',
+      hint: 'Download the current slide as PPTX',
+      aliases: ['download pptx export', 'export pptx', 'save powerpoint'],
+      steps: [],
+      run: async () => downloadPptxExport(),
     },
     {
       id: 'slides-open-my-slides',

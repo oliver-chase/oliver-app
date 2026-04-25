@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS public.slide_audit_filter_presets (
       'approve-approval',
       'reject-approval',
       'export-html',
-      'export-pdf'
+      'export-pdf',
+      'export-pptx'
     )
   ),
   outcome_filter      TEXT NOT NULL DEFAULT 'all' CHECK (outcome_filter IN ('all', 'success', 'failure')),
@@ -62,3 +63,28 @@ CREATE POLICY "deny client access" ON public.slide_audit_filter_presets
   FOR ALL TO anon, authenticated
   USING (false)
   WITH CHECK (false);
+
+ALTER TABLE public.slide_audit_events
+  DROP CONSTRAINT IF EXISTS slide_audit_events_action_check;
+
+ALTER TABLE public.slide_audit_events
+  ADD CONSTRAINT slide_audit_events_action_check
+  CHECK (
+    action IN (
+      'save',
+      'autosave',
+      'delete',
+      'duplicate',
+      'rename',
+      'publish-template',
+      'transfer-template',
+      'upsert-collaborator',
+      'remove-collaborator',
+      'submit-approval',
+      'approve-approval',
+      'reject-approval',
+      'export-html',
+      'export-pdf',
+      'export-pptx'
+    )
+  );

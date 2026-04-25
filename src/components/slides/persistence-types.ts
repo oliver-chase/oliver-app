@@ -78,6 +78,7 @@ export type SlideAuditAction =
   | 'reject-approval'
   | 'export-html'
   | 'export-pdf'
+  | 'export-pptx'
 
 export type SlideAuditOutcome = 'success' | 'failure'
 
