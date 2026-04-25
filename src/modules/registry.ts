@@ -50,7 +50,18 @@ const MODULES: ModuleDefinition[] = [
     href: '/slides',
     pageLabel: 'Slide Editor',
     defaultPlaceholder: 'Import or paste slide HTML, then save or export...',
-    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. Import, validate, save, and export flows are live while canvas editing remains in backlog.",
+    defaultGreeting: "Hi, I'm Oliver. You're viewing Slide Editor. Import HTML, edit slides, and export when ready.",
+  },
+  {
+    id: 'reviews',
+    name: 'Self-Led Growth & Review',
+    description: 'Employee-driven growth tracking, evidence capture, and reviewer preparation workflows.',
+    href: '/reviews',
+    pageLabel: 'Growth & Review',
+    defaultPlaceholder: 'Ask about focus areas, quarterly prompts, or review packet setup…',
+    defaultGreeting: "Hi, I'm Oliver. You're viewing Self-Led Growth & Review. Goals, updates, quarterly reflections, and annual drafts are available.",
+    comingSoon: true,
+    showInHub: false,
   },
   {
     id: 'crm',
@@ -61,6 +72,7 @@ const MODULES: ModuleDefinition[] = [
     defaultPlaceholder: 'Ask about the CRM roadmap…',
     defaultGreeting: "Hi, I'm Oliver. CRM & Business Development is in the backlog.",
     comingSoon: true,
+    enabledByDefault: false,
     showInHub: false,
   },
 ]

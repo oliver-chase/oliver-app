@@ -2,6 +2,7 @@ import type { OliverFlow } from '@/components/shared/OliverContext'
 import type { AppUser, PagePermission } from '@/types/auth'
 import { upsertUser, updateUserPermissions, updateUserRole, type UserRequestActor } from '@/lib/users'
 import { upsertToken } from '@/lib/tokens'
+import { getPermissionModules } from '@/modules/registry'
 
 type Ctx = {
   users: AppUser[]
@@ -9,7 +10,7 @@ type Ctx = {
   actorIdentity?: UserRequestActor
 }
 
-const PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides']
+const PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
 const TOKEN_NAMES = [
   '--color-brand-purple',
   '--color-brand-pink',
@@ -89,7 +90,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         const name = asString(answers.name)
         const role = asString(answers.role)
         const permissions = parsePermissions(asString(answers.permissions))
-        await upsertUser({ user_id: userId, email, name }, actorIdentity)
+        await upsertUser({ user_id: userId, email, name }, undefined, actorIdentity)
         if (role === 'admin' || role === 'user') await updateUserRole(userId, role, actorIdentity)
         if (permissions.length > 0) await updateUserPermissions(userId, permissions, actorIdentity)
         await refetch()

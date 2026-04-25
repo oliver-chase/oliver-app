@@ -1,8 +1,11 @@
 // /api/users — app_users CRUD via Supabase service role.
 //
 // Authz:
-// - Production: requires Cloudflare Access identity header:
+// - Preferred: Cloudflare Access identity header:
 //   cf-access-authenticated-user-email
+// - Microsoft-asserted fallback (for environments where CF Access headers are unavailable):
+//   requires actor_microsoft_tid plus actor_microsoft_oid or actor_microsoft_sub,
+//   and actor identity via user id/email.
 // - Optional local/dev fallback (disabled by default):
 //   set USERS_TRUST_CLIENT_IDENTITY=1 and send actor_email/actor_user_id
 //   through query/body or x-user-email/x-user-id headers.
@@ -21,9 +24,10 @@
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
 
-const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides']);
-const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides'];
+const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews']);
+const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews'];
 const USER_FIELDS = 'user_id,email,name,role,page_permissions,created_at,updated_at';
+const IDENTITY_FIELDS = 'identity_id,person_id,provider,tenant_id,subject_key,subject_key_type';
 const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
 
 function resolveServiceKey(env) {
@@ -63,6 +67,79 @@ function normalizeUserId(value) {
   return value.trim();
 }
 
+function normalizeTenantId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function normalizeMicrosoftSubject(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function normalizePersonId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function parseMicrosoftIdentity(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const microsoftOid = normalizeMicrosoftSubject(source.microsoft_oid);
+  const microsoftTid = normalizeTenantId(source.microsoft_tid);
+  const microsoftSub = normalizeMicrosoftSubject(source.microsoft_sub);
+  return { microsoftOid, microsoftTid, microsoftSub };
+}
+
+function parseActorMicrosoftIdentity(request, opts = {}) {
+  const url = opts.url || new URL(request.url);
+  const body = opts.body && typeof opts.body === 'object' ? opts.body : {};
+  return {
+    microsoftOid: normalizeMicrosoftSubject(
+      request.headers.get('x-user-microsoft-oid')
+      || body.actor_microsoft_oid
+      || url.searchParams.get('actor_microsoft_oid')
+      || '',
+    ),
+    microsoftTid: normalizeTenantId(
+      request.headers.get('x-user-microsoft-tid')
+      || body.actor_microsoft_tid
+      || url.searchParams.get('actor_microsoft_tid')
+      || '',
+    ),
+    microsoftSub: normalizeMicrosoftSubject(
+      request.headers.get('x-user-microsoft-sub')
+      || body.actor_microsoft_sub
+      || url.searchParams.get('actor_microsoft_sub')
+      || '',
+    ),
+  };
+}
+
+function hasMicrosoftIdentity(identity) {
+  if (!identity) return false;
+  if (!identity.microsoftTid) return false;
+  return !!(identity.microsoftOid || identity.microsoftSub);
+}
+
+function microsoftSubjects(identity) {
+  if (!identity) return [];
+  const subjects = [];
+  if (identity.microsoftOid) subjects.push(identity.microsoftOid);
+  if (identity.microsoftSub && identity.microsoftSub !== identity.microsoftOid) subjects.push(identity.microsoftSub);
+  return subjects;
+}
+
+function hasSharedMicrosoftSubject(left, right) {
+  if (!left || !right) return false;
+  if (!left.microsoftTid || !right.microsoftTid) return false;
+  if (left.microsoftTid !== right.microsoftTid) return false;
+  const rightSet = new Set(microsoftSubjects(right));
+  for (const subject of microsoftSubjects(left)) {
+    if (rightSet.has(subject)) return true;
+  }
+  return false;
+}
+
 function uniquePermissions(raw) {
   if (!Array.isArray(raw)) return [];
   const seen = new Set();
@@ -99,6 +176,7 @@ function normalizeUserRow(row) {
     user_id: normalizeUserId(row.user_id),
     email: normalizeEmail(row.email),
     name: typeof row.name === 'string' ? row.name : '',
+    person_id: normalizePersonId(row.person_id) || null,
     role: row.role === 'admin' ? 'admin' : 'user',
     page_permissions: uniquePermissions(row.page_permissions),
     created_at: row.created_at || null,
@@ -165,13 +243,354 @@ async function supabaseJson(env, path, init = {}) {
   };
 }
 
-function resolveActorIdentity(request, env, opts = {}) {
-  const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
-  if (cfAccessEmail) {
-    return { source: 'cf-access', email: cfAccessEmail, userId: '' };
+function buildMicrosoftIdentityCandidates(identity) {
+  if (!identity || !identity.microsoftTid) return [];
+  const out = [];
+  if (identity.microsoftOid) out.push({ subjectKeyType: 'oid', subjectKey: identity.microsoftOid });
+  if (identity.microsoftSub && identity.microsoftSub !== identity.microsoftOid) {
+    out.push({ subjectKeyType: 'sub', subjectKey: identity.microsoftSub });
+  }
+  return out;
+}
+
+async function fetchIdentityRow(env, microsoftTid, subjectKey) {
+  const lookup = await supabaseJson(
+    env,
+    '/rest/v1/person_identities?provider=eq.microsoft'
+      + '&tenant_id=eq.' + encodeURIComponent(microsoftTid)
+      + '&subject_key=eq.' + encodeURIComponent(subjectKey)
+      + '&select=' + IDENTITY_FIELDS
+      + '&limit=1',
+  );
+  if (!lookup.ok) {
+    return {
+      ok: false,
+      status: lookup.status,
+      error: 'Identity lookup failed: ' + lookup.text,
+      row: null,
+    };
+  }
+  const rows = Array.isArray(lookup.data) ? lookup.data : [];
+  return { ok: true, row: rows[0] || null };
+}
+
+async function fetchIdentitySlotForPerson(env, personId, microsoftTid, subjectKeyType) {
+  const lookup = await supabaseJson(
+    env,
+    '/rest/v1/person_identities?person_id=eq.' + encodeURIComponent(personId)
+      + '&provider=eq.microsoft'
+      + '&tenant_id=eq.' + encodeURIComponent(microsoftTid)
+      + '&subject_key_type=eq.' + encodeURIComponent(subjectKeyType)
+      + '&select=' + IDENTITY_FIELDS
+      + '&limit=1',
+  );
+  if (!lookup.ok) {
+    return {
+      ok: false,
+      status: lookup.status,
+      error: 'Identity slot lookup failed: ' + lookup.text,
+      row: null,
+    };
+  }
+  const rows = Array.isArray(lookup.data) ? lookup.data : [];
+  return { ok: true, row: rows[0] || null };
+}
+
+async function createPerson(env, name, email) {
+  const insert = await supabaseJson(
+    env,
+    '/rest/v1/people',
+    {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        full_name: name || '',
+        primary_email: email || '',
+      }),
+    },
+  );
+  if (!insert.ok) {
+    return {
+      ok: false,
+      status: insert.status,
+      error: 'Person create failed: ' + insert.text,
+      personId: '',
+    };
+  }
+  const rows = Array.isArray(insert.data) ? insert.data : [];
+  const personId = normalizePersonId(rows[0]?.person_id);
+  if (!personId) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'Person create failed: missing person_id in response.',
+      personId: '',
+    };
+  }
+  return { ok: true, personId };
+}
+
+async function patchPersonProfile(env, personId, name, email) {
+  await supabaseJson(
+    env,
+    '/rest/v1/people?person_id=eq.' + encodeURIComponent(personId),
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        full_name: name || '',
+        primary_email: email || '',
+      }),
+    },
+  );
+}
+
+async function syncMicrosoftIdentityCandidate(env, args) {
+  const {
+    personId,
+    microsoftTid,
+    candidate,
+    email,
+    identitySource,
+    mappingDecision,
+  } = args;
+
+  const now = new Date().toISOString();
+  const existing = await fetchIdentityRow(env, microsoftTid, candidate.subjectKey);
+  if (!existing.ok) return existing;
+
+  if (existing.row) {
+    const rowPersonId = normalizePersonId(existing.row.person_id);
+    if (rowPersonId && rowPersonId !== personId) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'Identity conflict: Microsoft subject already linked to a different person record.',
+      };
+    }
+    const patch = await supabaseJson(
+      env,
+      '/rest/v1/person_identities?identity_id=eq.' + encodeURIComponent(existing.row.identity_id),
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          identity_source: identitySource,
+          mapping_decision: mappingDecision,
+          email_snapshot: email || '',
+          metadata: {
+            protocol: 'microsoft-oid-tid-v1',
+            subject_key_type: candidate.subjectKeyType,
+          },
+          last_seen_at: now,
+        }),
+      },
+    );
+    if (!patch.ok) {
+      return {
+        ok: false,
+        status: patch.status,
+        error: 'Identity update failed: ' + patch.text,
+      };
+    }
+    return { ok: true };
   }
 
-  if (env.USERS_TRUST_CLIENT_IDENTITY !== '1') return null;
+  const slot = await fetchIdentitySlotForPerson(env, personId, microsoftTid, candidate.subjectKeyType);
+  if (!slot.ok) return slot;
+  if (slot.row && slot.row.subject_key !== candidate.subjectKey) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Identity conflict: this person already has a different Microsoft '
+        + candidate.subjectKeyType + ' value in the same tenant.',
+    };
+  }
+
+  const insert = await supabaseJson(
+    env,
+    '/rest/v1/person_identities',
+    {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        person_id: personId,
+        provider: 'microsoft',
+        tenant_id: microsoftTid,
+        subject_key: candidate.subjectKey,
+        subject_key_type: candidate.subjectKeyType,
+        identity_source: identitySource,
+        mapping_decision: mappingDecision,
+        email_snapshot: email || '',
+        metadata: {
+          protocol: 'microsoft-oid-tid-v1',
+          subject_key_type: candidate.subjectKeyType,
+        },
+        last_seen_at: now,
+      }),
+    },
+  );
+  if (!insert.ok) {
+    return {
+      ok: false,
+      status: insert.status,
+      error: 'Identity insert failed: ' + insert.text,
+    };
+  }
+  return { ok: true };
+}
+
+async function resolvePersonFromMicrosoftIdentity(env, microsoftIdentity) {
+  if (!hasMicrosoftIdentity(microsoftIdentity)) {
+    return { ok: true, personId: '', matchSource: 'no-microsoft-claims' };
+  }
+
+  const candidates = buildMicrosoftIdentityCandidates(microsoftIdentity);
+  const matchedRows = [];
+  for (const candidate of candidates) {
+    const lookup = await fetchIdentityRow(env, microsoftIdentity.microsoftTid, candidate.subjectKey);
+    if (!lookup.ok) return lookup;
+    if (lookup.row) matchedRows.push({ candidate, row: lookup.row });
+  }
+
+  const personIds = [...new Set(
+    matchedRows
+      .map(item => normalizePersonId(item.row.person_id))
+      .filter(Boolean),
+  )];
+
+  if (personIds.length > 1) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Identity conflict: Microsoft oid/sub claims resolve to different person records.',
+    };
+  }
+
+  if (personIds.length === 0) {
+    return { ok: true, personId: '', matchSource: 'new-person-required' };
+  }
+
+  const matchedBy = matchedRows.find(item => normalizePersonId(item.row.person_id) === personIds[0]);
+  return {
+    ok: true,
+    personId: personIds[0],
+    matchSource: matchedBy?.candidate?.subjectKeyType === 'sub' ? 'matched-sub' : 'matched-oid',
+  };
+}
+
+async function syncMicrosoftIdentitySlice(env, args) {
+  const { userId, email, name, microsoftIdentity, identitySource } = args;
+  if ((microsoftIdentity.microsoftOid || microsoftIdentity.microsoftSub) && !microsoftIdentity.microsoftTid) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'microsoft_tid is required when microsoft_oid or microsoft_sub is provided.',
+      personId: '',
+      mappingDecision: 'invalid-request',
+    };
+  }
+
+  if (!hasMicrosoftIdentity(microsoftIdentity)) {
+    return {
+      ok: true,
+      personId: '',
+      mappingDecision: 'microsoft-claims-missing',
+    };
+  }
+
+  const resolved = await resolvePersonFromMicrosoftIdentity(env, microsoftIdentity);
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      status: resolved.status || 409,
+      error: resolved.error || 'Identity resolution failed.',
+      personId: '',
+      mappingDecision: 'identity-conflict',
+    };
+  }
+
+  let personId = resolved.personId;
+  if (!personId) {
+    const createResult = await createPerson(env, name, email);
+    if (!createResult.ok) {
+      return {
+        ok: false,
+        status: createResult.status || 500,
+        error: createResult.error || 'Person create failed.',
+        personId: '',
+        mappingDecision: 'create-person-failed',
+      };
+    }
+    personId = createResult.personId;
+  } else {
+    await patchPersonProfile(env, personId, name, email);
+  }
+
+  const mappingDecision = resolved.matchSource === 'new-person-required'
+    ? 'created-person'
+    : resolved.matchSource;
+  const candidates = buildMicrosoftIdentityCandidates(microsoftIdentity);
+  for (const candidate of candidates) {
+    const syncResult = await syncMicrosoftIdentityCandidate(env, {
+      personId,
+      microsoftTid: microsoftIdentity.microsoftTid,
+      candidate,
+      email,
+      identitySource,
+      mappingDecision,
+    });
+    if (!syncResult.ok) {
+      return {
+        ok: false,
+        status: syncResult.status || 409,
+        error: syncResult.error || 'Identity sync failed.',
+        personId,
+        mappingDecision: 'identity-sync-failed',
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    personId,
+    mappingDecision,
+  };
+}
+
+async function fetchUserByMicrosoftIdentity(env, identity, ownerPolicy) {
+  if (!hasMicrosoftIdentity(identity)) return null;
+  const candidates = buildMicrosoftIdentityCandidates(identity);
+  for (const candidate of candidates) {
+    const identityLookup = await fetchIdentityRow(env, identity.microsoftTid, candidate.subjectKey);
+    if (!identityLookup.ok) continue;
+    if (!identityLookup.row) continue;
+    const lookup = await supabaseJson(
+      env,
+      '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(candidate.subjectKey)
+      + '&select=' + USER_FIELDS
+      + '&limit=1',
+    );
+    if (!lookup.ok) continue;
+    const rows = Array.isArray(lookup.data) ? lookup.data : [];
+    const row = normalizeUserRow(rows[0]);
+    const effective = await enforceOwnerInvariant(env, row, ownerPolicy);
+    if (effective) return effective;
+  }
+  return null;
+}
+
+function resolveActorIdentity(request, env, opts = {}) {
+  const actorMicrosoft = parseActorMicrosoftIdentity(request, opts);
+  const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
+  if (cfAccessEmail) {
+    return {
+      source: 'cf-access',
+      email: cfAccessEmail,
+      userId: '',
+      microsoftOid: actorMicrosoft.microsoftOid,
+      microsoftTid: actorMicrosoft.microsoftTid,
+      microsoftSub: actorMicrosoft.microsoftSub,
+    };
+  }
 
   const url = opts.url || new URL(request.url);
   const body = opts.body && typeof opts.body === 'object' ? opts.body : {};
@@ -188,8 +607,30 @@ function resolveActorIdentity(request, env, opts = {}) {
     || '',
   );
 
-  if (!actorEmail && !actorUserId) return null;
-  return { source: 'trusted-client', email: actorEmail, userId: actorUserId };
+  // This path is stricter than the plain trusted-client fallback:
+  // require tenant + oid/sub claim plus actor identity fields.
+  if (hasMicrosoftIdentity(actorMicrosoft) && (actorEmail || actorUserId)) {
+    return {
+      source: 'microsoft-asserted-client',
+      email: actorEmail,
+      userId: actorUserId,
+      microsoftOid: actorMicrosoft.microsoftOid,
+      microsoftTid: actorMicrosoft.microsoftTid,
+      microsoftSub: actorMicrosoft.microsoftSub,
+    };
+  }
+
+  if (env.USERS_TRUST_CLIENT_IDENTITY !== '1') return null;
+
+  if (!actorEmail && !actorUserId && !hasMicrosoftIdentity(actorMicrosoft)) return null;
+  return {
+    source: 'trusted-client',
+    email: actorEmail,
+    userId: actorUserId,
+    microsoftOid: actorMicrosoft.microsoftOid,
+    microsoftTid: actorMicrosoft.microsoftTid,
+    microsoftSub: actorMicrosoft.microsoftSub,
+  };
 }
 
 function buildIdentityLookupPath(identity) {
@@ -206,6 +647,8 @@ function buildIdentityLookupPath(identity) {
 }
 
 async function fetchActorUser(env, identity, ownerPolicy) {
+  const identityUser = await fetchUserByMicrosoftIdentity(env, identity, ownerPolicy);
+  if (identityUser) return identityUser;
   const lookupPath = buildIdentityLookupPath(identity);
   if (!lookupPath) return null;
   const lookup = await supabaseJson(env, lookupPath);
@@ -285,6 +728,11 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const requestedUserId = normalizeUserId(url.searchParams.get('user_id') || '');
   const requestedEmail = normalizeEmail(url.searchParams.get('email') || '');
+  const requestedMicrosoftIdentity = parseMicrosoftIdentity({
+    microsoft_oid: url.searchParams.get('microsoft_oid') || '',
+    microsoft_tid: url.searchParams.get('microsoft_tid') || '',
+    microsoft_sub: url.searchParams.get('microsoft_sub') || '',
+  });
 
   const actorIdentity = resolveActorIdentity(request, env, { url });
   if (!actorIdentity) return errorResponse('Unauthorized request. Missing verified actor identity.', 401);
@@ -292,7 +740,7 @@ export async function onRequestGet(context) {
   const actor = await fetchActorUser(env, actorIdentity, ownerPolicy);
   const actorAdmin = isAdminUser(actor, ownerPolicy) || isOwnerIdentity(actorIdentity, ownerPolicy);
 
-  if (!requestedUserId && !requestedEmail) {
+  if (!requestedUserId && !requestedEmail && !hasMicrosoftIdentity(requestedMicrosoftIdentity)) {
     if (!actorAdmin) return errorResponse('Forbidden. Admin access required.', 403);
     const list = await supabaseJson(env, '/rest/v1/app_users?order=created_at.asc&select=' + USER_FIELDS);
     if (!list.ok) return errorResponse('Fetch failed: ' + list.text, list.status);
@@ -307,10 +755,21 @@ export async function onRequestGet(context) {
 
   let lookupPath = '';
   if (actorAdmin) {
+    if (hasMicrosoftIdentity(requestedMicrosoftIdentity)) {
+      const identityUser = await fetchUserByMicrosoftIdentity(env, requestedMicrosoftIdentity, ownerPolicy);
+      if (identityUser) return jsonResponse(identityUser);
+    }
     lookupPath = buildTargetLookupPath(requestedUserId, requestedEmail);
   } else {
     if (actorIdentity.email && requestedEmail && requestedEmail !== actorIdentity.email) {
       return errorResponse('Forbidden. You can only read your own user profile.', 403);
+    }
+    if (hasMicrosoftIdentity(requestedMicrosoftIdentity) && !hasSharedMicrosoftSubject(actorIdentity, requestedMicrosoftIdentity)) {
+      return errorResponse('Forbidden. You can only read your own Microsoft identity profile.', 403);
+    }
+    if (hasMicrosoftIdentity(requestedMicrosoftIdentity)) {
+      const identityUser = await fetchUserByMicrosoftIdentity(env, requestedMicrosoftIdentity, ownerPolicy);
+      if (identityUser) return jsonResponse(identityUser);
     }
 
     const selfUserId = actor?.user_id
@@ -320,7 +779,10 @@ export async function onRequestGet(context) {
     lookupPath = buildTargetLookupPath(selfUserId, selfEmail);
   }
 
-  if (!lookupPath) return errorResponse('user_id or email required', 400);
+  if (!lookupPath) {
+    if (hasMicrosoftIdentity(requestedMicrosoftIdentity)) return jsonResponse(null);
+    return errorResponse('user_id or email required', 400);
+  }
   const lookup = await supabaseJson(env, lookupPath);
   if (!lookup.ok) return errorResponse('Fetch failed: ' + lookup.text, lookup.status);
 
@@ -341,6 +803,7 @@ export async function onRequestPost(context) {
   const userId = normalizeUserId(body.user_id);
   const email = normalizeEmail(body.email);
   const name = typeof body.name === 'string' ? body.name : '';
+  const microsoftIdentity = parseMicrosoftIdentity(body);
   if (!userId || !email) return errorResponse('user_id and email required', 400);
 
   const actorIdentity = resolveActorIdentity(request, env, { body });
@@ -350,6 +813,7 @@ export async function onRequestPost(context) {
   const selfRequest = (
     (actorIdentity.email && email === actorIdentity.email)
     || (actorIdentity.userId && userId === actorIdentity.userId)
+    || hasSharedMicrosoftSubject(actorIdentity, microsoftIdentity)
   );
 
   if (!actorAdmin && !selfRequest) {
@@ -362,9 +826,34 @@ export async function onRequestPost(context) {
   );
   if (!existing.ok) return errorResponse('Lookup failed: ' + existing.text, existing.status);
   const existingRows = Array.isArray(existing.data) ? existing.data : [];
+  if (existingRows.length > 1) {
+    return errorResponse(
+      'Identity conflict: user_id and email point to different app_users rows. Resolve in Admin before retrying.',
+      409,
+    );
+  }
+
+  const identitySync = await syncMicrosoftIdentitySlice(env, {
+    userId,
+    email,
+    name,
+    microsoftIdentity,
+    identitySource: actorIdentity.source === 'trusted-client' ? 'msal-id-token' : 'cf-access',
+  });
+  if (!identitySync.ok) {
+    return errorResponse(identitySync.error || 'Identity sync failed.', identitySync.status || 409);
+  }
 
   if (existingRows.length > 0) {
     const row = normalizeUserRow(existingRows[0]);
+    if (!row) return errorResponse('Lookup failed: invalid app_users row.', 500);
+    if (!actorAdmin && row.email === email && row.user_id !== userId) {
+      return errorResponse(
+        'Identity conflict: this email is already linked to a different user_id. Admin reconciliation required.',
+        409,
+      );
+    }
+
     const update = await supabaseJson(
       env,
       '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(row.user_id),
@@ -382,7 +871,11 @@ export async function onRequestPost(context) {
     if (!update.ok) return errorResponse('Update failed: ' + update.text, update.status);
     const updatedRows = Array.isArray(update.data) ? update.data : [];
     const effective = await enforceOwnerInvariant(env, updatedRows[0], ownerPolicy);
-    return jsonResponse(effective || null);
+    return jsonResponse(
+      effective
+        ? { ...effective, identity_mapping_decision: identitySync.mappingDecision }
+        : null,
+    );
   }
 
   const isOwner = ownerPolicy.ownerEmails.has(email) || ownerPolicy.ownerUserIds.has(userId);
@@ -404,7 +897,12 @@ export async function onRequestPost(context) {
   if (!insert.ok) return errorResponse('Insert failed: ' + insert.text, insert.status);
   const insertedRows = Array.isArray(insert.data) ? insert.data : [];
   const effective = await enforceOwnerInvariant(env, insertedRows[0], ownerPolicy);
-  return jsonResponse(effective || null, 201);
+  return jsonResponse(
+    effective
+      ? { ...effective, identity_mapping_decision: identitySync.mappingDecision }
+      : null,
+    201,
+  );
 }
 
 export async function onRequestPatch(context) {

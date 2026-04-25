@@ -33,6 +33,47 @@ function normalizeUserId(value) {
   return value.trim();
 }
 
+function normalizeTenantId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function normalizeMicrosoftSubject(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function parseActorMicrosoftIdentity(request, body = null, url = null) {
+  const params = url || new URL(request.url);
+  const actor = body && typeof body === 'object' ? body : {};
+  return {
+    microsoftOid: normalizeMicrosoftSubject(
+      request.headers.get('x-user-microsoft-oid')
+      || actor.actor_microsoft_oid
+      || params.searchParams.get('actor_microsoft_oid')
+      || '',
+    ),
+    microsoftTid: normalizeTenantId(
+      request.headers.get('x-user-microsoft-tid')
+      || actor.actor_microsoft_tid
+      || params.searchParams.get('actor_microsoft_tid')
+      || '',
+    ),
+    microsoftSub: normalizeMicrosoftSubject(
+      request.headers.get('x-user-microsoft-sub')
+      || actor.actor_microsoft_sub
+      || params.searchParams.get('actor_microsoft_sub')
+      || '',
+    ),
+  };
+}
+
+function hasMicrosoftIdentity(identity) {
+  if (!identity) return false;
+  if (!identity.microsoftTid) return false;
+  return !!(identity.microsoftOid || identity.microsoftSub);
+}
+
 function parseOwnerPolicy(env) {
   const ownerEmails = new Set(
     (env.OWNER_EMAILS || '')
@@ -67,13 +108,20 @@ function assertConfigured(env) {
 }
 
 function resolveActorIdentity(request, env, body = null) {
+  const url = new URL(request.url);
+  const actorMicrosoft = parseActorMicrosoftIdentity(request, body, url);
   const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
   if (cfAccessEmail) {
-    return { source: 'cf-access', email: cfAccessEmail, userId: '' };
+    return {
+      source: 'cf-access',
+      email: cfAccessEmail,
+      userId: '',
+      microsoftOid: actorMicrosoft.microsoftOid,
+      microsoftTid: actorMicrosoft.microsoftTid,
+      microsoftSub: actorMicrosoft.microsoftSub,
+    };
   }
 
-  if (env.ADMIN_KEYS_TRUST_CLIENT_IDENTITY !== '1') return null;
-  const url = new URL(request.url);
   const actor = body && typeof body === 'object' ? body : {};
   const actorEmail = normalizeEmail(
     request.headers.get('x-user-email')
@@ -87,8 +135,29 @@ function resolveActorIdentity(request, env, body = null) {
     || url.searchParams.get('actor_user_id')
     || '',
   );
+
+  if (hasMicrosoftIdentity(actorMicrosoft) && (actorEmail || actorUserId)) {
+    return {
+      source: 'microsoft-asserted-client',
+      email: actorEmail,
+      userId: actorUserId,
+      microsoftOid: actorMicrosoft.microsoftOid,
+      microsoftTid: actorMicrosoft.microsoftTid,
+      microsoftSub: actorMicrosoft.microsoftSub,
+    };
+  }
+
+  if (env.ADMIN_KEYS_TRUST_CLIENT_IDENTITY !== '1') return null;
+
   if (!actorEmail && !actorUserId) return null;
-  return { source: 'trusted-client', email: actorEmail, userId: actorUserId };
+  return {
+    source: 'trusted-client',
+    email: actorEmail,
+    userId: actorUserId,
+    microsoftOid: actorMicrosoft.microsoftOid,
+    microsoftTid: actorMicrosoft.microsoftTid,
+    microsoftSub: actorMicrosoft.microsoftSub,
+  };
 }
 
 async function supabaseJson(env, path, init = {}) {

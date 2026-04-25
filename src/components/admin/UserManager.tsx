@@ -1,23 +1,41 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import type { AccountInfo } from '@azure/msal-browser'
 import type { AppUser, PagePermission, Role } from '@/types/auth'
 import { useUser } from '@/context/UserContext'
+import { useAuth } from '@/context/AuthContext'
 import { listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
 import { getPermissionModules } from '@/modules/registry'
 import styles from './admin.module.css'
 
 const ALL_PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
 
+function getActorMicrosoftIdentity(account: AccountInfo | null) {
+  if (!account) return {}
+  const claims = account.idTokenClaims as Record<string, unknown> | undefined
+  const microsoftOid = typeof claims?.oid === 'string' && claims.oid ? claims.oid : undefined
+  const microsoftSub = typeof claims?.sub === 'string' && claims.sub ? claims.sub : undefined
+  const microsoftTid = typeof claims?.tid === 'string' && claims.tid
+    ? claims.tid
+    : (account.tenantId || undefined)
+  return {
+    microsoftOid,
+    microsoftTid,
+    microsoftSub,
+  }
+}
+
 export function UserManager() {
   const { appUser } = useUser()
+  const { account } = useAuth()
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const actorIdentity = useMemo(
-    () => (appUser ? { userId: appUser.user_id, email: appUser.email } : undefined),
-    [appUser],
+    () => (appUser ? { userId: appUser.user_id, email: appUser.email, ...getActorMicrosoftIdentity(account) } : undefined),
+    [account, appUser],
   )
 
   useEffect(() => {

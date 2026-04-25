@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import type { AccountInfo } from '@azure/msal-browser'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/context/UserContext'
+import { useAuth } from '@/context/AuthContext'
 import { UserManager } from '@/components/admin/UserManager'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
@@ -14,14 +16,30 @@ import type { AppUser } from '@/types/auth'
 import { getConversationPath } from '@/lib/chatbot-conversation-paths'
 import styles from './admin.module.css'
 
+function getActorMicrosoftIdentity(account: AccountInfo | null) {
+  if (!account) return {}
+  const claims = account.idTokenClaims as Record<string, unknown> | undefined
+  const microsoftOid = typeof claims?.oid === 'string' && claims.oid ? claims.oid : undefined
+  const microsoftSub = typeof claims?.sub === 'string' && claims.sub ? claims.sub : undefined
+  const microsoftTid = typeof claims?.tid === 'string' && claims.tid
+    ? claims.tid
+    : (account.tenantId || undefined)
+  return {
+    microsoftOid,
+    microsoftTid,
+    microsoftSub,
+  }
+}
+
 export default function AdminPage() {
   const { isAdmin, appUser, isLoading, loadError } = useUser()
+  const { account } = useAuth()
   const router = useRouter()
   const [users, setUsers] = useState<AppUser[]>([])
   const canAccessAdmin = !isLoading && !loadError && !!appUser && isAdmin
   const actorIdentity = useMemo(
-    () => (appUser ? { userId: appUser.user_id, email: appUser.email } : undefined),
-    [appUser],
+    () => (appUser ? { userId: appUser.user_id, email: appUser.email, ...getActorMicrosoftIdentity(account) } : undefined),
+    [account, appUser],
   )
 
   useEffect(() => {

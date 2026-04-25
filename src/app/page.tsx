@@ -32,10 +32,10 @@ export default function HubPage() {
   const visibleModules = useMemo(
     () => HUB_MODULES.filter(m => {
       if (permissionState !== 'ready') return false
-      if (m.comingSoon) return isAdmin
+      if (m.comingSoon) return false
       return hasPermission(m.id)
     }),
-    [hasPermission, isAdmin, permissionState],
+    [hasPermission, permissionState],
   )
 
   // Hub intentionally does not register an Oliver config. The dock only
