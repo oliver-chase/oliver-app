@@ -75,7 +75,11 @@ function normalizeActorBody(raw) {
 function shouldTrustClientIdentity(env) {
   if (env.SLIDES_TRUST_CLIENT_IDENTITY === '1') return true;
   if (env.SLIDES_TRUST_CLIENT_IDENTITY === '0') return false;
-  return env.USERS_TRUST_CLIENT_IDENTITY === '1';
+  if (env.USERS_TRUST_CLIENT_IDENTITY === '1') return true;
+  if (env.USERS_TRUST_CLIENT_IDENTITY === '0') return false;
+  // Default to trusted app-provided actor identity for slides to avoid
+  // hard module dead-ends when CF Access headers are unavailable.
+  return true;
 }
 
 function resolveActorIdentity(request, body, env) {
