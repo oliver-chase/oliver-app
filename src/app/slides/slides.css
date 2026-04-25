@@ -610,6 +610,12 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   font-size: var(--font-size-lg);
 }
 
+.slides-audit-filters {
+  display: grid;
+  gap: var(--spacing-xs);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
 .slides-empty {
   margin: 0;
   color: var(--color-text-secondary);
@@ -651,6 +657,10 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+}
+
+.slides-audit-pagination {
+  justify-content: flex-start;
 }
 
 @media (max-width: 800px) {

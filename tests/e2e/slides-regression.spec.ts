@@ -562,6 +562,70 @@ test.describe('slides regression', () => {
     await expect(templateCard.getByRole('button', { name: 'Make Shared' })).toHaveCount(0)
   })
 
+  test('SLD-FE-420 and SLD-BE-420 provide activity filtering, pagination, and csv export', async ({ page }) => {
+    await page.addInitScript(() => {
+      const audits = Array.from({ length: 25 }, (_, index) => ({
+        id: index + 1,
+        actor_user_id: 'qa-admin-user',
+        actor_email: 'qa-admin@example.com',
+        entity_type: index % 2 === 0 ? 'template' : 'slide',
+        entity_id: `entity-${index + 1}`,
+        action: index % 3 === 0 ? 'export-html' : index % 3 === 1 ? 'save' : 'publish-template',
+        outcome: index % 4 === 0 ? 'failure' : 'success',
+        error_class: index % 4 === 0 ? 'simulated_failure' : null,
+        details: { index: index + 1 },
+        created_at: `2026-04-${String(index + 1).padStart(2, '0')}T10:00:00.000Z`,
+      }))
+
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [],
+        audits,
+        nextAuditId: 26,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Activity' }).click()
+    const auditPagination = page.locator('.slides-audit-pagination')
+
+    await expect(page.locator('.slides-library-card')).toHaveCount(20)
+    await expect(page.getByText('Showing 1-20')).toBeVisible()
+
+    await auditPagination.getByRole('button', { name: 'Next' }).click()
+    await expect(page.locator('.slides-library-card')).toHaveCount(5)
+    await expect(page.getByText('Showing 21-25')).toBeVisible()
+
+    await auditPagination.getByRole('button', { name: 'Previous' }).click()
+    await expect(page.locator('.slides-library-card')).toHaveCount(20)
+
+    await page.locator('#slides-audit-action').selectOption('export-html')
+    await expect(page.locator('.slides-library-card')).toHaveCount(9)
+
+    await page.locator('#slides-audit-outcome').selectOption('failure')
+    await expect(page.locator('.slides-library-card')).toHaveCount(3)
+
+    await page.locator('#slides-audit-entity').selectOption('template')
+    await expect(page.locator('.slides-library-card')).toHaveCount(3)
+
+    await page.locator('#slides-audit-date-from').fill('2026-04-20')
+    await page.locator('#slides-audit-date-to').fill('2026-04-25')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export Current View CSV' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('slide-audit-events.csv')
+
+    await page.getByRole('button', { name: 'Reset Audit Filters' }).click()
+    await expect(page.locator('#slides-audit-action')).toHaveValue('all')
+    await expect(page.locator('#slides-audit-outcome')).toHaveValue('all')
+    await expect(page.locator('#slides-audit-entity')).toHaveValue('all')
+    await expect(page.locator('#slides-audit-date-from')).toHaveValue('')
+    await expect(page.locator('#slides-audit-date-to')).toHaveValue('')
+    await expect(page.locator('.slides-library-card')).toHaveCount(20)
+  })
+
   test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

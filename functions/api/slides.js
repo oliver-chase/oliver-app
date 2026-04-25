@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits&search=&limit=
+// GET /api/slides?resource=slides|templates|audits&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
@@ -756,6 +756,13 @@ function addSearch(path, field, query) {
   return path + '&' + field + '=ilike.*' + encodeURIComponent(trimmed) + '*';
 }
 
+function addAuditSearch(path, query) {
+  const trimmed = (query || '').trim();
+  if (!trimmed) return path;
+  const clause = `(action.ilike.*${trimmed}*,entity_id.ilike.*${trimmed}*,actor_email.ilike.*${trimmed}*,error_class.ilike.*${trimmed}*)`;
+  return path + '&or=' + encodeURIComponent(clause);
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const missing = assertSupabaseConfigured(env);
@@ -770,6 +777,8 @@ export async function onRequestGet(context) {
   const search = url.searchParams.get('search') || '';
   const limitRaw = Number.parseInt(url.searchParams.get('limit') || '50', 10);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+  const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
   if (resource === 'slides') {
     let path = '/rest/v1/slides?deleted_at=is.null&select=*&order=updated_at.desc&limit=' + String(limit);
@@ -805,14 +814,48 @@ export async function onRequestGet(context) {
   }
 
   if (resource === 'audits') {
-    let path = '/rest/v1/slide_audit_events?select=*&order=created_at.desc&limit=' + String(limit);
+    const action = (url.searchParams.get('action') || '').trim();
+    const outcome = (url.searchParams.get('outcome') || '').trim();
+    const entityType = (url.searchParams.get('entity_type') || '').trim();
+    const dateFrom = (url.searchParams.get('date_from') || '').trim();
+    const dateTo = (url.searchParams.get('date_to') || '').trim();
+
+    let path = '/rest/v1/slide_audit_events?select=*&order=created_at.desc&limit=' + String(limit + 1) + '&offset=' + String(offset);
     if (actor.role !== 'admin') {
       path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
     }
+    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'export-html', 'export-pdf'].includes(action)) {
+      path += '&action=eq.' + encodeURIComponent(action);
+    }
+    if (outcome && ['success', 'failure'].includes(outcome)) {
+      path += '&outcome=eq.' + encodeURIComponent(outcome);
+    }
+    if (entityType && ['slide', 'template'].includes(entityType)) {
+      path += '&entity_type=eq.' + encodeURIComponent(entityType);
+    }
+    if (dateFrom && dateTo) {
+      const dateClause = `(created_at.gte.${dateFrom}T00:00:00.000Z,created_at.lte.${dateTo}T23:59:59.999Z)`;
+      path += '&and=' + encodeURIComponent(dateClause);
+    } else if (dateFrom) {
+      path += '&created_at=gte.' + encodeURIComponent(dateFrom + 'T00:00:00.000Z');
+    } else if (dateTo) {
+      path += '&created_at=lte.' + encodeURIComponent(dateTo + 'T23:59:59.999Z');
+    }
+    path = addAuditSearch(path, search);
 
     const response = await supabaseFetch(env, path);
     const rows = await response.json().catch(() => []);
-    return jsonResponse({ items: rows });
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    return jsonResponse({
+      items,
+      pagination: {
+        offset,
+        limit,
+        has_more: hasMore,
+        next_offset: offset + items.length,
+      },
+    });
   }
 
   return errorResponse('Unsupported resource for /api/slides. Use slides, templates, or audits.', 400);

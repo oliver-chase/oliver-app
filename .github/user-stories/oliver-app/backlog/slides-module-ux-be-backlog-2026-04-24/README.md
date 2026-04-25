@@ -16,6 +16,7 @@ Goal: create one actionable backlog that covers:
 - Locked-layer guardrails now enforce immutability for protected components across keyboard, pointer, resize, and toolbar styling/alignment actions.
 - Library search now has explicit no-match guidance across My Slides/templates/activity and template visibility is constrained server-side before query limiting.
 - Template publish workflow now supports private/shared visibility controls with owner/admin governance actions for visibility updates and archive.
+- Activity explorer now supports server-side pagination plus action/outcome/entity/date filters and CSV export for current filtered view.
 - Slides chatbot coverage now includes parse/save/export/navigation command intents with guarded zero-step flow runtime handling.
 - Slides chatbot now supports direct HTML export download command execution to remove export dead-end follow-ups.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
@@ -33,6 +34,7 @@ Goal: create one actionable backlog that covers:
 | S2.4 | Chat Command Parity Hardening | `US-SLD-029` | Net-new |
 | S2.5 | Chat Export Execution Hardening | `US-SLD-040` | Net-new |
 | S3.1 | Template Governance + ACL Hardening | `SLD-FE-400`, `SLD-BE-400` | Net-new |
+| S3.2 | Audit Explorer + Query Hardening | `SLD-FE-420`, `SLD-BE-420` | Net-new |
 | S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
 
 ## Epic Status (Current Branch)
@@ -48,13 +50,14 @@ Goal: create one actionable backlog that covers:
 | S2.4 | Complete (`US-SLD-029`) | Ready to commit as one epic milestone |
 | S2.5 | Complete (`US-SLD-040`) | Ready to commit as one epic milestone |
 | S3.1 | Complete (`SLD-FE-400`, `SLD-BE-400`) | Ready to commit as one epic milestone |
+| S3.2 | Complete (`SLD-FE-420`, `SLD-BE-420`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
-1. Run full smoke + e2e pass in CI-like network conditions to validate no environment-specific regressions.
-2. Add cross-browser visual baselines if/when Firefox/WebKit projects are enabled.
-3. Track follow-up UX polish separately from the now-complete S2 functional backlog.
+1. Add collaborator role model for template governance (`SLD-FE-410`, `SLD-BE-410`).
+2. Add PPTX export platform slice with warnings/reporting (`SLD-FE-500`, `SLD-BE-500`).
+3. Add saved activity filter presets and long-range audit export jobs as follow-up ops backlog.
 
 ## Execution and Commit Model
 

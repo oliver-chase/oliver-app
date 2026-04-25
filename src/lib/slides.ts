@@ -30,6 +30,27 @@ interface UpdateTemplateOptions {
   isShared?: boolean
 }
 
+export interface SlideAuditQueryOptions {
+  limit?: number
+  offset?: number
+  search?: string
+  action?: SlideAuditAction | 'all'
+  outcome?: 'success' | 'failure' | 'all'
+  entityType?: 'slide' | 'template' | 'all'
+  dateFrom?: string
+  dateTo?: string
+}
+
+export interface SlideAuditQueryResult {
+  items: SlideAuditEvent[]
+  pagination: {
+    offset: number
+    limit: number
+    has_more: boolean
+    next_offset: number
+  }
+}
+
 class SlideApiError extends Error {
   status: number
 
@@ -341,23 +362,80 @@ export async function listTemplates(actorInput: SlideActor, search = ''): Promis
   )
 }
 
-export async function listSlideAudits(actorInput: SlideActor, limit = 30): Promise<SlideAuditEvent[]> {
+export async function listSlideAudits(
+  actorInput: SlideActor,
+  optionsInput: SlideAuditQueryOptions = {},
+): Promise<SlideAuditQueryResult> {
   const actor = normalizeActor(actorInput)
+  const limitRaw = Number.isFinite(optionsInput.limit) ? Number(optionsInput.limit) : 30
+  const offsetRaw = Number.isFinite(optionsInput.offset) ? Number(optionsInput.offset) : 0
+  const limit = Math.max(1, Math.min(200, limitRaw))
+  const offset = Math.max(0, offsetRaw)
+  const search = optionsInput.search || ''
 
   return withLocalFallback(
     async () => {
       const params = new URLSearchParams({
         resource: 'audits',
         limit: String(limit),
+        offset: String(offset),
+        search,
         user_id: actor.user_id,
       })
       if (actor.user_email) params.set('user_email', actor.user_email)
-      const response = await requestJson<{ items: SlideAuditEvent[] }>(`/api/slides?${params.toString()}`)
-      return response.items || []
+      if (optionsInput.action && optionsInput.action !== 'all') params.set('action', optionsInput.action)
+      if (optionsInput.outcome && optionsInput.outcome !== 'all') params.set('outcome', optionsInput.outcome)
+      if (optionsInput.entityType && optionsInput.entityType !== 'all') params.set('entity_type', optionsInput.entityType)
+      if (optionsInput.dateFrom) params.set('date_from', optionsInput.dateFrom)
+      if (optionsInput.dateTo) params.set('date_to', optionsInput.dateTo)
+
+      const response = await requestJson<SlideAuditQueryResult>(`/api/slides?${params.toString()}`)
+      return {
+        items: response.items || [],
+        pagination: response.pagination || {
+          offset,
+          limit,
+          has_more: false,
+          next_offset: offset,
+        },
+      }
     },
     () => {
       const store = readLocalStore(actor)
-      return store.audits.filter((event) => event.actor_user_id === actor.user_id).slice(0, limit)
+      const filtered = store.audits
+        .filter((event) => (actor.role === 'admin' ? true : event.actor_user_id === actor.user_id))
+        .filter((event) => {
+          if (optionsInput.action && optionsInput.action !== 'all' && event.action !== optionsInput.action) return false
+          if (optionsInput.outcome && optionsInput.outcome !== 'all' && event.outcome !== optionsInput.outcome) return false
+          if (optionsInput.entityType && optionsInput.entityType !== 'all' && event.entity_type !== optionsInput.entityType) return false
+          if (optionsInput.dateFrom && event.created_at < `${optionsInput.dateFrom}T00:00:00.000Z`) return false
+          if (optionsInput.dateTo && event.created_at > `${optionsInput.dateTo}T23:59:59.999Z`) return false
+          if (!search.trim()) return true
+          const query = search.trim().toLowerCase()
+          const haystack = [
+            event.action,
+            event.entity_type,
+            event.entity_id,
+            event.outcome,
+            event.error_class || '',
+            event.actor_email || '',
+            event.actor_user_id,
+          ].join(' ').toLowerCase()
+          return haystack.includes(query)
+        })
+
+      const pageRows = filtered.slice(offset, offset + limit + 1)
+      const hasMore = pageRows.length > limit
+      const items = hasMore ? pageRows.slice(0, limit) : pageRows
+      return {
+        items,
+        pagination: {
+          offset,
+          limit,
+          has_more: hasMore,
+          next_offset: offset + items.length,
+        },
+      }
     },
   )
 }

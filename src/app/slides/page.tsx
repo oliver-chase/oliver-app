@@ -148,6 +148,7 @@ const MIN_COMPONENT_WIDTH = 48
 const MIN_COMPONENT_HEIGHT = 32
 const MIN_FONT_SIZE = 14
 const MAX_HISTORY_ENTRIES = 80
+const AUDIT_PAGE_SIZE = 20
 
 const EDITABLE_COMPONENT_TYPES = new Set<SlideComponentType>([
   'text',
@@ -252,6 +253,13 @@ export default function SlidesPage() {
   const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
+  const [auditActionFilter, setAuditActionFilter] = useState<'all' | SlideAuditEvent['action']>('all')
+  const [auditOutcomeFilter, setAuditOutcomeFilter] = useState<'all' | SlideAuditEvent['outcome']>('all')
+  const [auditEntityTypeFilter, setAuditEntityTypeFilter] = useState<'all' | SlideAuditEvent['entity_type']>('all')
+  const [auditDateFrom, setAuditDateFrom] = useState('')
+  const [auditDateTo, setAuditDateTo] = useState('')
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [auditHasMore, setAuditHasMore] = useState(false)
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
@@ -280,24 +288,14 @@ export default function SlidesPage() {
   const trimmedSearchValue = searchValue.trim()
   const searchLabel = workspaceTab === 'activity' ? 'Search activity' : 'Search library'
   const searchPlaceholder = workspaceTab === 'activity' ? 'Search activity events' : 'Search slides or templates'
+  const hasActiveAuditFilters =
+    auditActionFilter !== 'all' ||
+    auditOutcomeFilter !== 'all' ||
+    auditEntityTypeFilter !== 'all' ||
+    auditDateFrom.length > 0 ||
+    auditDateTo.length > 0
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
-  const filteredAudits = useMemo(() => {
-    const query = trimmedSearchValue.toLowerCase()
-    if (!query) return audits
-    return audits.filter((event) => {
-      const haystack = [
-        event.action,
-        event.entity_type,
-        event.entity_id,
-        event.outcome,
-        event.error_class || '',
-        event.actor_email || '',
-        event.actor_user_id,
-      ].join(' ').toLowerCase()
-      return haystack.includes(query)
-    })
-  }, [audits, trimmedSearchValue])
   const canvasDimensions = useMemo(() => {
     const width = result?.canvas.width || CANVAS_DEFAULT_WIDTH
     const height = result?.canvas.height || CANVAS_DEFAULT_HEIGHT
@@ -983,21 +981,54 @@ export default function SlidesPage() {
       const [slideRows, templateRows, auditRows] = await Promise.all([
         listSlides(actor, searchValue),
         listTemplates(actor, searchValue),
-        listSlideAudits(actor, 40),
+        listSlideAudits(actor, {
+          limit: AUDIT_PAGE_SIZE,
+          offset: auditOffset,
+          search: searchValue,
+          action: auditActionFilter,
+          outcome: auditOutcomeFilter,
+          entityType: auditEntityTypeFilter,
+          dateFrom: auditDateFrom,
+          dateTo: auditDateTo,
+        }),
       ])
       setSlides(slideRows)
       setTemplates(templateRows)
-      setAudits(auditRows)
+      setAudits(auditRows.items)
+      setAuditHasMore(auditRows.pagination.has_more)
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setLibraryLoading(false)
     }
-  }, [actor, searchValue])
+  }, [actor, auditActionFilter, auditDateFrom, auditDateTo, auditEntityTypeFilter, auditOffset, auditOutcomeFilter, searchValue])
+
+  useEffect(() => {
+    setAuditOffset(0)
+  }, [searchValue, auditActionFilter, auditOutcomeFilter, auditEntityTypeFilter, auditDateFrom, auditDateTo])
 
   useEffect(() => {
     void refreshLibraryData()
   }, [refreshLibraryData])
+
+  const resetAuditFilters = useCallback(() => {
+    setAuditActionFilter('all')
+    setAuditOutcomeFilter('all')
+    setAuditEntityTypeFilter('all')
+    setAuditDateFrom('')
+    setAuditDateTo('')
+    setAuditOffset(0)
+  }, [])
+
+  const handleAuditNextPage = useCallback(() => {
+    if (!auditHasMore || libraryLoading) return
+    setAuditOffset((previous) => previous + AUDIT_PAGE_SIZE)
+  }, [auditHasMore, libraryLoading])
+
+  const handleAuditPreviousPage = useCallback(() => {
+    if (libraryLoading) return
+    setAuditOffset((previous) => Math.max(0, previous - AUDIT_PAGE_SIZE))
+  }, [libraryLoading])
 
   const normalizeComponentsForPersistence = useCallback((components: SlideComponent[]) => {
     return components.map((component) => ({
@@ -1719,6 +1750,28 @@ export default function SlidesPage() {
     anchor.click()
     URL.revokeObjectURL(url)
   }, [])
+
+  const handleExportAuditCsv = useCallback(() => {
+    if (audits.length === 0) return
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`
+    const rows = audits.map((event) =>
+      [
+        event.created_at,
+        event.action,
+        event.entity_type,
+        event.entity_id,
+        event.outcome,
+        event.actor_user_id,
+        event.actor_email || '',
+        event.error_class || '',
+      ].map((value) => escapeCsv(String(value))).join(','),
+    )
+    const csv = [
+      'created_at,action,entity_type,entity_id,outcome,actor_user_id,actor_email,error_class',
+      ...rows,
+    ].join('\n')
+    downloadTextFile(csv, 'slide-audit-events.csv', 'text/csv;charset=utf-8')
+  }, [audits, downloadTextFile])
 
   const copyParsedJson = useCallback(async () => {
     if (!result) return
@@ -2703,14 +2756,103 @@ export default function SlidesPage() {
             {workspaceTab === 'activity' && (
               <div className="slides-library-section">
                 <h2>Slide Operations</h2>
-                {filteredAudits.length === 0 && (
+                <div className="slides-audit-filters">
+                  <label className="slides-editor-field" htmlFor="slides-audit-action">
+                    <span>Action</span>
+                    <select
+                      id="slides-audit-action"
+                      className="slides-select"
+                      value={auditActionFilter}
+                      onChange={(event) => setAuditActionFilter(event.target.value as typeof auditActionFilter)}
+                    >
+                      <option value="all">All actions</option>
+                      <option value="save">Save</option>
+                      <option value="autosave">Autosave</option>
+                      <option value="rename">Rename</option>
+                      <option value="duplicate">Duplicate</option>
+                      <option value="delete">Delete</option>
+                      <option value="publish-template">Publish Template</option>
+                      <option value="export-html">Export HTML</option>
+                      <option value="export-pdf">Export PDF</option>
+                    </select>
+                  </label>
+                  <label className="slides-editor-field" htmlFor="slides-audit-outcome">
+                    <span>Outcome</span>
+                    <select
+                      id="slides-audit-outcome"
+                      className="slides-select"
+                      value={auditOutcomeFilter}
+                      onChange={(event) => setAuditOutcomeFilter(event.target.value as typeof auditOutcomeFilter)}
+                    >
+                      <option value="all">All outcomes</option>
+                      <option value="success">Success</option>
+                      <option value="failure">Failure</option>
+                    </select>
+                  </label>
+                  <label className="slides-editor-field" htmlFor="slides-audit-entity">
+                    <span>Entity</span>
+                    <select
+                      id="slides-audit-entity"
+                      className="slides-select"
+                      value={auditEntityTypeFilter}
+                      onChange={(event) => setAuditEntityTypeFilter(event.target.value as typeof auditEntityTypeFilter)}
+                    >
+                      <option value="all">All entities</option>
+                      <option value="slide">Slide</option>
+                      <option value="template">Template</option>
+                    </select>
+                  </label>
+                  <label className="slides-editor-field" htmlFor="slides-audit-date-from">
+                    <span>Date from</span>
+                    <input
+                      id="slides-audit-date-from"
+                      type="date"
+                      className="slides-input"
+                      value={auditDateFrom}
+                      onChange={(event) => setAuditDateFrom(event.target.value)}
+                    />
+                  </label>
+                  <label className="slides-editor-field" htmlFor="slides-audit-date-to">
+                    <span>Date to</span>
+                    <input
+                      id="slides-audit-date-to"
+                      type="date"
+                      className="slides-input"
+                      value={auditDateTo}
+                      onChange={(event) => setAuditDateTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="slides-inline-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={resetAuditFilters}
+                    disabled={!hasActiveAuditFilters}
+                  >
+                    Reset Audit Filters
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={handleExportAuditCsv}
+                    disabled={audits.length === 0}
+                  >
+                    Export Current View CSV
+                  </button>
+                </div>
+
+                {audits.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
                       ? `No activity events match "${trimmedSearchValue}". Clear or update search to continue.`
+                      : hasActiveAuditFilters
+                        ? 'No audit events match the selected filters.'
                       : 'No audit events found yet.'}
                   </p>
                 )}
-                {filteredAudits.map((event) => (
+                {audits.map((event) => (
                   <article key={event.id} className="slides-library-card">
                     <div>
                       <h3>{event.action}</h3>
@@ -2724,6 +2866,29 @@ export default function SlidesPage() {
                     </div>
                   </article>
                 ))}
+
+                <div className="slides-inline-actions slides-audit-pagination">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={handleAuditPreviousPage}
+                    disabled={auditOffset === 0 || libraryLoading}
+                  >
+                    Previous
+                  </button>
+                  <span className="slides-card-note">
+                    Showing {audits.length === 0 ? 0 : auditOffset + 1}-
+                    {auditOffset + audits.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={handleAuditNextPage}
+                    disabled={!auditHasMore || libraryLoading}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </section>

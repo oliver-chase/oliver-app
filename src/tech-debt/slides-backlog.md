@@ -12,13 +12,13 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | TBD |
 | Template publishing | Publish from My Slides now supports private/shared visibility with owner/admin governance controls. | No role-aware collaborator management beyond owner/admin controls. | SLD-FE-410, SLD-BE-410 |
 | Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
-| Audit and compliance | Save/export/delete actions are logged. | No admin-grade filter/search/export for audit events; troubleshooting remains manual. | SLD-FE-420, SLD-BE-420 |
+| Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. | No saved filter presets or full-range export job for long audit histories. | TBD |
 
 ## Dead / Incomplete / Debt Findings
 
 1. `src/app/slides/page.tsx` is a 1k+ line orchestrator combining parser UX, persistence, export, conflict handling, and tab UI. This is high coupling debt and slows feature delivery.
 2. No confirmed dead code in the slides subtree right now; debt is mostly oversized UI composition and missing operational tooling.
-3. Activity feed is read-only and lacks structured filter controls and export support for admin investigation workflows.
+3. Activity feed now supports operational filtering/export, but it still lacks saved filter presets and org-level canned audit views.
 
 ## Epic and Ticket Backlog
 
@@ -52,8 +52,8 @@ KPI: Template reuse rate and admin audit resolution time both improve release-ov
 | --- | --- | --- | --- | --- | --- |
 | SLD-FE-400 | Template visibility controls in publish workflow | Frontend | P1 | Done (2026-04-25) | User can set template visibility (private/shared) with clear role constraints. |
 | SLD-BE-400 | Template ACL and ownership enforcement | Backend | P1 | Done (2026-04-25) | API enforces visibility/edit/delete rights by owner/role with audit entries. |
-| SLD-FE-420 | Audit explorer with filter/search/export | Frontend | P2 | Backlog | Activity tab supports filters by actor/action/outcome/date and exportable views. |
-| SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Backlog | API supports server-side filtering/pagination and returns predictable query latency. |
+| SLD-FE-420 | Audit explorer with filter/search/export | Frontend | P2 | Done (2026-04-25) | Activity tab supports filters by actor/action/outcome/date and exportable views. |
+| SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Done (2026-04-25) | API supports server-side filtering/pagination and returns predictable query latency. |
 
 ## EPIC SLD-E4: Export Platform
 Goal: Expand deliverable options while preserving editable output quality.
@@ -67,6 +67,6 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 
 ## Next Features In Line
 
-1. SLD-FE-420 + SLD-BE-420: Add an operational audit explorer with server-side filtering and export.
-2. SLD-FE-500 + SLD-BE-500: Add native PPTX export flows with warnings reporting.
-3. SLD-FE-410 + SLD-BE-410: Add explicit collaborator roles for delegated template ownership and approval workflows.
+1. SLD-FE-500 + SLD-BE-500: Add native PPTX export flows with warnings reporting.
+2. SLD-FE-410 + SLD-BE-410: Add explicit collaborator roles for delegated template ownership and approval workflows.
+3. Define a new audit-ops ticket for saved activity filter presets and long-range export jobs.
