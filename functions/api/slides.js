@@ -105,6 +105,19 @@ async function fetchActorAppUser(env, identity) {
   return { ok: true, row: rows[0] || null };
 }
 
+async function readAppUserByIdentifier(env, userId, email) {
+  const trimmedUserId = typeof userId === 'string' ? userId.trim() : '';
+  const normalizedEmail = normalizeEmail(email || '');
+  if (!trimmedUserId && !normalizedEmail) return null;
+
+  const lookup = await fetchActorAppUser(env, {
+    userId: trimmedUserId,
+    email: normalizedEmail,
+  });
+  if (!lookup.ok) throw new Error(lookup.error || 'Target user lookup failed');
+  return lookup.row || null;
+}
+
 function isAuthorizedSlidesActor(appUser) {
   if (!appUser) return false;
   if (appUser.role === 'admin') return true;
@@ -728,6 +741,76 @@ async function handleArchiveTemplateAction(env, actor, body) {
   return jsonResponse({ ok: true });
 }
 
+async function handleTransferTemplateOwnershipAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for transfer-template-owner.', 400);
+
+  const targetUserId = typeof body.target_user_id === 'string' ? body.target_user_id.trim() : '';
+  const targetUserEmail = normalizeEmail(body.target_user_email || '');
+  if (!targetUserId && !targetUserEmail) {
+    return errorResponse('target_user_id or target_user_email is required for transfer-template-owner.', 400);
+  }
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for ownership transfer.', 404);
+
+  const actorIsAdmin = actor.role === 'admin';
+  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. You do not own this template.', 403);
+  }
+
+  let targetUser;
+  try {
+    targetUser = await readAppUserByIdentifier(env, targetUserId, targetUserEmail);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Target user lookup failed';
+    return errorResponse(message, 502);
+  }
+  if (!targetUser) {
+    return errorResponse('Target user not found for ownership transfer.', 404);
+  }
+  if (!isAuthorizedSlidesActor(targetUser)) {
+    return errorResponse('Target user does not have slides access.', 403);
+  }
+
+  if (template.owner_user_id === targetUser.user_id) {
+    return jsonResponse({ template: normalizeTemplateRow(template) });
+  }
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        owner_user_id: targetUser.user_id,
+        updated_by: actor.user_id,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+
+  const rows = await response.json().catch(() => []);
+  const updated = normalizeTemplateRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'transfer-template',
+    outcome: 'success',
+    details: {
+      previous_owner_user_id: template.owner_user_id,
+      next_owner_user_id: targetUser.user_id,
+      next_owner_email: targetUser.email || null,
+    },
+  });
+
+  return jsonResponse({ template: updated });
+}
+
 async function handleRecordExportAction(env, actor, body) {
   const slideId = typeof body.slide_id === 'string' ? body.slide_id.trim() : '';
   const format = body.format === 'pdf' ? 'pdf' : 'html';
@@ -824,7 +907,7 @@ export async function onRequestGet(context) {
     if (actor.role !== 'admin') {
       path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
     }
-    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'export-html', 'export-pdf'].includes(action)) {
+    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'transfer-template', 'export-html', 'export-pdf'].includes(action)) {
       path += '&action=eq.' + encodeURIComponent(action);
     }
     if (outcome && ['success', 'failure'].includes(outcome)) {
@@ -887,6 +970,7 @@ export async function onRequestPost(context) {
   if (action === 'publish-template') return handlePublishTemplateAction(env, actor, body);
   if (action === 'update-template') return handleUpdateTemplateAction(env, actor, body);
   if (action === 'archive-template') return handleArchiveTemplateAction(env, actor, body);
+  if (action === 'transfer-template-owner') return handleTransferTemplateOwnershipAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);

@@ -562,6 +562,58 @@ test.describe('slides regression', () => {
     await expect(templateCard.getByRole('button', { name: 'Make Shared' })).toHaveCount(0)
   })
 
+  test('SLD-FE-410 and SLD-BE-410 allow template ownership transfer with audit visibility', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-transfer-1',
+            owner_user_id: 'qa-admin-user',
+            name: 'Transferable Template',
+            description: 'Ownership handoff baseline.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'component-1',
+                type: 'text',
+                sourceLabel: '.headline',
+                x: 100,
+                y: 120,
+                width: 700,
+                content: 'Template ownership transfer',
+                style: { fontSize: 42, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        audits: [],
+        nextAuditId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const templateCard = page.locator('.slides-library-card', { hasText: 'Transferable Template' }).first()
+    await expect(templateCard.getByText(/Owner:\s*qa-admin-user/i)).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Transfer Owner' }).click()
+    await templateCard.getByLabel('New Owner').fill('qa-new-owner@example.com')
+    await templateCard.getByRole('button', { name: 'Confirm Transfer' }).click()
+    await expect(templateCard.getByText(/Owner:\s*qa-new-owner@example.com/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await page.locator('#slides-audit-action').selectOption('transfer-template')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+    await expect(page.locator('.slides-library-card h3')).toContainText('transfer-template')
+  })
+
   test('SLD-FE-420 and SLD-BE-420 provide activity filtering, pagination, and csv export', async ({ page }) => {
     await page.addInitScript(() => {
       const audits = Array.from({ length: 25 }, (_, index) => ({

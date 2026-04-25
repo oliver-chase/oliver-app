@@ -29,6 +29,7 @@ import {
   renameSlide,
   saveSlide,
   SlideConflictError,
+  transferTemplateOwnership,
   updateTemplate,
 } from '@/lib/slides'
 import { useUser } from '@/context/UserContext'
@@ -96,6 +97,11 @@ interface TemplatePublishDraft {
   name: string
   description: string
   isShared: boolean
+}
+
+interface TemplateTransferDraft {
+  templateId: string
+  target: string
 }
 
 function readHistoryIndex(state: unknown): number | null {
@@ -251,6 +257,7 @@ export default function SlidesPage() {
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState<string | null>(null)
   const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
+  const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
   const [auditActionFilter, setAuditActionFilter] = useState<'all' | SlideAuditEvent['action']>('all')
@@ -1541,6 +1548,44 @@ export default function SlidesPage() {
     }
   }, [actor, isSlidesAdmin, refreshLibraryData])
 
+  const openTransferTemplateDraft = useCallback((template: SlideTemplateRecord) => {
+    setLibraryError(null)
+    setTemplateTransferDraft({
+      templateId: template.id,
+      target: '',
+    })
+  }, [])
+
+  const closeTransferTemplateDraft = useCallback(() => {
+    setTemplateTransferDraft(null)
+  }, [])
+
+  const handleTransferTemplateOwnership = useCallback(async (template: SlideTemplateRecord) => {
+    if (templateActionBusyId) return
+    if (!templateTransferDraft || templateTransferDraft.templateId !== template.id) return
+    const target = templateTransferDraft.target.trim()
+    if (!target) {
+      setLibraryError('New owner email or user id is required.')
+      return
+    }
+
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      await transferTemplateOwnership(actor, template.id, {
+        userEmail: target.includes('@') ? target : undefined,
+        userId: target.includes('@') ? undefined : target,
+      })
+      await refreshLibraryData()
+      setTemplateTransferDraft(null)
+      setEditorNotice({ tone: 'info', text: `Transferred template "${template.name}" ownership to ${target}.` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor, refreshLibraryData, templateActionBusyId, templateTransferDraft])
+
   const handleArchiveTemplate = useCallback(async (template: SlideTemplateRecord) => {
     const approved = window.confirm(`Archive template "${template.name}"?`)
     if (!approved) return
@@ -2713,6 +2758,7 @@ export default function SlidesPage() {
                     <div>
                       <h3>{template.name}</h3>
                       <p>{template.description || 'No description'}</p>
+                      <p>Owner: {template.owner_user_id || 'n/a'}</p>
                       <p>
                         Visibility: {template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(template.updated_at)}
                       </p>
@@ -2739,6 +2785,14 @@ export default function SlidesPage() {
                           )}
                           <button
                             type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => openTransferTemplateDraft(template)}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            Transfer Owner
+                          </button>
+                          <button
+                            type="button"
                             className="btn btn-sm btn-danger"
                             onClick={() => void handleArchiveTemplate(template)}
                             disabled={templateActionBusyId === template.id}
@@ -2748,6 +2802,41 @@ export default function SlidesPage() {
                         </>
                       )}
                     </div>
+                    {templateTransferDraft?.templateId === template.id && (
+                      <div className="slides-template-draft">
+                        <label className="slides-label" htmlFor={`slides-template-transfer-${template.id}`}>New Owner</label>
+                        <input
+                          id={`slides-template-transfer-${template.id}`}
+                          className="slides-input"
+                          value={templateTransferDraft.target}
+                          onChange={(event) =>
+                            setTemplateTransferDraft((previous) =>
+                              previous && previous.templateId === template.id
+                                ? { ...previous, target: event.target.value }
+                                : previous,
+                            )}
+                          placeholder="user@example.com or user_id"
+                        />
+                        <div className="slides-inline-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => void handleTransferTemplateOwnership(template)}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            Confirm Transfer
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={closeTransferTemplateDraft}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>
@@ -2772,6 +2861,7 @@ export default function SlidesPage() {
                       <option value="duplicate">Duplicate</option>
                       <option value="delete">Delete</option>
                       <option value="publish-template">Publish Template</option>
+                      <option value="transfer-template">Transfer Template</option>
                       <option value="export-html">Export HTML</option>
                       <option value="export-pdf">Export PDF</option>
                     </select>

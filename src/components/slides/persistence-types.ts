@@ -40,6 +40,7 @@ export type SlideAuditAction =
   | 'duplicate'
   | 'rename'
   | 'publish-template'
+  | 'transfer-template'
   | 'export-html'
   | 'export-pdf'
 

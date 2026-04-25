@@ -30,6 +30,11 @@ interface UpdateTemplateOptions {
   isShared?: boolean
 }
 
+interface TransferTemplateOwnershipOptions {
+  userId?: string
+  userEmail?: string
+}
+
 export interface SlideAuditQueryOptions {
   limit?: number
   offset?: number
@@ -334,8 +339,10 @@ export async function listSlides(actorInput: SlideActor, search = ''): Promise<S
     },
     () => {
       const store = readLocalStore(actor)
-      const owned = store.slides.filter((slide) => slide.owner_user_id === actor.user_id)
-      return applySearch(owned, search).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      const rows = actor.role === 'admin'
+        ? store.slides
+        : store.slides.filter((slide) => slide.owner_user_id === actor.user_id)
+      return applySearch(rows, search).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     },
   )
 }
@@ -356,7 +363,9 @@ export async function listTemplates(actorInput: SlideActor, search = ''): Promis
     },
     () => {
       const store = readLocalStore(actor)
-      const rows = store.templates.filter((template) => template.is_shared || template.owner_user_id === actor.user_id)
+      const rows = actor.role === 'admin'
+        ? store.templates
+        : store.templates.filter((template) => template.is_shared || template.owner_user_id === actor.user_id)
       return applySearch(rows, search).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     },
   )
@@ -774,6 +783,61 @@ export async function archiveTemplate(actorInput: SlideActor, templateId: string
       store.templates = store.templates.filter((template) => template.id !== templateId)
       makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'archive-template' })
       writeLocalStore(store)
+    },
+  )
+}
+
+export async function transferTemplateOwnership(
+  actorInput: SlideActor,
+  templateId: string,
+  options: TransferTemplateOwnershipOptions,
+): Promise<SlideTemplateRecord> {
+  const actor = normalizeActor(actorInput)
+  const targetUserId = options.userId?.trim() || ''
+  const targetUserEmail = options.userEmail?.trim().toLowerCase() || ''
+  if (!targetUserId && !targetUserEmail) {
+    throw new SlideApiError('Target owner email or user id is required.', 400)
+  }
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ template: SlideTemplateRecord }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'transfer-template-owner',
+          actor,
+          template_id: templateId,
+          target_user_id: targetUserId || undefined,
+          target_user_email: targetUserEmail || undefined,
+        }),
+      })
+      return response.template
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const index = store.templates.findIndex((template) => template.id === templateId)
+      if (index < 0) throw new SlideApiError('Template not found for ownership transfer', 404)
+      const existing = store.templates[index]
+      const isOwner = existing.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+
+      const nextOwner = targetUserId || targetUserEmail
+      const updated: SlideTemplateRecord = {
+        ...existing,
+        owner_user_id: nextOwner,
+        updated_at: nowIso(),
+      }
+
+      store.templates[index] = updated
+      makeAuditEvent(store, actor, 'transfer-template', 'success', 'template', templateId, {
+        previous_owner_user_id: existing.owner_user_id,
+        next_owner_user_id: updated.owner_user_id,
+      })
+      writeLocalStore(store)
+      return updated
     },
   )
 }
