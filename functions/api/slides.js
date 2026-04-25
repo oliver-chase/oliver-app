@@ -1445,6 +1445,99 @@ async function handleEscalateTemplateApprovalAction(env, actor, body) {
   return jsonResponse({ approval: escalated });
 }
 
+async function handleRunApprovalEscalationSweepAction(env, actor, body) {
+  if (actor.role !== 'admin') {
+    return errorResponse('Forbidden. Only admins can run approval escalation sweeps.', 403);
+  }
+
+  const dryRun = body?.dry_run === true;
+  const nowMs = Date.now();
+  const overdueThresholdMs = 48 * 60 * 60 * 1000;
+  const escalationCooldownMs = 24 * 60 * 60 * 1000;
+  const overdueBefore = new Date(nowMs - overdueThresholdMs).toISOString();
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_approvals?status=eq.pending&created_at=lte.' + encodeURIComponent(overdueBefore) + '&select=*&order=created_at.asc&limit=200',
+  );
+  const rows = await response.json().catch(() => []);
+  const pending = Array.isArray(rows) ? rows : [];
+
+  let escalated = 0;
+  let skipped = 0;
+
+  for (const approval of pending) {
+    const payload = isObject(approval.payload) ? approval.payload : {};
+    const priorEscalations = Array.isArray(payload.escalations) ? payload.escalations : [];
+    const explicitLast = typeof payload.last_escalated_at === 'string' ? payload.last_escalated_at : '';
+    const lastEscalationEntry = priorEscalations[priorEscalations.length - 1] || null;
+    const derivedLast = lastEscalationEntry && typeof lastEscalationEntry.created_at === 'string'
+      ? lastEscalationEntry.created_at
+      : '';
+    const lastEscalatedAt = explicitLast || derivedLast;
+    const lastEscalatedAtMs = lastEscalatedAt ? Date.parse(lastEscalatedAt) : NaN;
+    if (Number.isFinite(lastEscalatedAtMs) && nowMs - lastEscalatedAtMs < escalationCooldownMs) {
+      skipped += 1;
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const escalationRecord = {
+      escalated_by_user_id: actor.user_id,
+      escalated_by_email: actor.email || null,
+      reason: 'SLA overdue escalation sweep',
+      automated: true,
+      created_at: now,
+    };
+
+    if (!dryRun) {
+      await supabaseFetch(
+        env,
+        '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            payload: {
+              ...payload,
+              escalations: [...priorEscalations, escalationRecord],
+              escalation_count: priorEscalations.length + 1,
+              last_escalated_at: now,
+            },
+            updated_at: now,
+          }),
+        },
+      );
+
+      await insertAudit(env, {
+        actor_user_id: actor.user_id,
+        actor_email: actor.email || null,
+        entity_type: 'template',
+        entity_id: approval.template_id,
+        action: 'escalate-approval',
+        outcome: 'success',
+        details: {
+          approval_id: approval.id,
+          approval_type: approval.approval_type,
+          escalation_count: priorEscalations.length + 1,
+          automated: true,
+        },
+      });
+    }
+
+    escalated += 1;
+  }
+
+  return jsonResponse({
+    sweep: {
+      processed: pending.length,
+      escalated,
+      skipped,
+      dry_run: dryRun,
+    },
+  });
+}
+
 async function handleUpsertAuditPresetAction(env, actor, body) {
   const name = sanitizeAuditPresetName(body.name);
   if (!name) return errorResponse('Valid preset name is required for upsert-audit-preset.', 400);
@@ -1808,6 +1901,7 @@ export async function onRequestPost(context) {
   if (action === 'submit-template-approval') return handleSubmitTemplateApprovalAction(env, actor, body);
   if (action === 'resolve-template-approval') return handleResolveTemplateApprovalAction(env, actor, body);
   if (action === 'escalate-template-approval') return handleEscalateTemplateApprovalAction(env, actor, body);
+  if (action === 'run-approval-escalation-sweep') return handleRunApprovalEscalationSweepAction(env, actor, body);
   if (action === 'upsert-audit-preset') return handleUpsertAuditPresetAction(env, actor, body);
   if (action === 'delete-audit-preset') return handleDeleteAuditPresetAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);

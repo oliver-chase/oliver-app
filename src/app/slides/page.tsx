@@ -42,6 +42,7 @@ import {
   recordExportEvent,
   removeTemplateCollaborator,
   resolveTemplateApproval,
+  runTemplateApprovalEscalationSweep,
   renameSlide,
   saveSlide,
   SlideConflictError,
@@ -488,6 +489,10 @@ export default function SlidesPage() {
     return byTemplate
   }, [templateApprovals])
   const showTemplateApprovalQueue = actor.role === 'admin' || templateApprovals.length > 0
+  const overdueTemplateApprovals = useMemo(
+    () => templateApprovals.filter((approval) => getApprovalSlaState(approval).tone === 'overdue').length,
+    [templateApprovals],
+  )
 
   const cloneComponents = useCallback(
     (components: SlideComponent[]) =>
@@ -2041,6 +2046,24 @@ export default function SlidesPage() {
     }
   }, [actor, refreshLibraryData, templateApprovalBusyId, templateById])
 
+  const handleRunApprovalEscalationSweep = useCallback(async () => {
+    if (templateApprovalBusyId) return
+    setTemplateApprovalBusyId('sweep')
+    setLibraryError(null)
+    try {
+      const result = await runTemplateApprovalEscalationSweep(actor)
+      await refreshLibraryData()
+      setEditorNotice({
+        tone: 'info',
+        text: `Approval sweep processed ${result.processed} pending requests and escalated ${result.escalated}.`,
+      })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateApprovalBusyId(null)
+    }
+  }, [actor, refreshLibraryData, templateApprovalBusyId])
+
   const applyStyleToSelection = useCallback((patch: Partial<SlideComponent['style']>) => {
     if (!result || selectedComponentIds.length === 0) {
       setEditorNotice({ tone: 'error', text: 'Select at least one layer before applying styles.' })
@@ -3360,6 +3383,21 @@ export default function SlidesPage() {
                     <p className="slides-card-note">
                       {actor.role === 'admin' ? 'Pending Governance Approvals' : 'My Pending Approval Requests'}
                     </p>
+                    {actor.role === 'admin' && (
+                      <div className="slides-inline-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void handleRunApprovalEscalationSweep()}
+                          disabled={!!templateApprovalBusyId || templateApprovals.length === 0}
+                        >
+                          {templateApprovalBusyId === 'sweep' ? 'Running Sweep…' : 'Run SLA Escalation Sweep'}
+                        </button>
+                        <span className="slides-card-note">
+                          Overdue approvals: {overdueTemplateApprovals}
+                        </span>
+                      </div>
+                    )}
                     {templateApprovals.length === 0 && (
                       <p className="slides-card-note">
                         {actor.role === 'admin'

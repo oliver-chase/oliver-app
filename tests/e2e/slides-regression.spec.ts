@@ -1001,6 +1001,72 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card h3')).toContainText('escalate-approval')
   })
 
+  test('SLD-BE-440 admin escalation sweep escalates overdue approvals without manual prompts', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('qa-app-user', JSON.stringify({
+        user_id: 'qa-admin-user',
+        email: 'qa-admin@example.com',
+        name: 'QA Admin',
+        role: 'admin',
+        page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+        created_at: '2026-04-24T00:00:00.000Z',
+        updated_at: '2026-04-24T00:00:00.000Z',
+      }))
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-sla-sweep-1',
+            owner_user_id: 'qa-member-user',
+            name: 'Sweep Template',
+            description: 'Overdue approvals should be swept.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [],
+            metadata: {},
+            created_at: '2026-04-20T08:00:00.000Z',
+            updated_at: '2026-04-20T08:00:00.000Z',
+          },
+        ],
+        collaborators: [],
+        approvals: [
+          {
+            id: 'approval-sweep-1',
+            template_id: 'template-sla-sweep-1',
+            requested_by_user_id: 'qa-member-user',
+            requested_by_email: 'qa-member@example.com',
+            approval_type: 'transfer-template',
+            payload: {
+              target_user_id: 'qa-admin-user',
+              target_user_email: 'qa-admin@example.com',
+            },
+            status: 'pending',
+            review_note: null,
+            reviewed_by_user_id: null,
+            reviewed_at: null,
+            created_at: '2026-04-20T08:00:00.000Z',
+            updated_at: '2026-04-20T08:00:00.000Z',
+          },
+        ],
+        audits: [],
+        nextAuditId: 1,
+        nextApprovalId: 2,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+    await expect(page.getByText(/Overdue approvals:\s*1/i)).toBeVisible()
+    await page.getByRole('button', { name: 'Run SLA Escalation Sweep' }).click()
+
+    const approvalCard = page.locator('.slides-template-draft .slides-library-card', { hasText: 'Transfer Template Ownership' }).first()
+    await expect(approvalCard).toContainText('Escalations: 1')
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await page.locator('#slides-audit-action').selectOption('escalate-approval')
+    await expect(page.locator('.slides-library-card h3')).toContainText('escalate-approval')
+  })
+
   test('SLD-FE-410 collaborator visibility allows members to use private delegated templates', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('qa-app-user', JSON.stringify({

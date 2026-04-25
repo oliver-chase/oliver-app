@@ -60,6 +60,13 @@ interface SubmitTemplateApprovalOptions {
   role?: SlideTemplateCollaboratorRole
 }
 
+export interface TemplateApprovalEscalationSweepResult {
+  processed: number
+  escalated: number
+  skipped: number
+  dry_run: boolean
+}
+
 export interface SlideAuditPresetInput {
   name: string
   scope: SlideAuditPresetScope
@@ -1540,6 +1547,109 @@ export async function escalateTemplateApproval(
       })
       writeLocalStore(store)
       return updated
+    },
+  )
+}
+
+export async function runTemplateApprovalEscalationSweep(
+  actorInput: SlideActor,
+  options: { dryRun?: boolean } = {},
+): Promise<TemplateApprovalEscalationSweepResult> {
+  const actor = normalizeActor(actorInput)
+  const dryRun = !!options.dryRun
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ sweep: TemplateApprovalEscalationSweepResult }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'run-approval-escalation-sweep',
+          actor,
+          dry_run: dryRun,
+        }),
+      })
+      if (!response.sweep) throw new SlideApiError('Escalation sweep failed.', 500)
+      return response.sweep
+    },
+    () => {
+      if (actor.role !== 'admin') {
+        throw new SlideApiError('Forbidden. Only admins can run approval escalation sweeps.', 403)
+      }
+
+      const now = Date.now()
+      const overdueThresholdMs = 48 * 60 * 60 * 1000
+      const escalationCooldownMs = 24 * 60 * 60 * 1000
+      const store = readLocalStore(actor)
+      const pending = store.approvals.filter((approval) => approval.status === 'pending')
+      let escalated = 0
+      let skipped = 0
+
+      for (let index = 0; index < pending.length; index += 1) {
+        const approval = pending[index]
+        const createdAtMs = Date.parse(approval.created_at)
+        if (!Number.isFinite(createdAtMs) || now - createdAtMs < overdueThresholdMs) {
+          skipped += 1
+          continue
+        }
+
+        const payload = approval.payload && typeof approval.payload === 'object' ? approval.payload : {}
+        const existingEscalations = Array.isArray((payload as { escalations?: unknown }).escalations)
+          ? (payload as { escalations: Array<Record<string, unknown>> }).escalations
+          : []
+        const explicitLast = typeof (payload as { last_escalated_at?: unknown }).last_escalated_at === 'string'
+          ? (payload as { last_escalated_at: string }).last_escalated_at
+          : ''
+        const lastEscalatedAt = explicitLast
+          || (existingEscalations.length > 0 && typeof existingEscalations[existingEscalations.length - 1].created_at === 'string'
+            ? String(existingEscalations[existingEscalations.length - 1].created_at)
+            : '')
+        const lastEscalatedAtMs = lastEscalatedAt ? Date.parse(lastEscalatedAt) : NaN
+        if (Number.isFinite(lastEscalatedAtMs) && now - lastEscalatedAtMs < escalationCooldownMs) {
+          skipped += 1
+          continue
+        }
+
+        if (!dryRun) {
+          const escalation = {
+            escalated_by_user_id: actor.user_id,
+            escalated_by_email: actor.user_email || null,
+            reason: 'SLA overdue escalation sweep',
+            automated: true,
+            created_at: nowIso(),
+          }
+          const updated: SlideTemplateApproval = {
+            ...approval,
+            payload: {
+              ...payload,
+              escalations: [...existingEscalations, escalation],
+              escalation_count: existingEscalations.length + 1,
+              last_escalated_at: escalation.created_at,
+            },
+            updated_at: nowIso(),
+          }
+          const storeIndex = store.approvals.findIndex((entry) => entry.id === approval.id)
+          if (storeIndex >= 0) store.approvals[storeIndex] = updated
+          makeAuditEvent(store, actor, 'escalate-approval', 'success', 'template', approval.template_id, {
+            approval_id: approval.id,
+            approval_type: approval.approval_type,
+            escalation_count: existingEscalations.length + 1,
+            automated: true,
+          })
+        }
+
+        escalated += 1
+      }
+
+      if (!dryRun && escalated > 0) {
+        writeLocalStore(store)
+      }
+
+      return {
+        processed: pending.length,
+        escalated,
+        skipped,
+        dry_run: dryRun,
+      }
     },
   )
 }
