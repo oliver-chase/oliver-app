@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverAction, OliverConfig } from '@/components/shared/OliverContext'
-import type { SlideImportResult } from '@/components/slides/types'
+import type { CSSProperties, FocusEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { SlideComponent, SlideComponentType, SlideImportResult } from '@/components/slides/types'
 import { convertHtmlToSlideComponents } from '@/components/slides/html-import'
 import { convertSlideComponentsToHtml } from '@/components/slides/html-export'
 import {
@@ -61,6 +62,15 @@ interface AutosaveRetryState {
   lastError: string
 }
 
+interface CanvasDragState {
+  componentId: string
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  originX: number
+  originY: number
+}
+
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -99,6 +109,63 @@ function summarizeWarnings(warnings: string[]) {
   return Array.from(groups.entries()).map(([label, items]) => ({ label, items }))
 }
 
+const CANVAS_DEFAULT_WIDTH = 1920
+const CANVAS_DEFAULT_HEIGHT = 1080
+
+const EDITABLE_COMPONENT_TYPES = new Set<SlideComponentType>([
+  'text',
+  'heading',
+  'subheading',
+  'card',
+  'row',
+  'stat',
+  'tag-line',
+  'panel',
+])
+
+function sanitizeHtmlContent(content: string): string {
+  return content
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
+    .replace(/\s(href|src)\s*=\s*"javascript:[^"]*"/gi, '')
+    .replace(/\s(href|src)\s*=\s*'javascript:[^']*'/gi, '')
+}
+
+function buildCanvasComponentStyle(component: SlideComponent): CSSProperties {
+  const style: CSSProperties = {
+    left: `${component.x}px`,
+    top: `${component.y}px`,
+    width: `${component.width}px`,
+  }
+
+  if (typeof component.height === 'number') style.height = `${component.height}px`
+  if (component.style.fontSize) style.fontSize = `${component.style.fontSize}px`
+  if (component.style.fontWeight) style.fontWeight = component.style.fontWeight
+  if (component.style.color) style.color = component.style.color
+  if (component.style.backgroundColor) style.backgroundColor = component.style.backgroundColor
+  if (component.style.fontStyle) style.fontStyle = component.style.fontStyle
+  if (component.style.lineHeight) style.lineHeight = `${component.style.lineHeight}px`
+  if (component.style.textAlign) style.textAlign = component.style.textAlign
+
+  return style
+}
+
+function clampCanvasCoordinates(
+  component: SlideComponent,
+  canvas: { width: number; height: number },
+  nextX: number,
+  nextY: number,
+) {
+  const maxX = Math.max(0, canvas.width - component.width)
+  const componentHeight = typeof component.height === 'number' ? component.height : 0
+  const maxY = Math.max(0, canvas.height - componentHeight)
+  return {
+    x: Math.min(maxX, Math.max(0, nextX)),
+    y: Math.min(maxY, Math.max(0, nextY)),
+  }
+}
+
 export default function SlidesPage() {
   const { allowRender } = useModuleAccess('slides')
   const { appUser } = useUser()
@@ -115,6 +182,8 @@ export default function SlidesPage() {
 
   const [showRawJson, setShowRawJson] = useState(false)
   const [jsonCopyState, setJsonCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
+  const [draggingComponentId, setDraggingComponentId] = useState<string | null>(null)
 
   const [slideTitle, setSlideTitle] = useState('Untitled Slide')
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null)
@@ -139,6 +208,10 @@ export default function SlidesPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const parseAbortRef = useRef<AbortController | null>(null)
+  const canvasHostRef = useRef<HTMLDivElement | null>(null)
+  const [canvasScale, setCanvasScale] = useState(1)
+  const canvasDragRef = useRef<CanvasDragState | null>(null)
+  const canvasDragMovedRef = useRef(false)
 
   const actor = useMemo(() => ({
     user_id: appUser?.user_id || 'qa-admin-user',
@@ -147,6 +220,11 @@ export default function SlidesPage() {
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
+  const canvasDimensions = useMemo(() => {
+    const width = result?.canvas.width || CANVAS_DEFAULT_WIDTH
+    const height = result?.canvas.height || CANVAS_DEFAULT_HEIGHT
+    return { width, height }
+  }, [result])
   const hasUnsavedChanges = useMemo(() => {
     const hasDraftContent = rawHtml.trim().length > 0 || !!result
     if (!hasDraftContent) return false
@@ -211,6 +289,170 @@ export default function SlidesPage() {
     setSaveStatus(result ? 'dirty' : 'clean')
   }, [result])
 
+  const updateCanvasComponentContent = useCallback((componentId: string, content: string) => {
+    setResult((previous) => {
+      if (!previous) return previous
+
+      const nextComponents = previous.components.map((component) => {
+        if (component.id !== componentId) return component
+        return {
+          ...component,
+          content,
+        }
+      })
+      return {
+        ...previous,
+        components: nextComponents,
+      }
+    })
+    setDirty()
+  }, [setDirty])
+
+  const handleCanvasLayerSelect = useCallback((componentId: string) => {
+    setSelectedComponentId(componentId)
+  }, [])
+
+  const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!result || !selectedComponentId) return
+
+    const target = event.target as HTMLElement | null
+    if (target?.closest('[contenteditable="true"]')) return
+
+    const step = event.shiftKey ? 10 : 1
+    let deltaX = 0
+    let deltaY = 0
+
+    if (event.key === 'ArrowLeft') deltaX = -step
+    if (event.key === 'ArrowRight') deltaX = step
+    if (event.key === 'ArrowUp') deltaY = -step
+    if (event.key === 'ArrowDown') deltaY = step
+
+    if (!deltaX && !deltaY) {
+      if (event.key === 'Escape') {
+        setSelectedComponentId(null)
+      }
+      return
+    }
+
+    event.preventDefault()
+
+    let moved = false
+    setResult((previous) => {
+      if (!previous) return previous
+
+      const nextComponents = previous.components.map((component) => {
+        if (component.id !== selectedComponentId) return component
+
+        const nextCoordinates = clampCanvasCoordinates(
+          component,
+          previous.canvas,
+          component.x + deltaX,
+          component.y + deltaY,
+        )
+
+        if (nextCoordinates.x === component.x && nextCoordinates.y === component.y) return component
+        moved = true
+        return {
+          ...component,
+          x: nextCoordinates.x,
+          y: nextCoordinates.y,
+        }
+      })
+
+      if (!moved) return previous
+      return {
+        ...previous,
+        components: nextComponents,
+      }
+    })
+
+    if (moved) {
+      setDirty()
+    }
+  }, [result, selectedComponentId, setDirty])
+
+  const handleCanvasPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const drag = canvasDragRef.current
+    if (!drag || event.pointerId !== drag.pointerId) return
+
+    const scale = canvasScale > 0 ? canvasScale : 1
+    const deltaX = Math.round((event.clientX - drag.startClientX) / scale)
+    const deltaY = Math.round((event.clientY - drag.startClientY) / scale)
+
+    let moved = false
+    setResult((previous) => {
+      if (!previous) return previous
+
+      const nextComponents = previous.components.map((component) => {
+        if (component.id !== drag.componentId) return component
+
+        const nextCoordinates = clampCanvasCoordinates(
+          component,
+          previous.canvas,
+          drag.originX + deltaX,
+          drag.originY + deltaY,
+        )
+
+        if (nextCoordinates.x === component.x && nextCoordinates.y === component.y) return component
+        moved = true
+        return {
+          ...component,
+          x: nextCoordinates.x,
+          y: nextCoordinates.y,
+        }
+      })
+
+      if (!moved) return previous
+      return {
+        ...previous,
+        components: nextComponents,
+      }
+    })
+
+    if (moved) {
+      canvasDragMovedRef.current = true
+    }
+  }, [canvasScale])
+
+  const finalizeCanvasDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const drag = canvasDragRef.current
+    if (!drag || event.pointerId !== drag.pointerId) return
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    canvasDragRef.current = null
+    setDraggingComponentId(null)
+
+    if (canvasDragMovedRef.current) {
+      canvasDragMovedRef.current = false
+      setDirty()
+    }
+  }, [setDirty])
+
+  const handleCanvasPointerDown = useCallback((component: SlideComponent, event: ReactPointerEvent<HTMLElement>) => {
+    if (component.locked) return
+    if (event.button !== 0) return
+
+    const target = event.target as HTMLElement | null
+    if (target?.closest('[contenteditable="true"]')) return
+
+    setSelectedComponentId(component.id)
+    setDraggingComponentId(component.id)
+    canvasDragMovedRef.current = false
+    canvasDragRef.current = {
+      componentId: component.id,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      originX: component.x,
+      originY: component.y,
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    event.preventDefault()
+  }, [])
+
   const parseHtmlSync = useCallback((html: string): SlideImportResult => {
     const preflight = validatePastedHtml(html)
     if (preflight) {
@@ -230,6 +472,7 @@ export default function SlidesPage() {
     }
 
     setResult(parsed)
+    setSelectedComponentId(null)
     setImportError(null)
     setParseStatus('completed')
     setParseProgress(100)
@@ -419,6 +662,39 @@ export default function SlidesPage() {
   }, [autosaveRetryState])
 
   useEffect(() => {
+    if (!result) {
+      setCanvasScale(1)
+      return
+    }
+
+    const host = canvasHostRef.current
+    if (!host) return
+
+    const sourceWidth = canvasDimensions.width > 0 ? canvasDimensions.width : CANVAS_DEFAULT_WIDTH
+
+    const updateScale = () => {
+      const availableWidth = host.clientWidth
+      if (!availableWidth) {
+        setCanvasScale(1)
+        return
+      }
+      const nextScale = Math.min(1, availableWidth / sourceWidth)
+      setCanvasScale(Number(nextScale.toFixed(4)))
+    }
+
+    updateScale()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateScale)
+      return () => window.removeEventListener('resize', updateScale)
+    }
+
+    const observer = new ResizeObserver(() => updateScale())
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [canvasDimensions.width, result])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
 
     const scopedRaw = window.localStorage.getItem(draftRecoveryKey)
@@ -472,6 +748,22 @@ export default function SlidesPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedChanges])
 
+  useEffect(() => {
+    if (!result) {
+      setSelectedComponentId(null)
+      setDraggingComponentId(null)
+      canvasDragRef.current = null
+      canvasDragMovedRef.current = false
+      return
+    }
+
+    if (!selectedComponentId) return
+    const stillExists = result.components.some((component) => component.id === selectedComponentId)
+    if (!stillExists) {
+      setSelectedComponentId(null)
+    }
+  }, [result, selectedComponentId])
+
   const restoreDraft = useCallback(() => {
     if (!recoveryDraft) return
     setRawHtml(recoveryDraft.rawHtml)
@@ -479,6 +771,10 @@ export default function SlidesPage() {
     setActiveSlideId(recoveryDraft.activeSlideId)
     setActiveRevision(recoveryDraft.revision || 0)
     setResult(recoveryDraft.result)
+    setSelectedComponentId(null)
+    setDraggingComponentId(null)
+    canvasDragRef.current = null
+    canvasDragMovedRef.current = false
     setAutosaveRetryState(null)
     setSaveError(null)
     setSaveStatus('dirty')
@@ -492,6 +788,13 @@ export default function SlidesPage() {
     }
     setRecoveryDraft(null)
   }, [draftRecoveryKey])
+
+  const handleCanvasComponentBlur = useCallback((component: SlideComponent, event: FocusEvent<HTMLDivElement>) => {
+    const nextContent = sanitizeHtmlContent(event.currentTarget.innerHTML || '')
+    if (nextContent === component.content) return
+    event.currentTarget.innerHTML = nextContent
+    updateCanvasComponentContent(component.id, nextContent)
+  }, [updateCanvasComponentContent])
 
   const onFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -527,6 +830,10 @@ export default function SlidesPage() {
     setSlideTitle(slide.title)
     setActiveSlideId(slide.id)
     setActiveRevision(slide.revision)
+    setSelectedComponentId(null)
+    setDraggingComponentId(null)
+    canvasDragRef.current = null
+    canvasDragMovedRef.current = false
     setAutosaveRetryState(null)
     setSaveStatus('clean')
     setSaveError(null)
@@ -847,7 +1154,7 @@ export default function SlidesPage() {
           <section className="slides-card">
             <h1 className="slides-title">HTML to Editable Components</h1>
             <p className="slides-subtitle">
-              Import existing slide HTML, review structured parser output, then save to My Slides. Canvas editing remains in backlog; save/export contracts are now wired.
+              Import slide HTML, review parser output, and work directly on a scaled 16:9 canvas before saving/exporting. Advanced drag/resize tooling is still in backlog.
             </p>
 
             {recoveryDraft && (
@@ -1038,6 +1345,82 @@ export default function SlidesPage() {
                     <p className="slides-summary">
                       Canvas: {result.canvas.width} × {result.canvas.height} · Components: {result.components.length}
                     </p>
+
+                    <section className="slides-canvas-preview" aria-labelledby="slides-canvas-heading">
+                      <div className="slides-canvas-meta">
+                        <h3 id="slides-canvas-heading">Canvas Preview</h3>
+                        <p>
+                          Scaled to viewport at {Math.round(canvasScale * 100)}% while preserving coordinate integrity.
+                          {selectedComponentId ? ` Selected layer: ${selectedComponentId}.` : ' Select a layer and use arrow keys to nudge.'}
+                        </p>
+                      </div>
+
+                      <div className="slides-canvas-host" ref={canvasHostRef}>
+                        <div
+                          className="slides-canvas-stage"
+                          style={{ height: `${Math.max(1, canvasDimensions.height * canvasScale)}px` }}
+                        >
+                          <div
+                            className="slides-canvas"
+                            data-slide-canvas="1"
+                            role="img"
+                            aria-label="Slide canvas preview"
+                            tabIndex={0}
+                            onKeyDown={handleCanvasKeyDown}
+                            style={{
+                              width: `${canvasDimensions.width}px`,
+                              height: `${canvasDimensions.height}px`,
+                              transform: `scale(${canvasScale})`,
+                            }}
+                          >
+                            {result.components.filter((component) => component.visible !== false).map((component) => {
+                              const isEditable = EDITABLE_COMPONENT_TYPES.has(component.type)
+                              const sanitizedContent = sanitizeHtmlContent(component.content || '')
+                              const isSelected = selectedComponentId === component.id
+
+                              return (
+                                <article
+                                  key={component.id}
+                                  className={
+                                    'slides-canvas-component slides-canvas-component--' +
+                                    component.type +
+                                    (component.locked ? ' is-locked' : '') +
+                                    (draggingComponentId === component.id ? ' is-dragging' : '') +
+                                    (isSelected ? ' is-selected' : '')
+                                  }
+                                  style={buildCanvasComponentStyle(component)}
+                                  data-component-id={component.id}
+                                  data-component-type={component.type}
+                                  data-component-x={String(component.x)}
+                                  data-component-y={String(component.y)}
+                                  data-component-width={String(component.width)}
+                                  data-component-height={typeof component.height === 'number' ? String(component.height) : ''}
+                                  data-component-locked={component.locked ? 'true' : 'false'}
+                                  data-component-selected={isSelected ? 'true' : 'false'}
+                                  data-component-dragging={draggingComponentId === component.id ? 'true' : 'false'}
+                                  tabIndex={0}
+                                  onClick={() => handleCanvasLayerSelect(component.id)}
+                                  onFocus={() => handleCanvasLayerSelect(component.id)}
+                                  onPointerDown={(event) => handleCanvasPointerDown(component, event)}
+                                  onPointerMove={handleCanvasPointerMove}
+                                  onPointerUp={finalizeCanvasDrag}
+                                  onPointerCancel={finalizeCanvasDrag}
+                                >
+                                  <div className="slides-canvas-component-type">{component.type}</div>
+                                  <div
+                                    className={'slides-canvas-component-content' + (isEditable ? '' : ' is-readonly')}
+                                    contentEditable={isEditable}
+                                    suppressContentEditableWarning
+                                    onBlur={(event) => handleCanvasComponentBlur(component, event)}
+                                    dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+                                  />
+                                </article>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
 
                     {warningGroups.length > 0 && (
                       <div className="slides-warning-groups">

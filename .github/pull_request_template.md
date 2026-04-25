@@ -2,6 +2,7 @@
 
 - Epic/group:
 - Scope:
+- Ownership check: this PR is scoped to one epic only.
 
 ## Story Coverage
 
@@ -18,6 +19,13 @@
 - [ ] `npm run lint`
 - [ ] `npm run build`
 - [ ] `npm run test:smoke`
+- [ ] `npm run check-epic-size` (or `npm run check-epic-size:strict`)
+
+## Squash Checkpoint
+
+- [ ] Branch stayed under squash thresholds.
+- [ ] If thresholds were exceeded, commits were squashed into clean epic milestone commit(s).
+- Squash notes (if applied):
 
 Evidence (paste key output lines):
 

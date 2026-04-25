@@ -108,6 +108,79 @@ test.describe('slides regression', () => {
     }
   })
 
+  test('US-SLD-020 renders scaled 16:9 canvas layers from component json and supports baseline inline edits', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:800px;">Canvas Heading</h1>
+      <div class="card" style="position:absolute;left:120px;top:320px;width:420px;height:220px;">Card Body</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.locator('#slides-title').fill('Canvas Layer Slide')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await expect(page.locator('[data-slide-canvas="1"]')).toBeVisible()
+    await expect(page.locator('.slides-canvas-component')).toHaveCount(2)
+    await expect(page.getByText(/Scaled to viewport at \d+% while preserving coordinate integrity\./)).toBeVisible()
+    await expect(page.locator('.slides-canvas-component[data-component-type="heading"][data-component-x="100"][data-component-y="120"][data-component-width="800"]')).toHaveCount(1)
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"] .slides-canvas-component-content').first()
+    await expect(headingLayer).toHaveAttribute('contenteditable', 'true')
+    await headingLayer.fill('Canvas Edited Heading')
+    await page.locator('#slides-title').click()
+    await expect(page.getByText(/Save status: dirty/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
+    expect(String(parsed[0]?.content || '')).toContain('Canvas Edited Heading')
+  })
+
+  test('US-SLD-021 supports drag movement and keyboard nudge on selected canvas layers', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:800px;">Nudge Me</h1>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.locator('#slides-title').fill('Nudge Slide')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await headingLayer.locator('.slides-canvas-component-type').click()
+    await expect(headingLayer).toHaveAttribute('data-component-selected', 'true')
+
+    const beforeDragX = Number(await headingLayer.getAttribute('data-component-x'))
+    const beforeDragY = Number(await headingLayer.getAttribute('data-component-y'))
+    const dragHandle = headingLayer.locator('.slides-canvas-component-type')
+    const dragHandleBox = await dragHandle.boundingBox()
+    if (!dragHandleBox) throw new Error('expected drag handle bounding box')
+
+    await page.mouse.move(dragHandleBox.x + dragHandleBox.width / 2, dragHandleBox.y + dragHandleBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(dragHandleBox.x + dragHandleBox.width / 2 + 40, dragHandleBox.y + dragHandleBox.height / 2 + 24)
+    await page.mouse.up()
+
+    const afterDragX = Number(await headingLayer.getAttribute('data-component-x'))
+    const afterDragY = Number(await headingLayer.getAttribute('data-component-y'))
+    expect(afterDragX).toBeGreaterThan(beforeDragX)
+    expect(afterDragY).toBeGreaterThan(beforeDragY)
+    await expect(headingLayer).toHaveAttribute('data-component-dragging', 'false')
+
+    const canvas = page.locator('[data-slide-canvas="1"]')
+    await canvas.focus()
+    await canvas.press('ArrowRight')
+    await canvas.press('Shift+ArrowDown')
+
+    await expect(headingLayer).toHaveAttribute('data-component-x', String(afterDragX + 1))
+    await expect(headingLayer).toHaveAttribute('data-component-y', String(afterDragY + 10))
+  })
+
   test('US-SLD-031 and US-SLD-032 save workflow populates My Slides and template duplication', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
@@ -207,20 +280,20 @@ test.describe('slides regression', () => {
     await expect(page.getByText(/Recovered draft available/)).toHaveCount(0)
   })
 
-  test.skip('US-SLD-039 autosave queues retry with backoff after API failure and recovers on retry', async ({ page }) => {
-    let failNextAutosave = true
-    await page.route('**/api/slides', async (route) => {
-      const request = route.request()
-      if (request.method() === 'POST' && failNextAutosave) {
-        failNextAutosave = false
-        await route.fulfill({
-          status: 500,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'forced autosave failure' }),
-        })
-        return
+  test('US-SLD-039 autosave queues retry with backoff after API failure and recovers on retry', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem
+      Object.defineProperty(window, '__slidesFailStoreWrites', {
+        value: true,
+        writable: true,
+        configurable: true,
+      })
+      Storage.prototype.setItem = function setItemWithFailure(key: string, value: string) {
+        if ((window as unknown as { __slidesFailStoreWrites?: boolean }).__slidesFailStoreWrites && key === 'oliver-slides-store-v1') {
+          throw new Error('forced autosave failure')
+        }
+        return originalSetItem.call(this, key, value)
       }
-      await route.continue()
     })
 
     await gotoAndSettle(page, '/slides')
@@ -234,6 +307,9 @@ test.describe('slides regression', () => {
     await expect(page.getByText(/Autosave retry queued/i)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Retry Autosave Now' })).toBeVisible()
 
+    await page.evaluate(() => {
+      ;(window as unknown as { __slidesFailStoreWrites?: boolean }).__slidesFailStoreWrites = false
+    })
     await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
     await expect(page.getByText(/Save status: saved/i)).toBeVisible({ timeout: 10000 })
   })

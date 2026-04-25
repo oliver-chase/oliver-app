@@ -29,7 +29,7 @@ Goal: create one actionable backlog that covers:
 | --- | --- | --- |
 | S0 | Complete (`US-SLD-001`..`US-SLD-005`) | Ready to commit as one epic milestone |
 | S1 | Complete (`US-SLD-010`..`US-SLD-013`) | Ready to commit as one epic milestone |
-| S2 | Not started (`US-SLD-020`..`US-SLD-025`) | Not commit-ready |
+| S2 | In progress (`US-SLD-020` code present; `US-SLD-021` partial with drag/nudge; `US-SLD-022`..`US-SLD-025` missing) | Not commit-ready |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion

@@ -10,7 +10,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check-tokens": "node scripts/check-tokens.mjs",
-    "check-stories": "node scripts/check-user-stories.mjs"
+    "check-stories": "node scripts/check-user-stories.mjs",
+    "check-epic-size": "node scripts/check-epic-size.mjs",
+    "check-epic-size:strict": "node scripts/check-epic-size.mjs --strict"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.7.0",

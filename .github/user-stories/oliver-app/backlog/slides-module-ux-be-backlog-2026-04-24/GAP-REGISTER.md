@@ -10,8 +10,8 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Structured import results + warning UX | `US-SLD-011` | S1 | Code Present |
 | Import progress/cancel UX | `US-SLD-012` | S1 | Code Present |
 | Import/export round-trip reliability fixtures | `US-SLD-013` | S1 | Code Present |
-| Render editable slide canvas from component JSON | `US-SLD-020` | S2 | Missing |
-| Selection, drag, resize, keyboard nudge | `US-SLD-021` | S2 | Missing |
+| Render editable slide canvas from component JSON | `US-SLD-020` | S2 | Code Present |
+| Selection, drag, resize, keyboard nudge | `US-SLD-021` | S2 | In Progress (selection + drag + nudge present; resize pending) |
 | Inline text editing + style toolbar | `US-SLD-022` | S2 | Missing |
 | Multi-select alignment/distribution | `US-SLD-023` | S2 | Missing |
 | Undo/redo history | `US-SLD-024` | S2 | Missing |

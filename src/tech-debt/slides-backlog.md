@@ -8,7 +8,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Journey Stage | Current Behavior | Gap / Risk | Ticket(s) |
 | --- | --- | --- | --- |
 | Start from template | Template duplication works, then opens in Import workspace. | No thumbnail, no visual picker quality signal; template choice is mostly text-only. | SLD-FE-210, SLD-BE-210 |
-| Edit imported slide | Parse summary + component table works. | No in-canvas editing yet (drag/resize/direct text edit), so user cannot complete full edit journey in one place. | SLD-FE-300 through SLD-FE-330 |
+| Edit imported slide | Scaled 16:9 canvas renderer, baseline inline layer editing, and bounded drag/nudge controls are now available. | Resize handles and advanced edit controls are still missing. | SLD-FE-320 through SLD-FE-330 |
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, and retry queue/backoff now exist. | Browser back route transitions still need full guard coverage for all navigation surfaces. | SLD-FE-142 |
 | Template publishing | Publish from My Slides works. | No template visibility controls (private/shared) or ownership governance workflows. | SLD-FE-400, SLD-BE-400 |
 | Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
@@ -39,8 +39,8 @@ KPI: 80%+ of edits completed without leaving the slide module.
 
 | Ticket | Title | Layer | Priority | Status | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- |
-| SLD-FE-300 | Canvas renderer for parsed component model | Frontend | P0 | Backlog | Parsed components render visually on 16:9 canvas with deterministic positioning. |
-| SLD-FE-310 | Drag and nudge movement controls | Frontend | P0 | Backlog | Mouse drag + keyboard nudge updates component coordinates and dirty state. |
+| SLD-FE-300 | Canvas renderer for parsed component model | Frontend | P0 | Done (2026-04-25) | Parsed components render on a scaled 16:9 canvas with deterministic positioning and baseline inline content editing. |
+| SLD-FE-310 | Drag and nudge movement controls | Frontend | P0 | Done (2026-04-25) | Mouse drag updates coordinates in real time and marks dirty on release; keyboard nudge supports 1px and Shift+10px movement with bounds clamping. |
 | SLD-FE-320 | Resize handles + bounds constraints | Frontend | P1 | Backlog | Width/height edits via handles with minimum-size and canvas bounds enforcement. |
 | SLD-FE-330 | Inline text editing with content sanitization parity | Frontend | P1 | Backlog | Text edit mode preserves sanitization guarantees and updates saved component content. |
 
@@ -67,6 +67,6 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 
 ## Next Features In Line
 
-1. SLD-FE-300: Render editable canvas from parsed component JSON (foundation for drag/resize/edit tickets).
+1. SLD-FE-320: Add resize handles and bounds constraints so layer geometry can be edited directly on canvas.
 2. SLD-FE-400 + SLD-BE-400: Add template visibility/ownership controls so publish workflow is complete end-to-end.
 3. SLD-FE-142: Add browser back/forward route guard coverage across all slide navigation surfaces.

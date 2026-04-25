@@ -687,6 +687,8 @@ All alignment is relative to the bounding box of the selection, matching PowerPo
 - `US-112` sanitization baseline: implemented (initial)
 - `US-113` unsupported CSS/layout warnings: implemented (initial, parser warns on unsupported units/transforms)
 - `US-114` canvas normalization to 1920x1080: implemented (initial)
+- `US-SLD-020` scaled canvas renderer from component JSON: implemented (baseline on-canvas editable layer rendering)
+- `US-SLD-021` selection/drag/nudge controls: partially implemented (resize handles still pending)
 - `US-121` unsaved-change protection: implemented (workspace navigation + browser unload guard, tracked as `US-SLD-037`)
 - `US-123` crash recovery drafts: implemented (unsaved-only, per-user recovery snapshots, tracked as `US-SLD-038`)
 - `US-122` autosave failure handling: implemented (initial autosave retry queue with exponential backoff and manual retry controls, tracked as `US-SLD-039`)

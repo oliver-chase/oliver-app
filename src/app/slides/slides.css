@@ -298,6 +298,120 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   color: var(--color-text-primary);
 }
 
+.slides-canvas-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--color-bg-page);
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.slides-canvas-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.slides-canvas-meta h3 {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.slides-canvas-meta p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.slides-canvas-host {
+  width: 100%;
+}
+
+.slides-canvas-stage {
+  position: relative;
+  width: 100%;
+}
+
+.slides-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transform-origin: top left;
+}
+
+.slides-canvas:focus {
+  outline: 2px solid var(--color-brand-pink);
+  outline-offset: var(--spacing-2xs);
+}
+
+.slides-canvas-component {
+  position: absolute;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-xs);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: var(--spacing-20);
+  cursor: grab;
+}
+
+.slides-canvas-component.is-locked {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.slides-canvas-component.is-dragging {
+  cursor: grabbing;
+}
+
+.slides-canvas-component.is-selected {
+  border-style: solid;
+  border-color: var(--color-brand-pink);
+  box-shadow: 0 0 0 var(--spacing-2xs) var(--color-pink-overlay-sm);
+}
+
+.slides-canvas-component-type {
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: var(--spacing-2xs) var(--spacing-xs);
+  font-size: var(--font-size-3xs);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+}
+
+.slides-canvas-component.is-selected .slides-canvas-component-type {
+  color: var(--color-brand-purple);
+  background: var(--color-brand-pink-light);
+}
+
+.slides-canvas-component-content {
+  min-height: var(--spacing-20);
+  padding: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  line-height: var(--line-height-base);
+  overflow: auto;
+}
+
+.slides-canvas-component-content:focus {
+  outline: 2px solid var(--color-brand-pink);
+  outline-offset: 0;
+}
+
+.slides-canvas-component-content.is-readonly {
+  cursor: default;
+}
+
 .slides-warning-groups {
   display: grid;
   gap: var(--spacing-sm);
