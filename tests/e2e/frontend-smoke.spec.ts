@@ -1,9 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-
-async function gotoAndSettle(page: Page, path: string) {
-  await page.goto(path)
-  await page.waitForLoadState('networkidle')
-}
+import { gotoAndSettle } from './helpers/navigation'
 
 function seedQaAuth(page: Page, appUserOverrides?: Record<string, unknown>) {
   return page.addInitScript(({ appUserOverrides }) => {
@@ -58,24 +54,24 @@ test.describe('frontend smoke', () => {
     await page.getByRole('link', { name: 'Account Strategy & Planning' }).click()
     await expect(page).toHaveURL(/\/accounts\/?$/)
 
-    await page.goto('/')
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'HR & People Ops' }).click()
     await expect(page).toHaveURL(/\/hr\/?$/)
 
-    await page.goto('/')
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'SDR & Outreach' }).click()
     await expect(page).toHaveURL(/\/sdr\/?$/)
 
-    await page.goto('/')
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Slide Editor' }).click()
     await expect(page).toHaveURL(/\/slides\/?$/)
 
-    await page.goto('/')
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Design System' }).scrollIntoViewIfNeeded()
     await page.getByRole('link', { name: 'Design System' }).click()
     await expect(page).toHaveURL(/\/design-system\/?$/)
 
-    await page.goto('/')
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Admin', exact: true }).click()
     await expect(page).toHaveURL(/\/admin\/?$/)
   })
@@ -596,7 +592,7 @@ test.describe('frontend smoke', () => {
       page_permissions: ['accounts', 'hr'],
     })
 
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await gotoAndSettle(page, '/', { waitUntil: 'domcontentloaded', settle: false })
     await expect(page.getByRole('link', { name: 'SDR & Outreach' })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Slide Editor' })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'CRM & Business Development' })).toHaveCount(0)

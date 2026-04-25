@@ -1,11 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-async function gotoAndSettle(page: Page, path: string) {
-  await page.goto(path)
-  await page.waitForLoadState('networkidle')
-}
+import { gotoAndSettle } from './helpers/navigation'
 
 function seedQaAuth(page: Page) {
   return page.addInitScript(() => {
@@ -367,6 +363,99 @@ test.describe('slides regression', () => {
     await expect(selectedContent).toHaveAttribute('contenteditable', 'true')
     await selectedContent.press('Escape')
     await expect(selectedContent).toHaveAttribute('contenteditable', 'false')
+  })
+
+  test('US-SLD-027 locked layers remain immutable across edit controls while unlocked layers still update', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [
+          {
+            id: 'locked-slide-1',
+            owner_user_id: 'qa-admin-user',
+            title: 'Locked Behavior',
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'locked-heading',
+                type: 'heading',
+                sourceLabel: '.locked-heading',
+                x: 100,
+                y: 120,
+                width: 760,
+                content: 'Locked Title',
+                style: { fontSize: 36, fontWeight: 700, color: '#0f172a' },
+                locked: true,
+                visible: true,
+              },
+              {
+                id: 'editable-card',
+                type: 'card',
+                sourceLabel: '.editable-card',
+                x: 160,
+                y: 360,
+                width: 460,
+                height: 220,
+                content: 'Editable Body',
+                style: { fontSize: 24, color: '#1f2937', backgroundColor: '#f8fafc' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            revision: 1,
+            source: 'import',
+            source_template_id: null,
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+            last_edited_at: '2026-04-25T00:00:00.000Z',
+          },
+        ],
+        templates: [],
+        audits: [],
+        nextAuditId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await page.getByText('Locked Behavior').first().waitFor()
+    await page.getByRole('button', { name: 'Load' }).first().click()
+    await expect(page.getByText(/Canvas: 1920 × 1080/)).toBeVisible()
+
+    const lockedLayer = page.locator('.slides-canvas-component[data-component-id="locked-heading"]').first()
+    const editableLayer = page.locator('.slides-canvas-component[data-component-id="editable-card"]').first()
+    const canvas = page.locator('[data-slide-canvas="1"]')
+
+    await lockedLayer.click()
+    await expect(lockedLayer).toHaveAttribute('data-component-locked', 'true')
+    await expect(lockedLayer.locator('.slides-canvas-resize-handle')).toHaveCount(0)
+    await canvas.focus()
+    await canvas.press('Enter')
+    await expect(lockedLayer.locator('.slides-canvas-component-content')).toHaveAttribute('contenteditable', 'false')
+
+    await lockedLayer.click()
+    await editableLayer.click({ modifiers: ['Shift'] })
+    await expect(page.locator('.slides-canvas-component[data-component-selected="true"]')).toHaveCount(2)
+
+    const lockedBeforeX = Number(await lockedLayer.getAttribute('data-component-x'))
+    const editableBeforeX = Number(await editableLayer.getAttribute('data-component-x'))
+
+    await canvas.focus()
+    await canvas.press('ArrowRight')
+    await expect(lockedLayer).toHaveAttribute('data-component-x', String(lockedBeforeX))
+    await expect(editableLayer).toHaveAttribute('data-component-x', String(editableBeforeX + 1))
+
+    await page.locator('#slides-style-font-size').fill('50')
+    await expect(page.getByText('Locked layers were skipped.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      id: string
+      style?: { fontSize?: number }
+    }>
+    const byId = new Map(parsed.map((entry) => [entry.id, entry] as const))
+    expect(Number(byId.get('locked-heading')?.style?.fontSize)).toBe(36)
+    expect(Number(byId.get('editable-card')?.style?.fontSize)).toBe(50)
   })
 
   test('US-SLD-031 and US-SLD-032 save workflow populates My Slides and template duplication', async ({ page }) => {

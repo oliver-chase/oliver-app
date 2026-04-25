@@ -277,7 +277,9 @@ export default function SlidesPage() {
       .filter((component): component is SlideComponent => !!component)
   }, [result, selectedComponentIds])
   const canInlineEditSelected =
-    selectedComponents.length === 1 && EDITABLE_COMPONENT_TYPES.has(selectedComponents[0].type)
+    selectedComponents.length === 1 &&
+    !selectedComponents[0].locked &&
+    EDITABLE_COMPONENT_TYPES.has(selectedComponents[0].type)
   const selectedStyle = useMemo(() => {
     if (selectedComponents.length === 0) return null
     const lead = selectedComponents[0]
@@ -422,7 +424,7 @@ export default function SlidesPage() {
   const updateCanvasComponentContent = useCallback((componentId: string, content: string) => {
     if (!result) return
     const existing = result.components.find((component) => component.id === componentId)
-    if (!existing || existing.content === content) return
+    if (!existing || existing.locked || existing.content === content) return
     pushHistorySnapshot(result.components)
     setResult((previous) => {
       if (!previous) return previous
@@ -460,10 +462,13 @@ export default function SlidesPage() {
   }, [])
 
   const beginInlineEditMode = useCallback((componentId: string) => {
+    if (!result) return
+    const component = result.components.find((entry) => entry.id === componentId)
+    if (!component || component.locked || !EDITABLE_COMPONENT_TYPES.has(component.type)) return
     setSelectedComponentIds([componentId])
     setEditingComponentId(componentId)
     focusInlineEditor(componentId)
-  }, [focusInlineEditor])
+  }, [focusInlineEditor, result])
 
   const handleCanvasLayerSelect = useCallback((componentId: string, options?: { multi?: boolean }) => {
     setEditingComponentId(null)
@@ -592,7 +597,15 @@ export default function SlidesPage() {
     if (!deltaX && !deltaY) return
     event.preventDefault()
 
-    const selectedIds = new Set(selectedComponentIds)
+    const selectedIds = new Set(
+      result.components
+        .filter((component) => selectedComponentIds.includes(component.id) && !component.locked)
+        .map((component) => component.id),
+    )
+    if (selectedIds.size === 0) {
+      setEditorNotice({ tone: 'error', text: 'Locked layers cannot be moved with arrow keys.' })
+      return
+    }
     const canMove = result.components.some((component) => {
       if (!selectedIds.has(component.id)) return false
       const nextCoordinates = clampCanvasCoordinates(
@@ -776,15 +789,19 @@ export default function SlidesPage() {
     setEditingComponentId(null)
     const selectionIds = selectedComponentIds.includes(component.id) ? selectedComponentIds : [component.id]
     setSelectedComponentIds(selectionIds)
+    const movableSelectionIds = result.components
+      .filter((entry) => selectionIds.includes(entry.id) && !entry.locked)
+      .map((entry) => entry.id)
+    if (movableSelectionIds.length === 0) return
     setDraggingComponentId(component.id)
     canvasDragMovedRef.current = false
     canvasDragRef.current = {
-      componentIds: selectionIds,
+      componentIds: movableSelectionIds,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       originById: result.components.reduce<Record<string, { x: number; y: number }>>((acc, entry) => {
-        if (selectionIds.includes(entry.id)) {
+        if (movableSelectionIds.includes(entry.id)) {
           acc[entry.id] = { x: entry.x, y: entry.y }
         }
         return acc
@@ -1367,7 +1384,14 @@ export default function SlidesPage() {
       return
     }
 
-    const selectedIds = new Set(selectedComponentIds)
+    const selected = result.components.filter((component) => selectedComponentIds.includes(component.id))
+    const editableSelected = selected.filter((component) => !component.locked)
+    if (editableSelected.length === 0) {
+      setEditorNotice({ tone: 'error', text: 'Selected layers are locked and cannot be styled.' })
+      return
+    }
+
+    const selectedIds = new Set(editableSelected.map((component) => component.id))
     const nextComponents = result.components.map((component) => {
       if (!selectedIds.has(component.id)) return component
       const nextStyle = {
@@ -1391,7 +1415,12 @@ export default function SlidesPage() {
     pushHistorySnapshot(result.components)
     setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
     setDirty()
-    setEditorNotice({ tone: 'info', text: `Updated styles for ${selectedComponentIds.length} selected layer(s).` })
+    setEditorNotice({
+      tone: 'info',
+      text:
+        `Updated styles for ${editableSelected.length} layer(s).` +
+        (selected.length > editableSelected.length ? ' Locked layers were skipped.' : ''),
+    })
   }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
 
   const alignSelection = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y') => {
@@ -1401,18 +1430,19 @@ export default function SlidesPage() {
     }
 
     const selected = result.components.filter((component) => selectedComponentIds.includes(component.id))
-    if (selected.length < 2) {
-      setEditorNotice({ tone: 'error', text: 'Selected layers were not found.' })
+    const movableSelected = selected.filter((component) => !component.locked)
+    if (movableSelected.length < 2) {
+      setEditorNotice({ tone: 'error', text: 'Select at least two unlocked layers before aligning.' })
       return
     }
 
-    const minX = Math.min(...selected.map((component) => component.x))
-    const maxRight = Math.max(...selected.map((component) => component.x + component.width))
-    const minY = Math.min(...selected.map((component) => component.y))
-    const maxBottom = Math.max(...selected.map((component) => component.y + (component.height ?? MIN_COMPONENT_HEIGHT)))
+    const minX = Math.min(...movableSelected.map((component) => component.x))
+    const maxRight = Math.max(...movableSelected.map((component) => component.x + component.width))
+    const minY = Math.min(...movableSelected.map((component) => component.y))
+    const maxBottom = Math.max(...movableSelected.map((component) => component.y + (component.height ?? MIN_COMPONENT_HEIGHT)))
     const centerX = minX + ((maxRight - minX) / 2)
     const centerY = minY + ((maxBottom - minY) / 2)
-    const selectedIds = new Set(selectedComponentIds)
+    const selectedIds = new Set(movableSelected.map((component) => component.id))
 
     const nextComponents = result.components.map((component) => {
       if (!selectedIds.has(component.id)) return component
@@ -1442,7 +1472,12 @@ export default function SlidesPage() {
     pushHistorySnapshot(result.components)
     setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
     setDirty()
-    setEditorNotice({ tone: 'info', text: `Applied ${mode} alignment to ${selected.length} layers.` })
+    setEditorNotice({
+      tone: 'info',
+      text:
+        `Applied ${mode} alignment to ${movableSelected.length} layer(s).` +
+        (selected.length > movableSelected.length ? ' Locked layers were skipped.' : ''),
+    })
   }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
 
   const distributeSelection = useCallback((axis: 'horizontal' | 'vertical') => {
@@ -1452,12 +1487,13 @@ export default function SlidesPage() {
     }
 
     const selected = result.components.filter((component) => selectedComponentIds.includes(component.id))
-    if (selected.length < 3) {
-      setEditorNotice({ tone: 'error', text: 'Selected layers were not found.' })
+    const movableSelected = selected.filter((component) => !component.locked)
+    if (movableSelected.length < 3) {
+      setEditorNotice({ tone: 'error', text: 'Select at least three unlocked layers to distribute spacing.' })
       return
     }
 
-    const sorted = [...selected].sort((a, b) => (axis === 'horizontal' ? a.x - b.x : a.y - b.y))
+    const sorted = [...movableSelected].sort((a, b) => (axis === 'horizontal' ? a.x - b.x : a.y - b.y))
     const first = sorted[0]
     const last = sorted[sorted.length - 1]
     const positions = new Map<string, { x: number; y: number }>()
@@ -1505,7 +1541,9 @@ export default function SlidesPage() {
     setDirty()
     setEditorNotice({
       tone: 'info',
-      text: `Distributed ${selected.length} layers ${axis === 'horizontal' ? 'horizontally' : 'vertically'}.`,
+      text:
+        `Distributed ${movableSelected.length} layer(s) ${axis === 'horizontal' ? 'horizontally' : 'vertically'}.` +
+        (selected.length > movableSelected.length ? ' Locked layers were skipped.' : ''),
     })
   }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
 
@@ -2197,7 +2235,7 @@ export default function SlidesPage() {
                                     handleCanvasLayerSelect(component.id, { multi: event.shiftKey })
                                   }}
                                   onDoubleClick={() => {
-                                    if (isEditable) beginInlineEditMode(component.id)
+                                    if (isEditable && !component.locked) beginInlineEditMode(component.id)
                                   }}
                                   onFocus={(event) => {
                                     if (event.target !== event.currentTarget) return
@@ -2222,11 +2260,14 @@ export default function SlidesPage() {
                                     />
                                   )}
                                   <div
-                                    className={'slides-canvas-component-content' + (isEditable ? '' : ' is-readonly')}
+                                    className={
+                                      'slides-canvas-component-content' +
+                                      (isEditable && !component.locked ? '' : ' is-readonly')
+                                    }
                                     ref={(node) => {
                                       canvasContentRefs.current[component.id] = node
                                     }}
-                                    contentEditable={isEditable && isEditing}
+                                    contentEditable={isEditable && !component.locked && isEditing}
                                     suppressContentEditableWarning
                                     onKeyDown={(event) => handleCanvasContentKeyDown(component, event)}
                                     onBlur={(event) => handleCanvasComponentBlur(component, event)}

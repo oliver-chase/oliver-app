@@ -16,6 +16,8 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Multi-select alignment/distribution | `US-SLD-023` | S2 | Code Present |
 | Undo/redo history | `US-SLD-024` | S2 | Code Present |
 | Keyboard-first + accessibility baseline | `US-SLD-025` | S2 | Code Present |
+| Visual regression screenshot baseline for key editor states | `US-SLD-026` | S2.1 | Code Present |
+| Locked-layer immutability across manipulation/style operations | `US-SLD-027` | S2.2 | Code Present |
 | Slide/template data model + RLS | `US-SLD-030` | S3 | Code Present |
 | Save API + autosave state contract | `US-SLD-031` | S3 | Code Present |
 | Template Library + My Slides FE/BE wiring | `US-SLD-032` | S3 | Code Present |

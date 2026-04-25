@@ -13,6 +13,7 @@ Goal: create one actionable backlog that covers:
 - Persisted My Slides + Template Library views are wired to a FE/BE contract (`/api/slides`) with local fallback for dev/QA and Supabase-backed production path.
 - Save/autosave, revision conflict handling, draft recovery, HTML export metadata, PDF print contract, and audit feed are implemented.
 - Core editor UX now includes resize handles with guardrails, inline text edit mode, style toolbar controls, multi-select alignment/distribution tools, undo/redo history, and keyboard-first shortcut support.
+- Locked-layer guardrails now enforce immutability for protected components across keyboard, pointer, resize, and toolbar styling/alignment actions.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
 
 ## Epic Breakdown
@@ -22,6 +23,8 @@ Goal: create one actionable backlog that covers:
 | S0 | Backfill + Tracking Cleanup | `US-SLD-001`..`US-SLD-005` | Past untracked detail + cleanup |
 | S1 | Import UX Hardening | `US-SLD-010`..`US-SLD-013` | Existing gap + cleanup |
 | S2 | Core Editor UX (Frontend) | `US-SLD-020`..`US-SLD-025` | Net-new |
+| S2.1 | Visual Regression Hardening | `US-SLD-026` | Net-new |
+| S2.2 | Interaction Safety Hardening | `US-SLD-027` | Net-new |
 | S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
 
 ## Epic Status (Current Branch)
@@ -31,13 +34,15 @@ Goal: create one actionable backlog that covers:
 | S0 | Complete (`US-SLD-001`..`US-SLD-005`) | Ready to commit as one epic milestone |
 | S1 | Complete (`US-SLD-010`..`US-SLD-013`) | Ready to commit as one epic milestone |
 | S2 | Complete (`US-SLD-020`..`US-SLD-025`) | Ready to commit as one epic milestone |
+| S2.1 | Complete (`US-SLD-026`) | Ready to commit as one epic milestone |
+| S2.2 | Complete (`US-SLD-027`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
-1. Add visual-regression baseline coverage for slide canvas states (selection, resize, multi-select, toolbar-applied styles).
-2. Run full smoke + e2e pass in CI-like network conditions to validate no environment-specific regressions.
-3. Track any follow-up UX polish separately from the now-complete S2 functional backlog.
+1. Run full smoke + e2e pass in CI-like network conditions to validate no environment-specific regressions.
+2. Add cross-browser visual baselines if/when Firefox/WebKit projects are enabled.
+3. Track follow-up UX polish separately from the now-complete S2 functional backlog.
 
 ## Execution and Commit Model
 
