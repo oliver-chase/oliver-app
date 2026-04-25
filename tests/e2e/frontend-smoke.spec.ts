@@ -428,6 +428,15 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
+  test('admin chatbot quick command opens design system without dead-end routing', async ({ page }) => {
+    await gotoAndSettle(page, '/admin')
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    await page.getByRole('button', { name: 'Open Design System' }).first().click()
+    await expect(page).toHaveURL(/\/design-system\/?$/)
+    await expect(page.getByRole('heading', { name: 'Design System' })).toBeVisible()
+  })
+
   test('owner rows are locked in user manager controls', async ({ page }) => {
     await page.route('**/api/users**', async route => {
       const request = route.request()
@@ -464,7 +473,7 @@ test.describe('frontend smoke', () => {
     })
 
     await gotoAndSettle(page, '/admin')
-    await expect(page.getByRole('button', { name: 'Users', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'User Access' })).toBeVisible()
 
     const ownerRow = page.locator('tbody tr').filter({ hasText: 'owner@example.com' })
     await expect(ownerRow).toHaveCount(1)
@@ -510,6 +519,14 @@ test.describe('frontend smoke', () => {
 
     await page.getByRole('tab', { name: 'Chips & Badges' }).click()
     await expect(page.getByText('All variants — static')).toBeVisible()
+
+    await page.getByRole('link', { name: 'Admin Edit Workspace' }).click()
+    const editWorkspace = page.locator('#sec-admin-edit')
+    await expect(editWorkspace.getByText('Token Overrides')).toBeVisible()
+    await expect(editWorkspace.getByText('--color-brand-purple').first()).toBeVisible()
+    await editWorkspace.getByRole('button', { name: 'Edit' }).first().click()
+    await expect(editWorkspace.locator('input').first()).toBeVisible()
+    await editWorkspace.getByRole('button', { name: 'Cancel' }).first().click()
   })
 
   test('design system renders dynamic inventories from registries', async ({ page }) => {
