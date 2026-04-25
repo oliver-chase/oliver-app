@@ -1758,6 +1758,14 @@ function addAuditSearch(path, query) {
   return path + '&or=' + encodeURIComponent(clause);
 }
 
+function safeSlidesErrorResponse(error, fallbackMessage) {
+  const detail = error instanceof Error ? error.message : String(error || '');
+  const message = detail
+    ? `${fallbackMessage} ${detail}`
+    : fallbackMessage;
+  return errorResponse(message, 503);
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const missing = assertSupabaseConfigured(env);
@@ -1775,6 +1783,7 @@ export async function onRequestGet(context) {
   const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
   const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
+  try {
   if (resource === 'slides') {
     let path = '/rest/v1/slides?deleted_at=is.null&select=*&order=updated_at.desc&limit=' + String(limit);
     if (actor.role !== 'admin') {
@@ -1936,6 +1945,9 @@ export async function onRequestGet(context) {
   }
 
   return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, template-collaborators, or template-approvals.', 400);
+  } catch (error) {
+    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.');
+  }
 }
 
 export async function onRequestPost(context) {
@@ -1956,6 +1968,7 @@ export async function onRequestPost(context) {
   const actor = authz.actor;
   const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
 
+  try {
   if (action === 'save') return handleSaveAction(env, actor, body);
   if (action === 'duplicate-slide') return handleDuplicateSlideAction(env, actor, body);
   if (action === 'duplicate-template') return handleDuplicateTemplateAction(env, actor, body);
@@ -1976,4 +1989,7 @@ export async function onRequestPost(context) {
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);
+  } catch (error) {
+    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.');
+  }
 }
