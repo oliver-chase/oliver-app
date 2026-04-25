@@ -194,8 +194,8 @@ list is a pointer, not a replacement.
 - **Auth and users API** — MSAL/AuthGuard/login route are active again.
   `UserContext` is mounted and resolves the signed-in Azure user through
   `/api/users`, auto-upserting a default `app_users` row when that backend is
-  available. Hub/Admin still need seeded `app_users` data for real permission
-  and admin behavior.
+  available. Owner identities from `OWNER_EMAILS`/`OWNER_USER_IDS` are
+  enforced as immutable admin + full permissions.
 - **JSX unicode-escape hygiene** — `\uXXXX` only appears inside JS string
   contexts (expressions, string literals), never as raw JSX text.
 - **Design-system runtime color resolution** — `<ResolvedValue token fallback>`
@@ -211,7 +211,7 @@ list is a pointer, not a replacement.
 ## 5. What's shipped (module status)
 
 ### Hub (`/`)
-- Permission-aware module grid (bypass active until `app_users` seeded).
+- Permission-aware module grid (loading/ready/error states; no unrestricted fallback).
 - Admin links visible when `isAdmin`; this now depends on `app_users` data resolving through `/api/users`.
 - Registers Oliver config (navigation + quickConvos). No upload.
 
@@ -352,10 +352,10 @@ list is a pointer, not a replacement.
   components all need design + build.
 - **User permissions seed**. Supabase `app_users` DDL is written but not
   seeded. CF Access needs to be wired. When ready:
-  1. Run `scripts/setup-app-users.sql` (if present) or write it.
+  1. Run `scripts/setup-app-users.sql`.
   2. Seed at least one admin row and verify role/permission resolution.
   3. Configure CF Access at network edge if network-layer gating is required.
-  4. Remove the remaining compatibility fallback once `/api/users` is guaranteed.
+  4. Verify `OWNER_EMAILS` / `OWNER_USER_IDS` are set for immutable owner access.
 
 ### Task #3 — Design-system Tesknota parity (complete as of e645929)
 What's shipped: anchor nav, dead-token audit card, token usages for colors /
@@ -372,9 +372,8 @@ applied on each keystroke, reverts on cancel, preview banner active while editin
   When there's budget, set up Playwright E2E against the staging URL.
 
 ### Intentional deferrals / known-OK
-- `UserProvider` is mounted, but compatibility fallback still exists when
-  `/api/users` cannot resolve the signed-in user. Hub falls back to the
-  unrestricted module view in that case.
+- `UserProvider` is mounted. When `/api/users` cannot resolve the signed-in
+  user, Hub keeps module access restricted and shows a permissions warning.
 - `--spacing-3` (3px) has 10+ consumers in `accounts.css` — design-system
   page's hand-curated usages array catalogues them.
 - SDR `.sdr-stat-value` rounded 28→26 and `.sdr-detail-close` 18→17 in
@@ -439,7 +438,9 @@ applied on each keystroke, reverts on cancel, preview banner active while editin
 - **No new CSS values.** If `tokens.css` doesn't have an exact value, pick
   the closest token and accept a ≤2px visual shift, or add a new semantic
   token to `tokens.css` first.
-- **Keep `UserProvider` mounted.** Current Hub/Admin behavior depends on it. Compatibility fallback still exists while `app_users` seeding and `/api/users` rollout are incomplete.
+- **Keep `UserProvider` mounted.** Current Hub/Admin behavior depends on it.
+  Owner invariants now rely on `/api/users` plus `OWNER_EMAILS` /
+  `OWNER_USER_IDS` config.
 - **Don't re-introduce retired components.** Section §4 lists them.
 
 ---

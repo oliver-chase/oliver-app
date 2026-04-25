@@ -63,12 +63,30 @@ interface AutosaveRetryState {
 }
 
 interface CanvasDragState {
+  componentIds: string[]
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  originById: Record<string, { x: number; y: number }>
+  snapshotBefore: SlideComponent[]
+}
+
+interface CanvasResizeState {
   componentId: string
   pointerId: number
   startClientX: number
   startClientY: number
   originX: number
   originY: number
+  originWidth: number
+  originHeight: number
+  supportsHeight: boolean
+  snapshotBefore: SlideComponent[]
+}
+
+interface CanvasEditorNotice {
+  tone: 'info' | 'error'
+  text: string
 }
 
 function delay(ms: number) {
@@ -111,6 +129,10 @@ function summarizeWarnings(warnings: string[]) {
 
 const CANVAS_DEFAULT_WIDTH = 1920
 const CANVAS_DEFAULT_HEIGHT = 1080
+const MIN_COMPONENT_WIDTH = 48
+const MIN_COMPONENT_HEIGHT = 32
+const MIN_FONT_SIZE = 14
+const MAX_HISTORY_ENTRIES = 80
 
 const EDITABLE_COMPONENT_TYPES = new Set<SlideComponentType>([
   'text',
@@ -130,6 +152,13 @@ function sanitizeHtmlContent(content: string): string {
     .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
     .replace(/\s(href|src)\s*=\s*"javascript:[^"]*"/gi, '')
     .replace(/\s(href|src)\s*=\s*'javascript:[^']*'/gi, '')
+}
+
+function toColorInputValue(color: string | undefined, fallback: string): string {
+  if (typeof color !== 'string') return fallback
+  const value = color.trim()
+  if (/^#[0-9a-f]{3,8}$/i.test(value)) return value
+  return fallback
 }
 
 function buildCanvasComponentStyle(component: SlideComponent): CSSProperties {
@@ -182,8 +211,13 @@ export default function SlidesPage() {
 
   const [showRawJson, setShowRawJson] = useState(false)
   const [jsonCopyState, setJsonCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
+  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([])
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null)
   const [draggingComponentId, setDraggingComponentId] = useState<string | null>(null)
+  const [resizingComponentId, setResizingComponentId] = useState<string | null>(null)
+  const [editorNotice, setEditorNotice] = useState<CanvasEditorNotice | null>(null)
+  const [historyPast, setHistoryPast] = useState<SlideComponent[][]>([])
+  const [historyFuture, setHistoryFuture] = useState<SlideComponent[][]>([])
 
   const [slideTitle, setSlideTitle] = useState('Untitled Slide')
   const [activeSlideId, setActiveSlideId] = useState<string | null>(null)
@@ -211,7 +245,10 @@ export default function SlidesPage() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const [canvasScale, setCanvasScale] = useState(1)
   const canvasDragRef = useRef<CanvasDragState | null>(null)
+  const canvasResizeRef = useRef<CanvasResizeState | null>(null)
   const canvasDragMovedRef = useRef(false)
+  const canvasResizeMovedRef = useRef(false)
+  const canvasContentRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const actor = useMemo(() => ({
     user_id: appUser?.user_id || 'qa-admin-user',
@@ -231,6 +268,99 @@ export default function SlidesPage() {
     if (saveStatus === 'clean' || saveStatus === 'saved') return false
     return true
   }, [rawHtml, result, saveStatus])
+  const primarySelectedComponentId = selectedComponentIds[0] || null
+  const selectedComponents = useMemo(() => {
+    if (!result || selectedComponentIds.length === 0) return []
+    const byId = new Map(result.components.map((component) => [component.id, component]))
+    return selectedComponentIds
+      .map((id) => byId.get(id))
+      .filter((component): component is SlideComponent => !!component)
+  }, [result, selectedComponentIds])
+  const canInlineEditSelected =
+    selectedComponents.length === 1 && EDITABLE_COMPONENT_TYPES.has(selectedComponents[0].type)
+  const selectedStyle = useMemo(() => {
+    if (selectedComponents.length === 0) return null
+    const lead = selectedComponents[0]
+    return {
+      fontSize: Math.max(MIN_FONT_SIZE, lead.style.fontSize || MIN_FONT_SIZE),
+      fontWeight: lead.style.fontWeight || 400,
+      fontStyle: lead.style.fontStyle || 'normal',
+      textAlign: lead.style.textAlign || 'left',
+      color: toColorInputValue(lead.style.color, '#0f172a'),
+      backgroundColor: toColorInputValue(lead.style.backgroundColor, '#ffffff'),
+    }
+  }, [selectedComponents])
+
+  const cloneComponents = useCallback(
+    (components: SlideComponent[]) =>
+      components.map((component) => ({
+        ...component,
+        style: { ...component.style },
+      })),
+    [],
+  )
+
+  const areComponentsEqual = useCallback((a: SlideComponent[], b: SlideComponent[]) => {
+    if (a.length !== b.length) return false
+    for (let index = 0; index < a.length; index += 1) {
+      const left = a[index]
+      const right = b[index]
+      if (
+        left.id !== right.id ||
+        left.type !== right.type ||
+        left.x !== right.x ||
+        left.y !== right.y ||
+        left.width !== right.width ||
+        left.height !== right.height ||
+        left.content !== right.content ||
+        left.locked !== right.locked ||
+        left.visible !== right.visible ||
+        left.sourceLabel !== right.sourceLabel
+      ) {
+        return false
+      }
+      const leftStyle = left.style || {}
+      const rightStyle = right.style || {}
+      if (
+        leftStyle.fontSize !== rightStyle.fontSize ||
+        leftStyle.fontWeight !== rightStyle.fontWeight ||
+        leftStyle.color !== rightStyle.color ||
+        leftStyle.backgroundColor !== rightStyle.backgroundColor ||
+        leftStyle.fontStyle !== rightStyle.fontStyle ||
+        leftStyle.lineHeight !== rightStyle.lineHeight ||
+        leftStyle.textAlign !== rightStyle.textAlign
+      ) {
+        return false
+      }
+    }
+    return true
+  }, [])
+
+  const pushHistorySnapshot = useCallback((components: SlideComponent[]) => {
+    setHistoryPast((previous) => {
+      if (previous.length > 0 && areComponentsEqual(previous[previous.length - 1], components)) {
+        return previous
+      }
+      const next = [...previous, cloneComponents(components)]
+      if (next.length > MAX_HISTORY_ENTRIES) {
+        return next.slice(next.length - MAX_HISTORY_ENTRIES)
+      }
+      return next
+    })
+    setHistoryFuture([])
+  }, [areComponentsEqual, cloneComponents])
+
+  const clearHistory = useCallback(() => {
+    setHistoryPast([])
+    setHistoryFuture([])
+  }, [])
+
+  const isTextEntryTarget = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false
+    if (target.closest('[contenteditable="true"]')) return true
+    const tag = target.tagName.toLowerCase()
+    return tag === 'input' || tag === 'textarea' || tag === 'select'
+  }, [])
 
   const confirmDiscardUnsaved = useCallback(() => {
     if (!hasUnsavedChanges) return true
@@ -290,6 +420,10 @@ export default function SlidesPage() {
   }, [result])
 
   const updateCanvasComponentContent = useCallback((componentId: string, content: string) => {
+    if (!result) return
+    const existing = result.components.find((component) => component.id === componentId)
+    if (!existing || existing.content === content) return
+    pushHistorySnapshot(result.components)
     setResult((previous) => {
       if (!previous) return previous
 
@@ -306,17 +440,145 @@ export default function SlidesPage() {
       }
     })
     setDirty()
-  }, [setDirty])
+  }, [pushHistorySnapshot, result, setDirty])
 
-  const handleCanvasLayerSelect = useCallback((componentId: string) => {
-    setSelectedComponentId(componentId)
+  const focusInlineEditor = useCallback((componentId: string) => {
+    window.requestAnimationFrame(() => {
+      const node = canvasContentRefs.current[componentId]
+      if (!node) return
+      node.focus()
+      if (document.getSelection) {
+        const selection = document.getSelection()
+        if (!selection) return
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        range.collapse(false)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    })
   }, [])
 
-  const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!result || !selectedComponentId) return
+  const beginInlineEditMode = useCallback((componentId: string) => {
+    setSelectedComponentIds([componentId])
+    setEditingComponentId(componentId)
+    focusInlineEditor(componentId)
+  }, [focusInlineEditor])
 
-    const target = event.target as HTMLElement | null
-    if (target?.closest('[contenteditable="true"]')) return
+  const handleCanvasLayerSelect = useCallback((componentId: string, options?: { multi?: boolean }) => {
+    setEditingComponentId(null)
+    if (options?.multi) {
+      setSelectedComponentIds((previous) => {
+        if (previous.includes(componentId)) {
+          return previous.filter((id) => id !== componentId)
+        }
+        return [...previous, componentId]
+      })
+      return
+    }
+    setSelectedComponentIds([componentId])
+  }, [])
+
+  const handleUndo = useCallback(() => {
+    if (!result || historyPast.length === 0) return
+    const previousSnapshot = historyPast[historyPast.length - 1]
+    const currentSnapshot = cloneComponents(result.components)
+    setHistoryPast(historyPast.slice(0, -1))
+    setHistoryFuture((previous) => {
+      const next = [...previous, currentSnapshot]
+      return next.length > MAX_HISTORY_ENTRIES ? next.slice(next.length - MAX_HISTORY_ENTRIES) : next
+    })
+    setResult({
+      ...result,
+      components: cloneComponents(previousSnapshot),
+    })
+    setSelectedComponentIds((previous) => previous.filter((id) => previousSnapshot.some((component) => component.id === id)))
+    setEditingComponentId(null)
+    setEditorNotice({ tone: 'info', text: 'Undid last editor action.' })
+    setDirty()
+  }, [cloneComponents, historyPast, result, setDirty])
+
+  const handleRedo = useCallback(() => {
+    if (!result || historyFuture.length === 0) return
+    const nextSnapshot = historyFuture[historyFuture.length - 1]
+    const currentSnapshot = cloneComponents(result.components)
+    setHistoryFuture(historyFuture.slice(0, -1))
+    setHistoryPast((previous) => {
+      const next = [...previous, currentSnapshot]
+      return next.length > MAX_HISTORY_ENTRIES ? next.slice(next.length - MAX_HISTORY_ENTRIES) : next
+    })
+    setResult({
+      ...result,
+      components: cloneComponents(nextSnapshot),
+    })
+    setSelectedComponentIds((previous) => previous.filter((id) => nextSnapshot.some((component) => component.id === id)))
+    setEditingComponentId(null)
+    setEditorNotice({ tone: 'info', text: 'Redid editor action.' })
+    setDirty()
+  }, [cloneComponents, historyFuture, result, setDirty])
+
+  const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!result) return
+    if (isTextEntryTarget(event.target)) {
+      if (event.key === 'Escape' && editingComponentId) {
+        setEditingComponentId(null)
+        const target = event.target as HTMLElement
+        target.blur()
+      }
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'a') {
+      event.preventDefault()
+      const ids = result.components.filter((component) => component.visible !== false).map((component) => component.id)
+      setSelectedComponentIds(ids)
+      setEditorNotice({ tone: 'info', text: `Selected ${ids.length} layers.` })
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault()
+      if (event.shiftKey) {
+        handleRedo()
+      } else {
+        handleUndo()
+      }
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'y') {
+      event.preventDefault()
+      handleRedo()
+      return
+    }
+
+    if (event.key === 'Escape') {
+      setSelectedComponentIds([])
+      setEditingComponentId(null)
+      return
+    }
+
+    if (event.key === 'PageDown' || event.key === 'PageUp') {
+      event.preventDefault()
+      const visibleIds = result.components.filter((component) => component.visible !== false).map((component) => component.id)
+      if (visibleIds.length === 0) return
+      const direction = event.key === 'PageDown' ? 1 : -1
+      const currentIndex = primarySelectedComponentId ? visibleIds.indexOf(primarySelectedComponentId) : -1
+      const nextIndex = currentIndex < 0
+        ? 0
+        : (currentIndex + direction + visibleIds.length) % visibleIds.length
+      setSelectedComponentIds([visibleIds[nextIndex]])
+      setEditingComponentId(null)
+      return
+    }
+
+    if (event.key === 'Enter' && canInlineEditSelected && primarySelectedComponentId) {
+      event.preventDefault()
+      beginInlineEditMode(primarySelectedComponentId)
+      return
+    }
+
+    if (selectedComponentIds.length === 0) return
 
     const step = event.shiftKey ? 10 : 1
     let deltaX = 0
@@ -327,31 +589,35 @@ export default function SlidesPage() {
     if (event.key === 'ArrowUp') deltaY = -step
     if (event.key === 'ArrowDown') deltaY = step
 
-    if (!deltaX && !deltaY) {
-      if (event.key === 'Escape') {
-        setSelectedComponentId(null)
-      }
-      return
-    }
-
+    if (!deltaX && !deltaY) return
     event.preventDefault()
 
-    let moved = false
+    const selectedIds = new Set(selectedComponentIds)
+    const canMove = result.components.some((component) => {
+      if (!selectedIds.has(component.id)) return false
+      const nextCoordinates = clampCanvasCoordinates(
+        component,
+        result.canvas,
+        component.x + deltaX,
+        component.y + deltaY,
+      )
+      return nextCoordinates.x !== component.x || nextCoordinates.y !== component.y
+    })
+    if (!canMove) return
+
+    pushHistorySnapshot(result.components)
+
     setResult((previous) => {
       if (!previous) return previous
 
       const nextComponents = previous.components.map((component) => {
-        if (component.id !== selectedComponentId) return component
-
+        if (!selectedIds.has(component.id)) return component
         const nextCoordinates = clampCanvasCoordinates(
           component,
           previous.canvas,
           component.x + deltaX,
           component.y + deltaY,
         )
-
-        if (nextCoordinates.x === component.x && nextCoordinates.y === component.y) return component
-        moved = true
         return {
           ...component,
           x: nextCoordinates.x,
@@ -359,17 +625,25 @@ export default function SlidesPage() {
         }
       })
 
-      if (!moved) return previous
       return {
         ...previous,
         components: nextComponents,
       }
     })
-
-    if (moved) {
-      setDirty()
-    }
-  }, [result, selectedComponentId, setDirty])
+    setDirty()
+  }, [
+    beginInlineEditMode,
+    canInlineEditSelected,
+    editingComponentId,
+    handleRedo,
+    handleUndo,
+    isTextEntryTarget,
+    primarySelectedComponentId,
+    pushHistorySnapshot,
+    result,
+    selectedComponentIds,
+    setDirty,
+  ])
 
   const handleCanvasPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const drag = canvasDragRef.current
@@ -384,15 +658,14 @@ export default function SlidesPage() {
       if (!previous) return previous
 
       const nextComponents = previous.components.map((component) => {
-        if (component.id !== drag.componentId) return component
-
+        const origin = drag.originById[component.id]
+        if (!origin) return component
         const nextCoordinates = clampCanvasCoordinates(
           component,
           previous.canvas,
-          drag.originX + deltaX,
-          drag.originY + deltaY,
+          origin.x + deltaX,
+          origin.y + deltaY,
         )
-
         if (nextCoordinates.x === component.x && nextCoordinates.y === component.y) return component
         moved = true
         return {
@@ -414,44 +687,145 @@ export default function SlidesPage() {
     }
   }, [canvasScale])
 
+  const handleCanvasResizeMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const resize = canvasResizeRef.current
+    if (!resize || event.pointerId !== resize.pointerId) return
+
+    const scale = canvasScale > 0 ? canvasScale : 1
+    const deltaX = Math.round((event.clientX - resize.startClientX) / scale)
+    const deltaY = Math.round((event.clientY - resize.startClientY) / scale)
+
+    let moved = false
+    setResult((previous) => {
+      if (!previous) return previous
+      const nextComponents = previous.components.map((component) => {
+        if (component.id !== resize.componentId) return component
+
+        const maxWidth = Math.max(MIN_COMPONENT_WIDTH, previous.canvas.width - resize.originX)
+        const nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, resize.originWidth + deltaX))
+        const maxHeight = Math.max(MIN_COMPONENT_HEIGHT, previous.canvas.height - resize.originY)
+        const nextHeight = resize.supportsHeight
+          ? Math.min(maxHeight, Math.max(MIN_COMPONENT_HEIGHT, resize.originHeight + deltaY))
+          : undefined
+
+        const widthChanged = nextWidth !== component.width
+        const heightChanged = resize.supportsHeight ? nextHeight !== component.height : false
+        if (!widthChanged && !heightChanged) return component
+
+        moved = true
+        return {
+          ...component,
+          width: nextWidth,
+          height: resize.supportsHeight ? nextHeight : component.height,
+        }
+      })
+
+      if (!moved) return previous
+      return {
+        ...previous,
+        components: nextComponents,
+      }
+    })
+
+    if (moved) canvasResizeMovedRef.current = true
+  }, [canvasScale])
+
   const finalizeCanvasDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const drag = canvasDragRef.current
     if (!drag || event.pointerId !== drag.pointerId) return
-
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     canvasDragRef.current = null
     setDraggingComponentId(null)
-
     if (canvasDragMovedRef.current) {
       canvasDragMovedRef.current = false
+      pushHistorySnapshot(drag.snapshotBefore)
       setDirty()
     }
-  }, [setDirty])
+  }, [pushHistorySnapshot, setDirty])
+
+  const finalizeCanvasResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const resize = canvasResizeRef.current
+    if (!resize || event.pointerId !== resize.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    canvasResizeRef.current = null
+    setResizingComponentId(null)
+    if (canvasResizeMovedRef.current) {
+      canvasResizeMovedRef.current = false
+      pushHistorySnapshot(resize.snapshotBefore)
+      setDirty()
+    }
+  }, [pushHistorySnapshot, setDirty])
 
   const handleCanvasPointerDown = useCallback((component: SlideComponent, event: ReactPointerEvent<HTMLElement>) => {
-    if (component.locked) return
+    if (!result || component.locked) return
     if (event.button !== 0) return
 
     const target = event.target as HTMLElement | null
     if (target?.closest('[contenteditable="true"]')) return
+    if (target?.closest('[data-resize-handle="se"]')) return
 
-    setSelectedComponentId(component.id)
+    if (event.shiftKey) {
+      event.preventDefault()
+      return
+    }
+
+    setEditingComponentId(null)
+    const selectionIds = selectedComponentIds.includes(component.id) ? selectedComponentIds : [component.id]
+    setSelectedComponentIds(selectionIds)
     setDraggingComponentId(component.id)
     canvasDragMovedRef.current = false
     canvasDragRef.current = {
+      componentIds: selectionIds,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      originById: result.components.reduce<Record<string, { x: number; y: number }>>((acc, entry) => {
+        if (selectionIds.includes(entry.id)) {
+          acc[entry.id] = { x: entry.x, y: entry.y }
+        }
+        return acc
+      }, {}),
+      snapshotBefore: cloneComponents(result.components),
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    event.preventDefault()
+  }, [cloneComponents, result, selectedComponentIds])
+
+  const handleResizePointerDown = useCallback((component: SlideComponent, event: ReactPointerEvent<HTMLElement>) => {
+    if (!result || component.locked) return
+    if (event.button !== 0) return
+
+    setEditingComponentId(null)
+    setSelectedComponentIds([component.id])
+    setResizingComponentId(component.id)
+    canvasResizeMovedRef.current = false
+    canvasResizeRef.current = {
       componentId: component.id,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
       originX: component.x,
       originY: component.y,
+      originWidth: component.width,
+      originHeight: typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT,
+      supportsHeight: typeof component.height === 'number',
+      snapshotBefore: cloneComponents(result.components),
     }
 
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
-  }, [])
+    event.stopPropagation()
+  }, [cloneComponents, result])
+
+  const handleCanvasPointerRelease = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    finalizeCanvasDrag(event)
+    finalizeCanvasResize(event)
+  }, [finalizeCanvasDrag, finalizeCanvasResize])
 
   const parseHtmlSync = useCallback((html: string): SlideImportResult => {
     const preflight = validatePastedHtml(html)
@@ -472,7 +846,12 @@ export default function SlidesPage() {
     }
 
     setResult(parsed)
-    setSelectedComponentId(null)
+    setSelectedComponentIds([])
+    setEditingComponentId(null)
+    setDraggingComponentId(null)
+    setResizingComponentId(null)
+    clearHistory()
+    setEditorNotice(null)
     setImportError(null)
     setParseStatus('completed')
     setParseProgress(100)
@@ -480,7 +859,7 @@ export default function SlidesPage() {
     setExportHtml('')
     setDirty()
     return parsed
-  }, [setDirty])
+  }, [clearHistory, setDirty])
 
   const runParseWithProgress = useCallback(async (html: string) => {
     const preflight = validatePastedHtml(html)
@@ -561,6 +940,18 @@ export default function SlidesPage() {
     void refreshLibraryData()
   }, [refreshLibraryData])
 
+  const normalizeComponentsForPersistence = useCallback((components: SlideComponent[]) => {
+    return components.map((component) => ({
+      ...component,
+      style: {
+        ...component.style,
+        ...(component.style.fontSize
+          ? { fontSize: Math.max(MIN_FONT_SIZE, component.style.fontSize) }
+          : {}),
+      },
+    }))
+  }, [])
+
   const handleSave = useCallback(async (options?: { autosave?: boolean; overwrite?: boolean }) => {
     if (!result) {
       setSaveStatus('error')
@@ -580,7 +971,7 @@ export default function SlidesPage() {
         id: activeSlideId || undefined,
         title: slideTitle.trim() || 'Untitled Slide',
         canvas: result.canvas,
-        components: result.components,
+        components: normalizeComponentsForPersistence(result.components),
         metadata: {
           warning_count: result.warnings.length,
           warnings: result.warnings,
@@ -620,7 +1011,7 @@ export default function SlidesPage() {
       setSaveError(error instanceof Error ? error.message : String(error))
       return null
     }
-  }, [activeRevision, activeSlideId, actor, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
+  }, [activeRevision, activeSlideId, actor, normalizeComponentsForPersistence, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
 
   useEffect(() => {
     if (!autosaveEnabled || saveStatus !== 'dirty' || !result) return
@@ -749,20 +1140,50 @@ export default function SlidesPage() {
   }, [hasUnsavedChanges])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
+      if (isTextEntryTarget(event.target)) return
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) {
+          handleRedo()
+        } else {
+          handleUndo()
+        }
+        return
+      }
+      if (key === 'y') {
+        event.preventDefault()
+        handleRedo()
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [handleRedo, handleUndo, isTextEntryTarget])
+
+  useEffect(() => {
     if (!result) {
-      setSelectedComponentId(null)
+      setSelectedComponentIds([])
+      setEditingComponentId(null)
       setDraggingComponentId(null)
+      setResizingComponentId(null)
       canvasDragRef.current = null
+      canvasResizeRef.current = null
       canvasDragMovedRef.current = false
+      canvasResizeMovedRef.current = false
       return
     }
 
-    if (!selectedComponentId) return
-    const stillExists = result.components.some((component) => component.id === selectedComponentId)
-    if (!stillExists) {
-      setSelectedComponentId(null)
-    }
-  }, [result, selectedComponentId])
+    setEditingComponentId((previous) => {
+      if (!previous) return null
+      return result.components.some((component) => component.id === previous) ? previous : null
+    })
+    if (selectedComponentIds.length === 0) return
+    setSelectedComponentIds((previous) => previous.filter((id) => result.components.some((component) => component.id === id)))
+  }, [result, selectedComponentIds.length])
 
   const restoreDraft = useCallback(() => {
     if (!recoveryDraft) return
@@ -771,15 +1192,21 @@ export default function SlidesPage() {
     setActiveSlideId(recoveryDraft.activeSlideId)
     setActiveRevision(recoveryDraft.revision || 0)
     setResult(recoveryDraft.result)
-    setSelectedComponentId(null)
+    setSelectedComponentIds([])
+    setEditingComponentId(null)
     setDraggingComponentId(null)
+    setResizingComponentId(null)
     canvasDragRef.current = null
+    canvasResizeRef.current = null
     canvasDragMovedRef.current = false
+    canvasResizeMovedRef.current = false
+    clearHistory()
+    setEditorNotice(null)
     setAutosaveRetryState(null)
     setSaveError(null)
     setSaveStatus('dirty')
     setRecoveryDraft(null)
-  }, [recoveryDraft])
+  }, [clearHistory, recoveryDraft])
 
   const discardDraft = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -791,10 +1218,20 @@ export default function SlidesPage() {
 
   const handleCanvasComponentBlur = useCallback((component: SlideComponent, event: FocusEvent<HTMLDivElement>) => {
     const nextContent = sanitizeHtmlContent(event.currentTarget.innerHTML || '')
-    if (nextContent === component.content) return
-    event.currentTarget.innerHTML = nextContent
-    updateCanvasComponentContent(component.id, nextContent)
+    if (nextContent !== component.content) {
+      event.currentTarget.innerHTML = nextContent
+      updateCanvasComponentContent(component.id, nextContent)
+    }
+    setEditingComponentId((previous) => (previous === component.id ? null : previous))
   }, [updateCanvasComponentContent])
+
+  const handleCanvasContentKeyDown = useCallback((component: SlideComponent, event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    setEditingComponentId((previous) => (previous === component.id ? null : previous))
+    event.currentTarget.blur()
+  }, [])
 
   const onFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -830,16 +1267,22 @@ export default function SlidesPage() {
     setSlideTitle(slide.title)
     setActiveSlideId(slide.id)
     setActiveRevision(slide.revision)
-    setSelectedComponentId(null)
+    setSelectedComponentIds([])
+    setEditingComponentId(null)
     setDraggingComponentId(null)
+    setResizingComponentId(null)
     canvasDragRef.current = null
+    canvasResizeRef.current = null
     canvasDragMovedRef.current = false
+    canvasResizeMovedRef.current = false
+    clearHistory()
+    setEditorNotice(null)
     setAutosaveRetryState(null)
     setSaveStatus('clean')
     setSaveError(null)
     setLastSavedAt(slide.updated_at)
     setExportHtml('')
-  }, [confirmDiscardUnsaved])
+  }, [clearHistory, confirmDiscardUnsaved])
 
   const handleDuplicateSlide = useCallback(async (slideId: string) => {
     if (!confirmDiscardUnsaved()) return
@@ -878,12 +1321,22 @@ export default function SlidesPage() {
       if (activeSlideId === slide.id) {
         setActiveSlideId(null)
         setActiveRevision(0)
+        setResult(null)
+        setSelectedComponentIds([])
+        setEditingComponentId(null)
+        setDraggingComponentId(null)
+        setResizingComponentId(null)
+        clearHistory()
+        setEditorNotice({ tone: 'info', text: 'Deleted active slide. Import or load another slide to continue editing.' })
         setSaveStatus('clean')
+        setSaveError(null)
+        setLastSavedAt(null)
+        setExportHtml('')
       }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     }
-  }, [activeSlideId, actor, refreshLibraryData])
+  }, [activeSlideId, actor, clearHistory, refreshLibraryData])
 
   const handleDuplicateTemplate = useCallback(async (templateId: string) => {
     if (!confirmDiscardUnsaved()) return
@@ -907,6 +1360,154 @@ export default function SlidesPage() {
       setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [actor, refreshLibraryData])
+
+  const applyStyleToSelection = useCallback((patch: Partial<SlideComponent['style']>) => {
+    if (!result || selectedComponentIds.length === 0) {
+      setEditorNotice({ tone: 'error', text: 'Select at least one layer before applying styles.' })
+      return
+    }
+
+    const selectedIds = new Set(selectedComponentIds)
+    const nextComponents = result.components.map((component) => {
+      if (!selectedIds.has(component.id)) return component
+      const nextStyle = {
+        ...component.style,
+        ...patch,
+      }
+      if (typeof nextStyle.fontSize === 'number') {
+        nextStyle.fontSize = Math.max(MIN_FONT_SIZE, nextStyle.fontSize)
+      }
+      return {
+        ...component,
+        style: nextStyle,
+      }
+    })
+
+    if (areComponentsEqual(result.components, nextComponents)) {
+      setEditorNotice({ tone: 'info', text: 'No style changes were applied.' })
+      return
+    }
+
+    pushHistorySnapshot(result.components)
+    setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
+    setDirty()
+    setEditorNotice({ tone: 'info', text: `Updated styles for ${selectedComponentIds.length} selected layer(s).` })
+  }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
+
+  const alignSelection = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y') => {
+    if (!result || selectedComponentIds.length < 2) {
+      setEditorNotice({ tone: 'error', text: 'Select at least two layers before aligning.' })
+      return
+    }
+
+    const selected = result.components.filter((component) => selectedComponentIds.includes(component.id))
+    if (selected.length < 2) {
+      setEditorNotice({ tone: 'error', text: 'Selected layers were not found.' })
+      return
+    }
+
+    const minX = Math.min(...selected.map((component) => component.x))
+    const maxRight = Math.max(...selected.map((component) => component.x + component.width))
+    const minY = Math.min(...selected.map((component) => component.y))
+    const maxBottom = Math.max(...selected.map((component) => component.y + (component.height ?? MIN_COMPONENT_HEIGHT)))
+    const centerX = minX + ((maxRight - minX) / 2)
+    const centerY = minY + ((maxBottom - minY) / 2)
+    const selectedIds = new Set(selectedComponentIds)
+
+    const nextComponents = result.components.map((component) => {
+      if (!selectedIds.has(component.id)) return component
+
+      let nextX = component.x
+      let nextY = component.y
+      if (mode === 'left') nextX = minX
+      if (mode === 'right') nextX = maxRight - component.width
+      if (mode === 'top') nextY = minY
+      if (mode === 'bottom') nextY = maxBottom - (component.height ?? MIN_COMPONENT_HEIGHT)
+      if (mode === 'center-x') nextX = Math.round(centerX - (component.width / 2))
+      if (mode === 'center-y') nextY = Math.round(centerY - ((component.height ?? MIN_COMPONENT_HEIGHT) / 2))
+
+      const nextCoordinates = clampCanvasCoordinates(component, result.canvas, nextX, nextY)
+      return {
+        ...component,
+        x: nextCoordinates.x,
+        y: nextCoordinates.y,
+      }
+    })
+
+    if (areComponentsEqual(result.components, nextComponents)) {
+      setEditorNotice({ tone: 'info', text: 'Alignment made no positional changes.' })
+      return
+    }
+
+    pushHistorySnapshot(result.components)
+    setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
+    setDirty()
+    setEditorNotice({ tone: 'info', text: `Applied ${mode} alignment to ${selected.length} layers.` })
+  }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
+
+  const distributeSelection = useCallback((axis: 'horizontal' | 'vertical') => {
+    if (!result || selectedComponentIds.length < 3) {
+      setEditorNotice({ tone: 'error', text: 'Select at least three layers to distribute spacing.' })
+      return
+    }
+
+    const selected = result.components.filter((component) => selectedComponentIds.includes(component.id))
+    if (selected.length < 3) {
+      setEditorNotice({ tone: 'error', text: 'Selected layers were not found.' })
+      return
+    }
+
+    const sorted = [...selected].sort((a, b) => (axis === 'horizontal' ? a.x - b.x : a.y - b.y))
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    const positions = new Map<string, { x: number; y: number }>()
+
+    if (axis === 'horizontal') {
+      const totalWidths = sorted.reduce((sum, component) => sum + component.width, 0)
+      const span = (last.x + last.width) - first.x
+      const gap = Math.max(0, (span - totalWidths) / (sorted.length - 1))
+      let cursor = first.x
+      sorted.forEach((component) => {
+        positions.set(component.id, { x: Math.round(cursor), y: component.y })
+        cursor += component.width + gap
+      })
+    } else {
+      const heights = sorted.map((component) => component.height ?? MIN_COMPONENT_HEIGHT)
+      const totalHeights = heights.reduce((sum, value) => sum + value, 0)
+      const lastHeight = last.height ?? MIN_COMPONENT_HEIGHT
+      const span = (last.y + lastHeight) - first.y
+      const gap = Math.max(0, (span - totalHeights) / (sorted.length - 1))
+      let cursor = first.y
+      sorted.forEach((component, index) => {
+        positions.set(component.id, { x: component.x, y: Math.round(cursor) })
+        cursor += heights[index] + gap
+      })
+    }
+
+    const nextComponents = result.components.map((component) => {
+      const nextPosition = positions.get(component.id)
+      if (!nextPosition) return component
+      const nextCoordinates = clampCanvasCoordinates(component, result.canvas, nextPosition.x, nextPosition.y)
+      return {
+        ...component,
+        x: nextCoordinates.x,
+        y: nextCoordinates.y,
+      }
+    })
+
+    if (areComponentsEqual(result.components, nextComponents)) {
+      setEditorNotice({ tone: 'info', text: 'Distribution made no positional changes.' })
+      return
+    }
+
+    pushHistorySnapshot(result.components)
+    setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
+    setDirty()
+    setEditorNotice({
+      tone: 'info',
+      text: `Distributed ${selected.length} layers ${axis === 'horizontal' ? 'horizontally' : 'vertically'}.`,
+    })
+  }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
 
   const generateExport = useCallback(() => {
     if (!result) return ''
@@ -1019,7 +1620,7 @@ export default function SlidesPage() {
       const response = await saveSlide(actor, {
         title: copyTitle,
         canvas: result.canvas,
-        components: result.components,
+        components: normalizeComponentsForPersistence(result.components),
         metadata: {
           warning_count: result.warnings.length,
           warnings: result.warnings,
@@ -1037,7 +1638,7 @@ export default function SlidesPage() {
       setSaveStatus('error')
       setSaveError(error instanceof Error ? error.message : String(error))
     }
-  }, [actor, rawHtml.length, refreshLibraryData, result, slideTitle])
+  }, [actor, normalizeComponentsForPersistence, rawHtml.length, refreshLibraryData, result, slideTitle])
 
   const oliverConfig = useMemo<OliverConfig>(() => {
     const actions: OliverAction[] = SLIDES_COMMANDS.map((command) => {
@@ -1154,7 +1755,7 @@ export default function SlidesPage() {
           <section className="slides-card">
             <h1 className="slides-title">HTML to Editable Components</h1>
             <p className="slides-subtitle">
-              Import slide HTML, review parser output, and work directly on a scaled 16:9 canvas before saving/exporting. Advanced drag/resize tooling is still in backlog.
+              Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas with keyboard-first controls, alignment tools, autosave, and export.
             </p>
 
             {recoveryDraft && (
@@ -1343,15 +1944,198 @@ export default function SlidesPage() {
                 {result && (
                   <div className="slides-results">
                     <p className="slides-summary">
-                      Canvas: {result.canvas.width} × {result.canvas.height} · Components: {result.components.length}
+                      Canvas: {result.canvas.width} × {result.canvas.height} · Components: {result.components.length} · Selected: {selectedComponentIds.length}
                     </p>
+
+                    <section className="slides-editor-toolbar" aria-label="Layer editing controls">
+                      <div className="slides-editor-toolbar-row">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => handleUndo()}
+                          disabled={historyPast.length === 0}
+                        >
+                          Undo
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => handleRedo()}
+                          disabled={historyFuture.length === 0}
+                        >
+                          Redo
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('left')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Left
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('center-x')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Center X
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('right')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Right
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('top')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Top
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('center-y')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Center Y
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => alignSelection('bottom')}
+                          disabled={selectedComponentIds.length < 2}
+                        >
+                          Align Bottom
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => distributeSelection('horizontal')}
+                        >
+                          Distribute Horizontally
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => distributeSelection('vertical')}
+                        >
+                          Distribute Vertically
+                        </button>
+                      </div>
+
+                      <div className="slides-editor-toolbar-row slides-editor-toolbar-row--inputs">
+                        <label className="slides-editor-field" htmlFor="slides-style-font-size">
+                          <span>Font size</span>
+                          <input
+                            id="slides-style-font-size"
+                            type="number"
+                            min={MIN_FONT_SIZE}
+                            step={1}
+                            value={selectedStyle?.fontSize ?? MIN_FONT_SIZE}
+                            onChange={(event) =>
+                              applyStyleToSelection({
+                                fontSize: Number.isFinite(Number(event.target.value))
+                                  ? Math.max(MIN_FONT_SIZE, Number(event.target.value))
+                                  : MIN_FONT_SIZE,
+                              })}
+                            disabled={selectedComponentIds.length === 0}
+                          />
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-font-weight">
+                          <span>Weight</span>
+                          <select
+                            id="slides-style-font-weight"
+                            value={String(selectedStyle?.fontWeight ?? 400)}
+                            onChange={(event) => applyStyleToSelection({ fontWeight: Number(event.target.value) })}
+                            disabled={selectedComponentIds.length === 0}
+                          >
+                            <option value="400">400</option>
+                            <option value="500">500</option>
+                            <option value="600">600</option>
+                            <option value="700">700</option>
+                          </select>
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-align">
+                          <span>Text align</span>
+                          <select
+                            id="slides-style-align"
+                            value={selectedStyle?.textAlign ?? 'left'}
+                            onChange={(event) => applyStyleToSelection({ textAlign: event.target.value as SlideComponent['style']['textAlign'] })}
+                            disabled={selectedComponentIds.length === 0}
+                          >
+                            <option value="left">Left</option>
+                            <option value="center">Center</option>
+                            <option value="right">Right</option>
+                            <option value="justify">Justify</option>
+                          </select>
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-color">
+                          <span>Text color</span>
+                          <input
+                            id="slides-style-color"
+                            type="color"
+                            value={selectedStyle?.color ?? '#0f172a'}
+                            onChange={(event) => applyStyleToSelection({ color: event.target.value })}
+                            disabled={selectedComponentIds.length === 0}
+                          />
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-background">
+                          <span>Background</span>
+                          <input
+                            id="slides-style-background"
+                            type="color"
+                            value={selectedStyle?.backgroundColor ?? '#ffffff'}
+                            onChange={(event) => applyStyleToSelection({ backgroundColor: event.target.value })}
+                            disabled={selectedComponentIds.length === 0}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() =>
+                            applyStyleToSelection({
+                              fontStyle: selectedStyle?.fontStyle === 'italic' ? 'normal' : 'italic',
+                            })}
+                          disabled={selectedComponentIds.length === 0}
+                        >
+                          {selectedStyle?.fontStyle === 'italic' ? 'Remove Italic' : 'Italic'}
+                        </button>
+                      </div>
+                    </section>
+
+                    <details className="slides-shortcuts">
+                      <summary>Keyboard Shortcuts</summary>
+                      <ul id="slides-canvas-shortcuts-help">
+                        <li>Tab to focus a layer, Enter to start inline text editing, Escape to exit editing/selection.</li>
+                        <li>Arrow keys nudge selected layers by 1px. Use Shift+Arrow for 10px.</li>
+                        <li>Shift+click toggles multi-select. Ctrl/Cmd+A selects all visible layers.</li>
+                        <li>PageUp/PageDown cycles layer selection.</li>
+                        <li>Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y redo.</li>
+                      </ul>
+                    </details>
+
+                    {editorNotice && (
+                      <p className={'slides-editor-notice' + (editorNotice.tone === 'error' ? ' is-error' : '')} role={editorNotice.tone === 'error' ? 'alert' : 'status'}>
+                        {editorNotice.text}
+                      </p>
+                    )}
 
                     <section className="slides-canvas-preview" aria-labelledby="slides-canvas-heading">
                       <div className="slides-canvas-meta">
                         <h3 id="slides-canvas-heading">Canvas Preview</h3>
                         <p>
                           Scaled to viewport at {Math.round(canvasScale * 100)}% while preserving coordinate integrity.
-                          {selectedComponentId ? ` Selected layer: ${selectedComponentId}.` : ' Select a layer and use arrow keys to nudge.'}
+                          {primarySelectedComponentId
+                            ? selectedComponentIds.length > 1
+                              ? ` ${selectedComponentIds.length} layers selected.`
+                              : ` Selected layer: ${primarySelectedComponentId}.`
+                            : ' Select a layer and use arrow keys to nudge.'}
                         </p>
                       </div>
 
@@ -1363,8 +2147,10 @@ export default function SlidesPage() {
                           <div
                             className="slides-canvas"
                             data-slide-canvas="1"
-                            role="img"
-                            aria-label="Slide canvas preview"
+                            role="listbox"
+                            aria-multiselectable="true"
+                            aria-label="Slide canvas editor"
+                            aria-describedby="slides-canvas-shortcuts-help"
                             tabIndex={0}
                             onKeyDown={handleCanvasKeyDown}
                             style={{
@@ -1376,7 +2162,8 @@ export default function SlidesPage() {
                             {result.components.filter((component) => component.visible !== false).map((component) => {
                               const isEditable = EDITABLE_COMPONENT_TYPES.has(component.type)
                               const sanitizedContent = sanitizeHtmlContent(component.content || '')
-                              const isSelected = selectedComponentId === component.id
+                              const isSelected = selectedComponentIds.includes(component.id)
+                              const isEditing = editingComponentId === component.id
 
                               return (
                                 <article
@@ -1386,6 +2173,7 @@ export default function SlidesPage() {
                                     component.type +
                                     (component.locked ? ' is-locked' : '') +
                                     (draggingComponentId === component.id ? ' is-dragging' : '') +
+                                    (resizingComponentId === component.id ? ' is-resizing' : '') +
                                     (isSelected ? ' is-selected' : '')
                                   }
                                   style={buildCanvasComponentStyle(component)}
@@ -1398,20 +2186,51 @@ export default function SlidesPage() {
                                   data-component-locked={component.locked ? 'true' : 'false'}
                                   data-component-selected={isSelected ? 'true' : 'false'}
                                   data-component-dragging={draggingComponentId === component.id ? 'true' : 'false'}
+                                  data-component-resizing={resizingComponentId === component.id ? 'true' : 'false'}
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  aria-label={`${component.type} layer ${component.id}`}
                                   tabIndex={0}
-                                  onClick={() => handleCanvasLayerSelect(component.id)}
-                                  onFocus={() => handleCanvasLayerSelect(component.id)}
+                                  onClick={(event) => {
+                                    const target = event.target as HTMLElement
+                                    if (target.closest('[contenteditable="true"]')) return
+                                    handleCanvasLayerSelect(component.id, { multi: event.shiftKey })
+                                  }}
+                                  onDoubleClick={() => {
+                                    if (isEditable) beginInlineEditMode(component.id)
+                                  }}
+                                  onFocus={(event) => {
+                                    if (event.target !== event.currentTarget) return
+                                    handleCanvasLayerSelect(component.id)
+                                  }}
                                   onPointerDown={(event) => handleCanvasPointerDown(component, event)}
-                                  onPointerMove={handleCanvasPointerMove}
-                                  onPointerUp={finalizeCanvasDrag}
-                                  onPointerCancel={finalizeCanvasDrag}
+                                  onPointerMove={(event) => {
+                                    handleCanvasPointerMove(event)
+                                    handleCanvasResizeMove(event)
+                                  }}
+                                  onPointerUp={handleCanvasPointerRelease}
+                                  onPointerCancel={handleCanvasPointerRelease}
                                 >
                                   <div className="slides-canvas-component-type">{component.type}</div>
+                                  {isSelected && !component.locked && (
+                                    <button
+                                      type="button"
+                                      className="slides-canvas-resize-handle"
+                                      data-resize-handle="se"
+                                      aria-label={`Resize ${component.type} layer`}
+                                      onPointerDown={(event) => handleResizePointerDown(component, event)}
+                                    />
+                                  )}
                                   <div
                                     className={'slides-canvas-component-content' + (isEditable ? '' : ' is-readonly')}
-                                    contentEditable={isEditable}
+                                    ref={(node) => {
+                                      canvasContentRefs.current[component.id] = node
+                                    }}
+                                    contentEditable={isEditable && isEditing}
                                     suppressContentEditableWarning
+                                    onKeyDown={(event) => handleCanvasContentKeyDown(component, event)}
                                     onBlur={(event) => handleCanvasComponentBlur(component, event)}
+                                    aria-label={`${component.type} content`}
                                     dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                                   />
                                 </article>

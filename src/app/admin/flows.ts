@@ -103,7 +103,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         {
           id: 'user_id', prompt: 'Which user?', kind: 'entity',
           options: () => users.map(user => ({
-            label: `${user.name || user.email} — ${user.email} (${user.role})`,
+            label: `${user.name || user.email} — ${user.email} (${user.role}${user.is_owner ? ', owner' : ''})`,
             value: user.user_id,
           })),
         },
@@ -118,6 +118,8 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
       run: async (answers) => {
         const userId = asString(answers.user_id)
         const role = asString(answers.role)
+        const user = users.find(u => u.user_id === userId)
+        if (user?.is_owner) return 'Owner role is immutable.'
         if (role !== 'admin' && role !== 'user') return 'Invalid role.'
         await updateUserRole(userId, role)
         await refetch()
@@ -146,6 +148,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         const permission = asString(answers.permission) as PagePermission
         const user = users.find(u => u.user_id === userId)
         if (!user) return 'User not found.'
+        if (user.is_owner) return 'Owner permissions are immutable.'
         if (user.role === 'admin') return 'Admins already have all module access.'
         const updated = Array.from(new Set([...user.page_permissions, permission]))
         await updateUserPermissions(userId, updated)
@@ -175,6 +178,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         const permission = asString(answers.permission)
         const user = users.find(u => u.user_id === userId)
         if (!user) return 'User not found.'
+        if (user.is_owner) return 'Owner permissions are immutable.'
         if (user.role === 'admin') return 'Downgrade role from admin first if you need scoped permissions.'
         const updated = user.page_permissions.filter(p => p !== permission)
         await updateUserPermissions(userId, updated)

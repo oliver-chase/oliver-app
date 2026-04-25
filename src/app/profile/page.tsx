@@ -11,7 +11,7 @@ export default function ProfilePage() {
 
   const displayName = appUser?.name || account?.name || 'Unknown user'
   const email = appUser?.email || account?.username || 'Not available'
-  const role = appUser?.role || 'member'
+  const role = appUser?.role || 'user'
 
   return (
     <div className="profile-shell">

@@ -1,6 +1,6 @@
 # oliver-app
 
-Next.js 15 rewrite of the vanilla-JS ops dashboard. Static-export SPA deployed to Cloudflare Pages; Supabase backend shared with ops-dashboard.
+Next.js 16 rewrite of the vanilla-JS ops dashboard. Static-export SPA deployed to Cloudflare Pages; Supabase backend shared with ops-dashboard.
 
 - **Staging:** staging.oliver-app.pages.dev (branch `staging`)
 - **Production:** oliver-app.pages.dev (branch `main`)
@@ -8,7 +8,7 @@ Next.js 15 rewrite of the vanilla-JS ops dashboard. Static-export SPA deployed t
 
 ## Stack
 
-- Next.js 15, App Router, TypeScript strict
+- Next.js 16, App Router, TypeScript strict
 - Static export — `output: 'export'` in `next.config.ts`; build output `out/`
 - CSS tokens in `src/app/tokens.css`; per-module styles in `src/app/<module>/<module>.css`
 - No runtime server. All data access is client-side Supabase via `src/lib/supabase.ts`
@@ -41,6 +41,8 @@ Cloudflare Pages Function env vars (set in Pages project settings for each envir
 SUPABASE_URL=https://tjaowjiccowofzisdfhr.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role key>   # preferred
 # SUPABASE_SERVICE_KEY can be used as an alias if your environment already uses that name.
+OWNER_EMAILS=<comma-separated owner emails>     # required: include Kiana Micari's Azure login email
+# OWNER_USER_IDS=<comma-separated Azure oid/sub values>  # optional owner hardening
 
 # SDR draft approvals (/api/sdr-approve -> v-two-sdr approval-handler.yml)
 SDR_GITHUB_PAT=<github token with actions:write on oliver-chase/v-two-sdr>
@@ -50,7 +52,7 @@ SDR_GITHUB_WORKFLOW=approval-handler.yml        # optional override
 # SDR_APPROVAL_TRUST_CLIENT_IDENTITY=1          # dev-only fallback (keep unset in staging/prod)
 ```
 
-If these server-side vars are missing, the hub will show a permissions-service warning and fall back to unrestricted module visibility.
+If these server-side vars are missing, the hub will show a permissions-service warning and keep module access restricted until permissions can be verified.
 `/api/sdr-approve` expects Cloudflare Access identity headers in staging/prod and checks `app_users` for admin or `sdr` permission before dispatching approval workflows.
 
 ## Branch workflow
@@ -60,7 +62,7 @@ Day-to-day work happens on `staging`. `main` is the production branch.
 ```bash
 # ship to staging
 git checkout staging
-git add -A && git commit -m "<msg>"
+git add <epic-owned paths> && git commit -m "<msg>"
 git push origin staging                     # auto-deploys to staging.oliver-app.pages.dev
 
 # promote to production (confirm with user first)
@@ -75,17 +77,19 @@ CI verifies on every push. Local QA should use `npm run typecheck`, `npm run lin
 
 ## Commit and PR traceability
 
-Use grouped commits tied to story IDs and include QA gate outcomes.
+Use grouped commits tied to one epic ownership boundary, with story IDs and QA gate outcomes.
 
 - Policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
 - Commit template: `.gitmessage` (optional setup: `git config commit.template .gitmessage`)
 - PR template: `.github/pull_request_template.md`
 - Release mapping: `src/tech-debt/release-traceability.md`
+- Epic size guard: `npm run check-epic-size` (use `npm run check-epic-size:strict` for CI/blocking mode)
 
 ## QA workflow
 
 - Static gates: `npm run typecheck`, `npm run lint`, `npm run build`
 - Browser smoke: `npm run test:smoke` (Playwright manages the local server on `127.0.0.1:3001`)
+- Pre-push commit-size gate: `npm run check-epic-size`
 - Current smoke spec: `tests/e2e/frontend-smoke.spec.ts`
 - Deep-pass checklist: `src/tech-debt/deep-qa-workflow.md`
 - Commit grouping policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
@@ -110,7 +114,7 @@ src/
     accounts/           CSS only — accounts page UI lives in src/components/accounts.
     hr/                 HR page shell + hr.css
     sdr/                SDR page shell + sdr.css
-    slides/             Slide editor shell + slides.css (HTML import scaffold)
+    slides/             Slide editor shell + slides.css (HTML import + canvas editing workflow)
     crm/ admin/ login/ design-system/
     page.tsx            Hub (module landing page)
     layout.tsx          Root layout
@@ -144,7 +148,7 @@ public/                 Static assets
 
 `src/context/AuthContext.tsx` and `src/components/auth/AuthGuard.tsx` are mounted in `src/app/layout.tsx`, so the app currently expects Azure MSAL login for route access.
 
-`src/context/UserContext.tsx` is also mounted. It resolves the signed-in Azure user through `/api/users`, auto-upserting a default `app_users` row when that backend is available. If the users API is unavailable, the hub falls back to the unrestricted module view and admin behavior remains config-dependent.
+`src/context/UserContext.tsx` is also mounted. It resolves the signed-in Azure user through `/api/users`, auto-upserting a default `app_users` row when that backend is available. Owner identities from `OWNER_EMAILS`/`OWNER_USER_IDS` are always enforced as admin with full module access.
 
 ## Tech-debt inventory
 
@@ -154,9 +158,11 @@ public/                 Static assets
 - `margin-scale.md` — canonical top-margin scale (source of truth)
 - `token-violations.md` — outstanding off-token values
 - `slides-backlog.md` — slides/module epic-ticket backlog with journey gap mapping
+- `auth-permissions-runbook.md` — owner/admin bootstrap and verification checklist
 - `deep-qa-workflow.md` — repeatable full-repo QA sequence
 - `qa-*.md` — per-page visual QA checklists run against staging
 
 ## Related
 
 - `ops-dashboard` repo — legacy vanilla JS implementation (still live). Some SDR features listed in MEMORY still need manual port.
+- `scripts/setup-app-users.sql` + `scripts/dedupe-app-users.sql` — owner bootstrap and one-time identity cleanup helpers.

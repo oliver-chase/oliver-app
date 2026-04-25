@@ -11,14 +11,13 @@ export function useModuleAccess(moduleId: ModuleId) {
   const { appUser, isAdmin, hasPermission, isLoading } = useUser()
 
   const module = useMemo(() => getModuleById(moduleId), [moduleId])
-  const permissionsReady = appUser !== null
+  const permissionsReady = !isLoading && appUser !== null
   const enabled = isModuleEnabled(moduleId)
 
-  const canAccess = module.comingSoon
-    ? isAdmin
-    : (!permissionsReady || hasPermission(moduleId))
+  const canAccess = permissionsReady
+    && (module.comingSoon ? isAdmin : hasPermission(moduleId))
 
-  const allowRender = isLoading || (enabled && canAccess)
+  const allowRender = permissionsReady && enabled && canAccess
 
   useEffect(() => {
     if (isLoading) return
@@ -27,4 +26,3 @@ export function useModuleAccess(moduleId: ModuleId) {
 
   return { allowRender, canAccess, enabled }
 }
-

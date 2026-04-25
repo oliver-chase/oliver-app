@@ -13,19 +13,29 @@ import { getHubModules } from '@/modules/registry'
 import styles from './hub.module.css'
 
 const HUB_MODULES = getHubModules()
+const HUB_SKELETON_ROWS = 4
+
+type PermissionState = 'loading' | 'error' | 'ready' | 'unassigned'
 
 export default function HubPage() {
   const { appUser, isAdmin, hasPermission, isLoading, loadError, refreshUser } = useUser()
   const { account, logout } = useAuth()
 
-  const permissionsReady = appUser !== null
+  const permissionState: PermissionState = isLoading
+    ? 'loading'
+    : loadError
+      ? 'error'
+      : appUser
+        ? 'ready'
+        : 'unassigned'
+
   const visibleModules = useMemo(
     () => HUB_MODULES.filter(m => {
+      if (permissionState !== 'ready') return false
       if (m.comingSoon) return isAdmin
-      if (!permissionsReady) return true
       return hasPermission(m.id)
     }),
-    [isAdmin, permissionsReady, hasPermission],
+    [hasPermission, isAdmin, permissionState],
   )
 
   // Hub intentionally does not register an Oliver config. The dock only
@@ -55,7 +65,7 @@ export default function HubPage() {
         {loadError && (
           <div className={styles.statusRegion}>
             <p className={styles.statusBanner}>
-              Permissions service unavailable. Falling back to the unrestricted module view for this session.
+              Permissions service unavailable. Module access is temporarily restricted until permissions can be verified.
             </p>
             <div className={styles.statusActions}>
               <button
@@ -73,13 +83,23 @@ export default function HubPage() {
         <div className={styles.brand}>
           <div className={styles.wordmark}>V.Two Ops</div>
           <div className={styles.subtitle}>
-            {isLoading ? 'Loading module access…' : 'Internal Operations Hub'}
+            {permissionState === 'loading' ? 'Loading module access…' : 'Internal Operations Hub'}
           </div>
         </div>
 
-        {visibleModules.length > 0
-          ? <HubModuleList modules={visibleModules} />
-          : <p className={styles.empty}>No modules assigned. Contact your administrator.</p>}
+        {permissionState === 'loading' && (
+          <div className={styles.skeletonWrap} aria-hidden="true">
+            {Array.from({ length: HUB_SKELETON_ROWS }).map((_, idx) => (
+              <div key={idx} className={styles.skeletonCard} />
+            ))}
+          </div>
+        )}
+
+        {permissionState !== 'loading' && (
+          visibleModules.length > 0
+            ? <HubModuleList modules={visibleModules} />
+            : <p className={styles.empty}>No modules assigned. Contact your administrator.</p>
+        )}
       </div>
       <div className={styles.footer}>V.TWO &middot; 2026</div>
     </>

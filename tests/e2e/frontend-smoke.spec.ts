@@ -430,6 +430,55 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
+  test('owner rows are locked in user manager controls', async ({ page }) => {
+    await page.route('**/api/users', async route => {
+      const request = route.request()
+      if (request.method() !== 'GET') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            user_id: 'owner-user-id',
+            email: 'owner@example.com',
+            name: 'Kiana Micari',
+            role: 'admin',
+            page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+            is_owner: true,
+          },
+          {
+            user_id: 'normal-user-id',
+            email: 'member@example.com',
+            name: 'Member User',
+            role: 'user',
+            page_permissions: ['accounts'],
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await gotoAndSettle(page, '/admin')
+    await expect(page.getByRole('button', { name: 'Users', exact: true })).toBeVisible()
+
+    const ownerRow = page.locator('tbody tr').filter({ hasText: 'owner@example.com' })
+    await expect(ownerRow).toHaveCount(1)
+    await expect(ownerRow.locator('[class*=ownerTag]')).toHaveText('Owner')
+    await expect(ownerRow.getByRole('combobox')).toBeDisabled()
+    await expect(ownerRow.getByText('Owner access is immutable.')).toBeVisible()
+
+    const memberRow = page.locator('tbody tr').filter({ hasText: 'member@example.com' })
+    await expect(memberRow).toHaveCount(1)
+    await expect(memberRow.getByRole('combobox')).toBeEnabled()
+  })
+
   test('design system interactive controls behave consistently', async ({ page }) => {
     await gotoAndSettle(page, '/design-system')
 
@@ -474,7 +523,7 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/slides')
 
     await expect(page.getByRole('heading', { name: 'HTML to Editable Components' })).toBeVisible()
-    await expect(page.getByText(/Import existing slide HTML, review structured parser output, then save to My Slides/)).toBeVisible()
+    await expect(page.getByText(/Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas/)).toBeVisible()
     const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
       <h1 style="position:absolute;left:100px;top:120px;width:800px;font-size:64px;color:#FEFFFF;">Hello</h1>
       <div class="card" style="position:absolute;left:120px;top:260px;width:420px;">Card Body</div>
@@ -543,11 +592,16 @@ test.describe('frontend smoke', () => {
       user_id: 'qa-member-user',
       email: 'qa-member@example.com',
       name: 'QA Member',
-      role: 'member',
+      role: 'user',
       page_permissions: ['accounts', 'hr'],
     })
 
-    await gotoAndSettle(page, '/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('link', { name: 'SDR & Outreach' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Slide Editor' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'CRM & Business Development' })).toHaveCount(0)
+    await page.waitForLoadState('networkidle')
+
     await expect(page.locator('[data-hub-columns="1"]')).toBeVisible()
     await expect(page.locator('[data-hub-col="left"] > *')).toHaveCount(2)
     await expect(page.locator('[data-hub-col="right"]')).toHaveCount(0)
@@ -566,6 +620,22 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/slides')
     await expect(page).toHaveURL(/\/$/)
     await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await gotoAndSettle(page, '/sdr')
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await gotoAndSettle(page, '/crm')
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await gotoAndSettle(page, '/accounts')
+    await expect(page).toHaveURL(/\/accounts\/?$/)
+    await expect(page.getByText('All Accounts').first()).toBeVisible()
+
+    await gotoAndSettle(page, '/hr')
+    await expect(page).toHaveURL(/\/hr\/?$/)
+    await expect(page.getByText('HR & People Ops').first()).toBeVisible()
 
     await gotoAndSettle(page, '/design-system')
     await expect(page).toHaveURL(/\/$/)

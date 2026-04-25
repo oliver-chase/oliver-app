@@ -68,6 +68,15 @@
   cursor: pointer;
 }
 
+.ownerTag {
+  margin-top: var(--spacing-xs);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-3xs);
+  letter-spacing: var(--letter-spacing-mid);
+  text-transform: uppercase;
+  color: var(--color-brand-purple);
+}
+
 .permGrid {
   display: flex;
   flex-wrap: wrap;
@@ -87,6 +96,12 @@
 .permLabel input {
   accent-color: var(--color-brand-purple);
   cursor: pointer;
+}
+
+.ownerNote {
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
 }
 
 /* ── Token Editor ─────────────────────────────────────────────────── */

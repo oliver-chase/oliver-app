@@ -11,3 +11,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Never create more than one commit per working session unless explicitly told to start a new milestone.
 - New commit work must map to a single epic (full epic milestone or incremental commit inside an existing epic).
 - Before push/PR, run `npm run check-epic-size`; if thresholds are exceeded, squash into clean epic milestone commit(s).
+- If assessment/audit work uncovers additional outstanding items that may be active in another terminal/session, document them but keep them out of the current commit scope.

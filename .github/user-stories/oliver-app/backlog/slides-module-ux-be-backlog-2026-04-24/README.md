@@ -12,6 +12,7 @@ Goal: create one actionable backlog that covers:
 - Slide module now provides import preflight validation, categorized parser failures, grouped warnings, and structured component result tables.
 - Persisted My Slides + Template Library views are wired to a FE/BE contract (`/api/slides`) with local fallback for dev/QA and Supabase-backed production path.
 - Save/autosave, revision conflict handling, draft recovery, HTML export metadata, PDF print contract, and audit feed are implemented.
+- Core editor UX now includes resize handles with guardrails, inline text edit mode, style toolbar controls, multi-select alignment/distribution tools, undo/redo history, and keyboard-first shortcut support.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
 
 ## Epic Breakdown
@@ -29,14 +30,14 @@ Goal: create one actionable backlog that covers:
 | --- | --- | --- |
 | S0 | Complete (`US-SLD-001`..`US-SLD-005`) | Ready to commit as one epic milestone |
 | S1 | Complete (`US-SLD-010`..`US-SLD-013`) | Ready to commit as one epic milestone |
-| S2 | In progress (`US-SLD-020` code present; `US-SLD-021` partial with drag/nudge; `US-SLD-022`..`US-SLD-025` missing) | Not commit-ready |
+| S2 | Complete (`US-SLD-020`..`US-SLD-025`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
-1. Execute `S2` (`US-SLD-020`..`US-SLD-025`) next, using the now-shipped S3 persistence contracts.
-2. Keep S1/S3 regression coverage green while adding editor interactions.
-3. Land editor features in story-sized slices so each interaction family (selection, text editing, undo/redo, accessibility) ships with tests.
+1. Add visual-regression baseline coverage for slide canvas states (selection, resize, multi-select, toolbar-applied styles).
+2. Run full smoke + e2e pass in CI-like network conditions to validate no environment-specific regressions.
+3. Track any follow-up UX polish separately from the now-complete S2 functional backlog.
 
 ## Execution and Commit Model
 

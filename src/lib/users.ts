@@ -20,6 +20,12 @@ export async function getUser(userId: string): Promise<AppUser | null> {
   return request<AppUser | null>(`/api/users?user_id=${encodeURIComponent(userId)}`)
 }
 
+export async function getUserByIdentity(userId: string, email: string): Promise<AppUser | null> {
+  return request<AppUser | null>(
+    `/api/users?user_id=${encodeURIComponent(userId)}&email=${encodeURIComponent(email)}`,
+  )
+}
+
 export async function upsertUser(
   user: Pick<AppUser, 'user_id' | 'email' | 'name'>,
 ): Promise<AppUser | null> {
@@ -34,7 +40,7 @@ export async function listUsers(): Promise<AppUser[]> {
 }
 
 export async function updateUserRole(userId: string, role: Role): Promise<void> {
-  await request<{ ok: true }>('/api/users', {
+  await request<{ ok: true; user?: AppUser | null }>('/api/users', {
     method: 'PATCH',
     body: JSON.stringify({ user_id: userId, role }),
   })
@@ -44,7 +50,7 @@ export async function updateUserPermissions(
   userId: string,
   page_permissions: PagePermission[],
 ): Promise<void> {
-  await request<{ ok: true }>('/api/users', {
+  await request<{ ok: true; user?: AppUser | null }>('/api/users', {
     method: 'PATCH',
     body: JSON.stringify({ user_id: userId, page_permissions }),
   })

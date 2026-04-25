@@ -357,8 +357,6 @@ export default function AccountsApp() {
 
   useRegisterOliver(oliverConfig)
 
-  if (!allowRender) return null
-
   useEffect(() => {
     if (!currentAccountId) {
       setActiveSection('overview')
@@ -405,6 +403,8 @@ export default function AccountsApp() {
     window.addEventListener('hashchange', syncHashSection)
     return () => window.removeEventListener('hashchange', syncHashSection)
   }, [currentAccountId])
+
+  if (!allowRender) return null
 
   const syncStatus = syncState === 'syncing' ? 'syncing' : syncState === 'error' ? 'err' : 'ok'
   const syncText = syncState === 'syncing' ? 'Saving\u2026' : syncState === 'error' ? 'Error' : 'Synced'

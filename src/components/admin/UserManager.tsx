@@ -21,6 +21,8 @@ export function UserManager() {
   }, [])
 
   async function handleRoleChange(userId: string, role: Role) {
+    const target = users.find(u => u.user_id === userId)
+    if (target?.is_owner) return
     setSaving(userId)
     setError(null)
     try {
@@ -36,6 +38,7 @@ export function UserManager() {
   async function handlePermissionToggle(userId: string, perm: PagePermission) {
     const user = users.find(u => u.user_id === userId)
     if (!user) return
+    if (user.is_owner) return
     const current = user.page_permissions
     const updated = current.includes(perm)
       ? current.filter(p => p !== perm)
@@ -80,11 +83,12 @@ export function UserManager() {
                   className={styles.roleSelect}
                   value={user.role}
                   onChange={e => handleRoleChange(user.user_id, e.target.value as Role)}
-                  disabled={saving === user.user_id}
+                  disabled={saving === user.user_id || user.is_owner}
                 >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
+                {user.is_owner && <div className={styles.ownerTag}>Owner</div>}
               </td>
               <td>
                 <div className={styles.permGrid}>
@@ -93,13 +97,14 @@ export function UserManager() {
                       <input
                         type="checkbox"
                         checked={user.role === 'admin' || user.page_permissions.includes(perm)}
-                        disabled={user.role === 'admin' || saving === user.user_id}
+                        disabled={user.role === 'admin' || saving === user.user_id || !!user.is_owner}
                         onChange={() => handlePermissionToggle(user.user_id, perm)}
                       />
                       {perm}
                     </label>
                   ))}
                 </div>
+                {user.is_owner && <div className={styles.ownerNote}>Owner access is immutable.</div>}
               </td>
             </tr>
           ))}

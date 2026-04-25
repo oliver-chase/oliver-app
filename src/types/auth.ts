@@ -10,4 +10,7 @@ export interface AppUser {
   page_permissions: PagePermission[]
   created_at: string
   updated_at: string
+  is_owner?: boolean
+  effective_role?: Role
+  effective_page_permissions?: PagePermission[]
 }

@@ -82,7 +82,20 @@ git commit -m "feat(epic-<epic-slug>): <milestone summary>"
 
 Then re-run QA gates and update traceability.
 
-## 5. PR traceability requirements
+## 5. Assessment findings vs commit scope
+
+Assessment and audit passes may discover additional outstanding work.
+
+That work can be:
+
+- documented in backlog/traceability, and
+- intentionally left out of the current commit
+
+when it may be active in another terminal/session or belongs to a different epic slice.
+
+Always stage explicit file paths for the current epic ownership boundary.
+
+## 6. PR traceability requirements
 
 Every PR must include:
 
@@ -93,7 +106,7 @@ Every PR must include:
 
 Use `.github/pull_request_template.md` for the required format.
 
-## 6. Release traceability file
+## 7. Release traceability file
 
 Update `src/tech-debt/release-traceability.md` before merge with:
 

@@ -62,8 +62,8 @@ If re-opening, add a dated note under the entry with the reason.
 - `AuthProvider`, `AuthGuard`, `msalConfig`, and `src/app/login/` are present and mounted again.
 - `UserProvider` is mounted in `src/app/layout.tsx` and resolves the signed-in Azure user through `/api/users`.
 - When `/api/users` is available, the provider auto-upserts a default `app_users` row keyed by Azure AD `oid` and enables real role/permission checks in Hub and Admin.
-- When `/api/users` is unavailable, the hub falls back to the unrestricted module view for compatibility, and admin access remains config-dependent.
-- Real admin behavior still requires at least one seeded admin row in `app_users`.
+- When `/api/users` is unavailable, the hub now keeps module access restricted and surfaces a permissions-service warning.
+- Owner identities configured in `OWNER_EMAILS`/`OWNER_USER_IDS` are treated as immutable admin + full module permissions.
 
 ### JSX unicode-escape hygiene (Audit #1 issue #1)
 - All `\uXXXX` usages now live in JS string contexts (JS string literals or JSX expression children `{ '…' }`), never raw JSX text or double-quoted attribute values.

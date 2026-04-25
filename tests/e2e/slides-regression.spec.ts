@@ -127,9 +127,11 @@ test.describe('slides regression', () => {
     await expect(page.getByText(/Scaled to viewport at \d+% while preserving coordinate integrity\./)).toBeVisible()
     await expect(page.locator('.slides-canvas-component[data-component-type="heading"][data-component-x="100"][data-component-y="120"][data-component-width="800"]')).toHaveCount(1)
 
-    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"] .slides-canvas-component-content').first()
-    await expect(headingLayer).toHaveAttribute('contenteditable', 'true')
-    await headingLayer.fill('Canvas Edited Heading')
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await headingLayer.dblclick()
+    const headingContent = headingLayer.locator('.slides-canvas-component-content')
+    await expect(headingContent).toHaveAttribute('contenteditable', 'true')
+    await headingContent.fill('Canvas Edited Heading')
     await page.locator('#slides-title').click()
     await expect(page.getByText(/Save status: dirty/i)).toBeVisible()
 
@@ -179,6 +181,192 @@ test.describe('slides regression', () => {
 
     await expect(headingLayer).toHaveAttribute('data-component-x', String(afterDragX + 1))
     await expect(headingLayer).toHaveAttribute('data-component-y', String(afterDragY + 10))
+  })
+
+  test('US-SLD-021 supports resize handles with width and height guardrails', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <div class="card" style="position:absolute;left:120px;top:160px;width:280px;height:180px;">Resizable card</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const cardLayer = page.locator('.slides-canvas-component[data-component-type="card"]').first()
+    await cardLayer.click()
+    const beforeWidth = Number(await cardLayer.getAttribute('data-component-width'))
+    const beforeHeight = Number(await cardLayer.getAttribute('data-component-height'))
+
+    const resizeHandle = cardLayer.locator('.slides-canvas-resize-handle')
+    const resizeBox = await resizeHandle.boundingBox()
+    if (!resizeBox) throw new Error('expected resize handle bounding box')
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 64, resizeBox.y + resizeBox.height / 2 + 52)
+    await page.mouse.up()
+
+    const enlargedWidth = Number(await cardLayer.getAttribute('data-component-width'))
+    const enlargedHeight = Number(await cardLayer.getAttribute('data-component-height'))
+    expect(enlargedWidth).toBeGreaterThan(beforeWidth)
+    expect(enlargedHeight).toBeGreaterThan(beforeHeight)
+
+    const resizedHandleBox = await resizeHandle.boundingBox()
+    if (!resizedHandleBox) throw new Error('expected resized handle bounding box')
+    await page.mouse.move(resizedHandleBox.x + resizedHandleBox.width / 2, resizedHandleBox.y + resizedHandleBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(resizedHandleBox.x + resizedHandleBox.width / 2 - 1000, resizedHandleBox.y + resizedHandleBox.height / 2 - 1000)
+    await page.mouse.up()
+
+    const minWidth = Number(await cardLayer.getAttribute('data-component-width'))
+    const minHeight = Number(await cardLayer.getAttribute('data-component-height'))
+    expect(minWidth).toBeGreaterThanOrEqual(48)
+    expect(minHeight).toBeGreaterThanOrEqual(32)
+  })
+
+  test('US-SLD-022 inline text editing and toolbar style controls update selected layers', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:800px;">Toolbar Target</h1>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await headingLayer.click()
+    await page.locator('[data-slide-canvas="1"]').focus()
+    await page.keyboard.press('Enter')
+
+    const headingContent = headingLayer.locator('.slides-canvas-component-content')
+    await expect(headingContent).toHaveAttribute('contenteditable', 'true')
+    await headingContent.fill('Toolbar Edited Heading')
+    await page.locator('#slides-style-font-size').click()
+    await page.locator('#slides-style-font-size').fill('10')
+    await page.locator('#slides-style-align').selectOption('center')
+
+    await expect(page.getByText(/Save status: dirty/i)).toBeVisible()
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
+    expect(String(parsed[0]?.content || '')).toContain('Toolbar Edited Heading')
+    expect(Number(parsed[0]?.style?.fontSize)).toBe(14)
+    expect(String(parsed[0]?.style?.textAlign || '')).toBe('center')
+  })
+
+  test('US-SLD-023 supports shift multi-select, group nudge, align, and distribution feedback', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <div class="card" style="position:absolute;left:100px;top:100px;width:240px;height:140px;">A</div>
+      <div class="card" style="position:absolute;left:480px;top:220px;width:240px;height:140px;">B</div>
+      <div class="card" style="position:absolute;left:900px;top:320px;width:240px;height:140px;">C</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const cards = page.locator('.slides-canvas-component[data-component-type="card"]')
+    await cards.nth(0).click()
+    await cards.nth(1).click({ modifiers: ['Shift'] })
+    await cards.nth(2).click({ modifiers: ['Shift'] })
+
+    await expect(page.locator('.slides-canvas-component[data-component-selected="true"]')).toHaveCount(3)
+    const beforeX = [
+      Number(await cards.nth(0).getAttribute('data-component-x')),
+      Number(await cards.nth(1).getAttribute('data-component-x')),
+      Number(await cards.nth(2).getAttribute('data-component-x')),
+    ]
+
+    await page.locator('[data-slide-canvas="1"]').focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(cards.nth(0)).toHaveAttribute('data-component-x', String(beforeX[0] + 1))
+    await expect(cards.nth(1)).toHaveAttribute('data-component-x', String(beforeX[1] + 1))
+    await expect(cards.nth(2)).toHaveAttribute('data-component-x', String(beforeX[2] + 1))
+
+    await page.getByRole('button', { name: 'Align Top' }).click()
+    const yValues = [
+      Number(await cards.nth(0).getAttribute('data-component-y')),
+      Number(await cards.nth(1).getAttribute('data-component-y')),
+      Number(await cards.nth(2).getAttribute('data-component-y')),
+    ]
+    expect(new Set(yValues).size).toBe(1)
+
+    await page.getByRole('button', { name: 'Distribute Horizontally' }).click()
+    const xAfterDistribution = [
+      Number(await cards.nth(0).getAttribute('data-component-x')),
+      Number(await cards.nth(1).getAttribute('data-component-x')),
+      Number(await cards.nth(2).getAttribute('data-component-x')),
+    ]
+    const gapA = xAfterDistribution[1] - xAfterDistribution[0]
+    const gapB = xAfterDistribution[2] - xAfterDistribution[1]
+    expect(Math.abs(gapA - gapB)).toBeLessThanOrEqual(2)
+
+    await cards.nth(0).click()
+    await page.getByRole('button', { name: 'Distribute Vertically' }).click()
+    await expect(page.getByText('Select at least three layers to distribute spacing.')).toBeVisible()
+  })
+
+  test('US-SLD-024 undo and redo work via controls and keyboard shortcuts', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:800px;">Undo Redo</h1>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const layer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await layer.click()
+
+    const undoButton = page.getByRole('button', { name: 'Undo' })
+    const redoButton = page.getByRole('button', { name: 'Redo' })
+    await expect(undoButton).toBeDisabled()
+    await expect(redoButton).toBeDisabled()
+
+    await page.locator('[data-slide-canvas="1"]').focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(undoButton).toBeEnabled()
+
+    const movedX = Number(await layer.getAttribute('data-component-x'))
+    await undoButton.click()
+    await expect(layer).toHaveAttribute('data-component-x', String(movedX - 1))
+    await expect(redoButton).toBeEnabled()
+
+    await redoButton.click()
+    await expect(layer).toHaveAttribute('data-component-x', String(movedX))
+
+    await page.keyboard.press('ControlOrMeta+Z')
+    await expect(layer).toHaveAttribute('data-component-x', String(movedX - 1))
+    await page.keyboard.press('ControlOrMeta+Shift+Z')
+    await expect(layer).toHaveAttribute('data-component-x', String(movedX))
+  })
+
+  test('US-SLD-025 exposes keyboard-first workflows, semantic canvas roles, and shortcut help', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:800px;">Keyboard One</h1>
+      <h2 style="position:absolute;left:140px;top:260px;width:760px;">Keyboard Two</h2>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const canvas = page.locator('[data-slide-canvas="1"]')
+    await expect(canvas).toHaveAttribute('role', 'listbox')
+    await expect(canvas).toHaveAttribute('aria-multiselectable', 'true')
+
+    await page.locator('.slides-shortcuts summary').click()
+    await expect(page.getByText(/Ctrl\/Cmd\+Z undo/)).toBeVisible()
+
+    await canvas.focus()
+    await page.keyboard.press('PageDown')
+    const selectedLayer = page.locator('.slides-canvas-component[data-component-selected="true"]').first()
+    await expect(selectedLayer).toBeVisible()
+
+    await page.keyboard.press('Enter')
+    const selectedContent = selectedLayer.locator('.slides-canvas-component-content')
+    await expect(selectedContent).toHaveAttribute('contenteditable', 'true')
+    await selectedContent.press('Escape')
+    await expect(selectedContent).toHaveAttribute('contenteditable', 'false')
   })
 
   test('US-SLD-031 and US-SLD-032 save workflow populates My Slides and template duplication', async ({ page }) => {

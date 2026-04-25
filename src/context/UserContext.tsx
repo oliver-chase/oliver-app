@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { AccountInfo } from '@azure/msal-browser'
 import { useAuth } from '@/context/AuthContext'
-import { getUser, upsertUser } from '@/lib/users'
+import { getUserByIdentity, upsertUser } from '@/lib/users'
 import type { AppUser, PagePermission } from '@/types/auth'
 
 type UserContextType = {
@@ -109,7 +109,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       for (let attempt = 0; attempt < USER_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
         if (attempt > 0) await delay(USER_LOAD_RETRY_DELAYS_MS[attempt] || 0)
         try {
-          let row = await getUser(userId)
+          const lookupEmail = account.username || ''
+          let row = await getUserByIdentity(userId, lookupEmail)
           if (!row && account.username) {
             row = await upsertUser({
               user_id: userId,
