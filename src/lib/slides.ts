@@ -22,6 +22,7 @@ const LOCAL_STORAGE_KEY = 'oliver-slides-store-v1'
 interface LocalSlidesStore {
   slides: SlideRecord[]
   templates: SlideTemplateRecord[]
+  archivedTemplates: SlideTemplateRecord[]
   collaborators: SlideTemplateCollaborator[]
   approvals: SlideTemplateApproval[]
   audits: SlideAuditEvent[]
@@ -269,6 +270,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     return {
       slides: [],
       templates: initialTemplates(actor),
+      archivedTemplates: [],
       collaborators: [],
       approvals: [],
       audits: [],
@@ -284,6 +286,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     const store: LocalSlidesStore = {
       slides: [],
       templates: initialTemplates(actor),
+      archivedTemplates: [],
       collaborators: [],
       approvals: [],
       audits: [],
@@ -301,6 +304,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     if (!Array.isArray(parsed.templates) || parsed.templates.length === 0) {
       parsed.templates = initialTemplates(actor)
     }
+    if (!Array.isArray(parsed.archivedTemplates)) parsed.archivedTemplates = []
     if (!Array.isArray(parsed.slides)) parsed.slides = []
     if (!Array.isArray(parsed.collaborators)) parsed.collaborators = []
     if (!Array.isArray(parsed.approvals)) parsed.approvals = []
@@ -314,6 +318,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     const store: LocalSlidesStore = {
       slides: [],
       templates: initialTemplates(actor),
+      archivedTemplates: [],
       collaborators: [],
       approvals: [],
       audits: [],
@@ -1338,9 +1343,56 @@ export async function archiveTemplate(actorInput: SlideActor, templateId: string
       }
 
       store.templates = store.templates.filter((template) => template.id !== templateId)
-      store.collaborators = store.collaborators.filter((entry) => entry.template_id !== templateId)
+      store.archivedTemplates = [
+        {
+          ...existing,
+          is_archived: true,
+          updated_at: nowIso(),
+        },
+        ...store.archivedTemplates.filter((template) => template.id !== templateId),
+      ]
       makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'archive-template' })
       writeLocalStore(store)
+    },
+  )
+}
+
+export async function restoreTemplate(actorInput: SlideActor, templateId: string): Promise<SlideTemplateRecord> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ template: SlideTemplateRecord }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'restore-template',
+          actor,
+          template_id: templateId,
+        }),
+      })
+      if (!response.template) throw new SlideApiError('Template restore failed.', 500)
+      return response.template
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const existing = store.archivedTemplates.find((template) => template.id === templateId)
+      if (!existing) throw new SlideApiError('Template not found for restore', 404)
+      const isOwner = existing.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+
+      const restored: SlideTemplateRecord = {
+        ...existing,
+        is_archived: false,
+        updated_at: nowIso(),
+      }
+      store.archivedTemplates = store.archivedTemplates.filter((template) => template.id !== templateId)
+      store.templates = [restored, ...store.templates.filter((template) => template.id !== templateId)]
+      makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'restore-template' })
+      writeLocalStore(store)
+      return restored
     },
   )
 }

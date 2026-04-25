@@ -26,6 +26,7 @@ export interface SlideTemplateRecord {
   name: string
   description: string
   is_shared: boolean
+  is_archived?: boolean
   canvas: SlideCanvas
   components: SlideComponent[]
   metadata: Record<string, unknown>

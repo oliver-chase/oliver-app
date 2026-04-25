@@ -378,6 +378,7 @@ function normalizeTemplateRow(row) {
     name: row.name,
     description: row.description || '',
     is_shared: !!row.is_shared,
+    is_archived: !!row.is_archived,
     canvas: row.canvas || { width: 1920, height: 1080 },
     components: Array.isArray(row.components_json) ? row.components_json : [],
     metadata: row.metadata || {},
@@ -504,10 +505,12 @@ async function readSlideById(env, slideId) {
   return rows[0] || null;
 }
 
-async function readTemplateById(env, templateId) {
+async function readTemplateById(env, templateId, options = {}) {
+  const includeArchived = options.includeArchived === true;
+  const archiveClause = includeArchived ? '' : '&is_archived=eq.false';
   const response = await supabaseFetch(
     env,
-    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(templateId) + '&is_archived=eq.false&select=*&limit=1',
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(templateId) + archiveClause + '&select=*&limit=1',
   );
   const rows = await response.json().catch(() => []);
   return rows[0] || null;
@@ -1075,15 +1078,6 @@ async function handleArchiveTemplateAction(env, actor, body) {
     },
   );
 
-  await supabaseFetch(
-    env,
-    '/rest/v1/slide_template_collaborators?template_id=eq.' + encodeURIComponent(template.id),
-    {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' },
-    },
-  );
-
   await insertAudit(env, {
     actor_user_id: actor.user_id,
     actor_email: actor.email || null,
@@ -1095,6 +1089,50 @@ async function handleArchiveTemplateAction(env, actor, body) {
   });
 
   return jsonResponse({ ok: true });
+}
+
+async function handleRestoreTemplateAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for restore-template.', 400);
+
+  const template = await readTemplateById(env, templateId, { includeArchived: true });
+  if (!template) return errorResponse('Template not found for restore.', 404);
+
+  const actorIsAdmin = actor.role === 'admin';
+  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. You do not own this template.', 403);
+  }
+  if (!template.is_archived) {
+    return jsonResponse({ template: normalizeTemplateRow(template) });
+  }
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        is_archived: false,
+        updated_by: actor.user_id,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+  const rows = await response.json().catch(() => []);
+  const restored = normalizeTemplateRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'delete',
+    outcome: 'success',
+    details: { operation: 'restore-template' },
+  });
+
+  return jsonResponse({ template: restored });
 }
 
 async function handleTransferTemplateOwnershipAction(env, actor, body) {
@@ -2296,6 +2334,7 @@ export async function onRequestPost(context) {
   if (action === 'publish-template') return handlePublishTemplateAction(env, actor, body);
   if (action === 'update-template') return handleUpdateTemplateAction(env, actor, body);
   if (action === 'archive-template') return handleArchiveTemplateAction(env, actor, body);
+  if (action === 'restore-template') return handleRestoreTemplateAction(env, actor, body);
   if (action === 'transfer-template-owner') return handleTransferTemplateOwnershipAction(env, actor, body);
   if (action === 'upsert-template-collaborator') return handleUpsertTemplateCollaboratorAction(env, actor, body);
   if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);

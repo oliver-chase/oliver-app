@@ -44,6 +44,7 @@ import {
   publishTemplateFromSlide,
   recordExportEvent,
   requestAuditExportJob,
+  restoreTemplate,
   removeTemplateCollaborator,
   resolveTemplateApproval,
   runTemplateApprovalEscalationSweep,
@@ -65,6 +66,7 @@ import { useModuleAccess } from '@/modules/use-module-access'
 const AUTOSAVE_DELAY_MS = 5000
 const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
 const AUTOSAVE_RETRY_MAX_DELAY_MS = 60000
+const TEMPLATE_ARCHIVE_UNDO_WINDOW_MS = 2 * 60 * 1000
 const LEGACY_DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
 const DRAFT_RECOVERY_KEY_PREFIX = 'oliver-slide-draft-v2'
 const UNSAVED_CHANGES_CONFIRM_TEXT = 'You have unsaved slide changes. Discard them and continue?'
@@ -132,6 +134,12 @@ interface TemplateCollaboratorDraft {
   templateId: string
   target: string
   role: SlideTemplateCollaboratorRole
+}
+
+interface ArchivedTemplateUndoState {
+  templateId: string
+  templateName: string
+  expiresAt: number
 }
 
 function readHistoryIndex(state: unknown): number | null {
@@ -416,6 +424,7 @@ export default function SlidesPage() {
   const [audits, setAudits] = useState<SlideAuditEvent[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState<string | null>(null)
+  const [archivedTemplateUndo, setArchivedTemplateUndo] = useState<ArchivedTemplateUndoState | null>(null)
   const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
   const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
   const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
@@ -544,6 +553,21 @@ export default function SlidesPage() {
     () => templateApprovals.filter((approval) => getApprovalSlaState(approval).tone === 'overdue').length,
     [templateApprovals],
   )
+
+  useEffect(() => {
+    if (!archivedTemplateUndo) return
+    const remainingMs = archivedTemplateUndo.expiresAt - Date.now()
+    if (remainingMs <= 0) {
+      setArchivedTemplateUndo(null)
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      setArchivedTemplateUndo((previous) =>
+        previous && previous.templateId === archivedTemplateUndo.templateId ? null : previous,
+      )
+    }, remainingMs)
+    return () => window.clearTimeout(timeout)
+  }, [archivedTemplateUndo])
 
   const cloneComponents = useCallback(
     (components: SlideComponent[]) =>
@@ -2088,7 +2112,7 @@ export default function SlidesPage() {
   }, [actor, refreshLibraryData, templateActionBusyId, templateCollaboratorPanelId, templateTransferDraft])
 
   const handleArchiveTemplate = useCallback(async (template: SlideTemplateRecord) => {
-    const approved = window.confirm(`Archive template "${template.name}"?`)
+    const approved = window.confirm(`Archive template "${template.name}"? You can undo this for a short period.`)
     if (!approved) return
 
     setTemplateActionBusyId(template.id)
@@ -2096,6 +2120,15 @@ export default function SlidesPage() {
     try {
       await archiveTemplate(actor, template.id)
       await refreshLibraryData()
+      setArchivedTemplateUndo({
+        templateId: template.id,
+        templateName: template.name,
+        expiresAt: Date.now() + TEMPLATE_ARCHIVE_UNDO_WINDOW_MS,
+      })
+      setEditorNotice({
+        tone: 'info',
+        text: `Archived "${template.name}". Use Undo to restore if needed.`,
+      })
       if (templateCollaboratorPanelId === template.id) {
         setTemplateCollaboratorPanelId(null)
         setTemplateCollaboratorDraft(null)
@@ -2106,6 +2139,30 @@ export default function SlidesPage() {
       setTemplateActionBusyId(null)
     }
   }, [actor, refreshLibraryData, templateCollaboratorPanelId])
+
+  const handleUndoArchivedTemplate = useCallback(async () => {
+    if (!archivedTemplateUndo) return
+    if (archivedTemplateUndo.expiresAt <= Date.now()) {
+      setArchivedTemplateUndo(null)
+      return
+    }
+
+    setTemplateActionBusyId(archivedTemplateUndo.templateId)
+    setLibraryError(null)
+    try {
+      await restoreTemplate(actor, archivedTemplateUndo.templateId)
+      await refreshLibraryData()
+      setEditorNotice({
+        tone: 'info',
+        text: `Restored template "${archivedTemplateUndo.templateName}".`,
+      })
+      setArchivedTemplateUndo(null)
+    } catch (error) {
+      setLibraryError(toUserFacingSlidesError(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor, archivedTemplateUndo, refreshLibraryData])
 
   const handleResolveTemplateApproval = useCallback(async (approval: SlideTemplateApproval, decision: 'approve' | 'reject') => {
     if (templateApprovalBusyId) return
@@ -2871,6 +2928,32 @@ export default function SlidesPage() {
               <p className="slides-error" role="alert">
                 Library error: {libraryError}
               </p>
+            )}
+
+            {workspaceTab === 'templates' && archivedTemplateUndo && (
+              <div className="slides-recovery" role="status">
+                <div>
+                  Template "{archivedTemplateUndo.templateName}" archived.
+                </div>
+                <div className="slides-inline-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => void handleUndoArchivedTemplate()}
+                    disabled={templateActionBusyId === archivedTemplateUndo.templateId}
+                  >
+                    Undo Archive
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => setArchivedTemplateUndo(null)}
+                    disabled={templateActionBusyId === archivedTemplateUndo.templateId}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
             )}
 
             {workspaceTab === 'import' && (
