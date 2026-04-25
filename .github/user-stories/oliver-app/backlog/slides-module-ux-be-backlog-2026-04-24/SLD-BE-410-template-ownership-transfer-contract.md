@@ -1,7 +1,7 @@
 ---
 ID: SLD-BE-410
 Title: Template Ownership + Collaborator Governance Contract
-Status: Partial (Approvals Pending)
+Status: Complete
 Verified: true
 Backdated: 2026-04-25
 ---
@@ -17,4 +17,4 @@ Acceptance Criteria:
 - [x] Transfer events are written to `slide_audit_events` with previous/next ownership details.
 - [x] API supports collaborator upsert/remove actions with owner/admin authorization and target-user slides-access checks.
 - [x] Non-admin template visibility includes delegated collaborator access for private templates.
-- [ ] Extend this story with approval rules for ownership transfer and collaborator role changes.
+- [x] Approval workflow persists pending governance actions and supports admin approve/reject resolution with audit events.

@@ -23,8 +23,8 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Slides chatbot direct HTML export download execution | `US-SLD-040` | S2.5 | Code Present |
 | Template publish visibility controls (private/shared) with role-aware UX constraints | `SLD-FE-400` | S3.1 | Code Present |
 | Template ACL and ownership governance for visibility edits/archive actions | `SLD-BE-400` | S3.1 | Code Present |
-| Template owner handoff controls with visible owner context and collaborator role management UI | `SLD-FE-410` | S3.3 | Partial (approvals pending) |
-| Backend ownership/collaborator governance actions with destination-user authorization | `SLD-BE-410` | S3.3 | Partial (approvals pending) |
+| Template owner handoff controls with visible owner context and collaborator role management UI | `SLD-FE-410` | S3.3 | Code Present |
+| Backend ownership/collaborator governance actions with destination-user authorization | `SLD-BE-410` | S3.3 | Code Present |
 | Activity explorer filters + pagination + CSV export UX | `SLD-FE-420` | S3.2 | Code Present |
 | Audits API server-side filter/search/date pagination contract | `SLD-BE-420` | S3.2 | Code Present |
 | Slide/template data model + RLS | `US-SLD-030` | S3 | Code Present |

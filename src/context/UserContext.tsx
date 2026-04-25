@@ -110,13 +110,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (attempt > 0) await delay(USER_LOAD_RETRY_DELAYS_MS[attempt] || 0)
         try {
           const lookupEmail = account.username || ''
-          let row = await getUserByIdentity(userId, lookupEmail)
+          const actorIdentity = { userId, email: lookupEmail }
+          let row = await getUserByIdentity(userId, lookupEmail, actorIdentity)
           if (!row && account.username) {
             row = await upsertUser({
               user_id: userId,
               email: account.username,
               name: getAccountName(account),
-            })
+            }, actorIdentity)
           }
           setAppUser(row)
           setLoadError(null)

@@ -6,7 +6,7 @@ Set these in Cloudflare Pages Functions for each environment:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY` (preferred) or `SUPABASE_SERVICE_KEY`
-- `OWNER_EMAILS` (CSV; must include Kiana Micari's Azure login email)
+- `OWNER_EMAILS` (CSV of additional owner emails; `kiana.micari@vtwo.co` is always treated as owner by default)
 - `OWNER_USER_IDS` (optional CSV of Azure oid/sub claims)
 
 ## Owner Bootstrap Procedure

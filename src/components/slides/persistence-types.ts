@@ -44,6 +44,25 @@ export interface SlideTemplateCollaborator {
   updated_at: string
 }
 
+export type SlideTemplateApprovalType = 'transfer-template' | 'upsert-collaborator' | 'remove-collaborator'
+
+export type SlideTemplateApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export interface SlideTemplateApproval {
+  id: string
+  template_id: string
+  requested_by_user_id: string
+  requested_by_email: string | null
+  approval_type: SlideTemplateApprovalType
+  payload: Record<string, unknown>
+  status: SlideTemplateApprovalStatus
+  review_note: string | null
+  reviewed_by_user_id: string | null
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type SlideAuditAction =
   | 'save'
   | 'autosave'
@@ -54,6 +73,9 @@ export type SlideAuditAction =
   | 'transfer-template'
   | 'upsert-collaborator'
   | 'remove-collaborator'
+  | 'submit-approval'
+  | 'approve-approval'
+  | 'reject-approval'
   | 'export-html'
   | 'export-pdf'
 

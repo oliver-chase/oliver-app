@@ -671,6 +671,261 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card')).toHaveCount(1)
   })
 
+  test('SLD-FE-410 and SLD-BE-410 route member ownership transfer through admin approvals', async ({ page }) => {
+    await page.addInitScript(() => {
+      const actor = window.localStorage.getItem('qa-test-actor') || 'member'
+      if (actor === 'admin') {
+        window.localStorage.setItem('qa-auth-account', JSON.stringify({
+          homeAccountId: 'qa-home-account',
+          environment: 'qa.local',
+          tenantId: 'qa-tenant',
+          username: 'qa-admin@example.com',
+          localAccountId: 'qa-local-account',
+          name: 'QA Admin',
+          idTokenClaims: {
+            oid: 'qa-admin-user',
+            sub: 'qa-admin-user',
+          },
+        }))
+        window.localStorage.setItem('qa-app-user', JSON.stringify({
+          user_id: 'qa-admin-user',
+          email: 'qa-admin@example.com',
+          name: 'QA Admin',
+          role: 'admin',
+          page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+          created_at: '2026-04-24T00:00:00.000Z',
+          updated_at: '2026-04-24T00:00:00.000Z',
+        }))
+        return
+      }
+
+      window.localStorage.setItem('qa-auth-account', JSON.stringify({
+        homeAccountId: 'qa-member-home-account',
+        environment: 'qa.local',
+        tenantId: 'qa-tenant',
+        username: 'qa-member@example.com',
+        localAccountId: 'qa-member-local-account',
+        name: 'QA Member',
+        idTokenClaims: {
+          oid: 'qa-member-user',
+          sub: 'qa-member-user',
+        },
+      }))
+      window.localStorage.setItem('qa-app-user', JSON.stringify({
+        user_id: 'qa-member-user',
+        email: 'qa-member@example.com',
+        name: 'QA Member',
+        role: 'member',
+        page_permissions: ['slides'],
+        created_at: '2026-04-24T00:00:00.000Z',
+        updated_at: '2026-04-24T00:00:00.000Z',
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.evaluate(() => {
+      window.localStorage.setItem('qa-test-actor', 'member')
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-transfer-approval-1',
+            owner_user_id: 'qa-member-user',
+            name: 'Member Owned Template',
+            description: 'Transfer requires admin approval.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'component-1',
+                type: 'text',
+                sourceLabel: '.headline',
+                x: 100,
+                y: 120,
+                width: 700,
+                content: 'Transfer approval workflow',
+                style: { fontSize: 42, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        collaborators: [],
+        approvals: [],
+        audits: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+    await page.reload()
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const templateCard = page.locator('.slides-library-card', {
+      has: page.getByRole('heading', { name: 'Member Owned Template' }),
+    }).first()
+    await expect(templateCard.getByText(/Owner:\s*qa-member-user/i)).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Transfer Owner' }).click()
+    await templateCard.getByLabel('New Owner').fill('qa-admin@example.com')
+    await templateCard.getByRole('button', { name: 'Confirm Transfer' }).click()
+
+    await expect(templateCard.getByText(/Owner:\s*qa-member-user/i)).toBeVisible()
+    await expect(page.locator('.slides-template-draft .slides-library-card', { hasText: 'Transfer Template Ownership' })).toHaveCount(1)
+
+    await page.evaluate(() => {
+      window.localStorage.setItem('qa-test-actor', 'admin')
+    })
+    await page.reload()
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const approvalCard = page.locator('.slides-template-draft .slides-library-card', { hasText: 'Transfer Template Ownership' }).first()
+    await expect(approvalCard).toBeVisible()
+    await approvalCard.getByRole('button', { name: 'Approve' }).click()
+    await expect(templateCard.getByText(/Owner:\s*qa-admin@example.com/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await page.locator('#slides-audit-action').selectOption('submit-approval')
+    await expect(page.locator('.slides-library-card h3')).toContainText('submit-approval')
+    await page.locator('#slides-audit-action').selectOption('approve-approval')
+    await expect(page.locator('.slides-library-card h3')).toContainText('approve-approval')
+  })
+
+  test('SLD-FE-410 and SLD-BE-410 allow admins to reject collaborator approval requests', async ({ page }) => {
+    await page.addInitScript(() => {
+      const actor = window.localStorage.getItem('qa-test-actor') || 'member'
+      if (actor === 'admin') {
+        window.localStorage.setItem('qa-auth-account', JSON.stringify({
+          homeAccountId: 'qa-home-account',
+          environment: 'qa.local',
+          tenantId: 'qa-tenant',
+          username: 'qa-admin@example.com',
+          localAccountId: 'qa-local-account',
+          name: 'QA Admin',
+          idTokenClaims: {
+            oid: 'qa-admin-user',
+            sub: 'qa-admin-user',
+          },
+        }))
+        window.localStorage.setItem('qa-app-user', JSON.stringify({
+          user_id: 'qa-admin-user',
+          email: 'qa-admin@example.com',
+          name: 'QA Admin',
+          role: 'admin',
+          page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+          created_at: '2026-04-24T00:00:00.000Z',
+          updated_at: '2026-04-24T00:00:00.000Z',
+        }))
+        return
+      }
+
+      window.localStorage.setItem('qa-auth-account', JSON.stringify({
+        homeAccountId: 'qa-member-home-account',
+        environment: 'qa.local',
+        tenantId: 'qa-tenant',
+        username: 'qa-member@example.com',
+        localAccountId: 'qa-member-local-account',
+        name: 'QA Member',
+        idTokenClaims: {
+          oid: 'qa-member-user',
+          sub: 'qa-member-user',
+        },
+      }))
+      window.localStorage.setItem('qa-app-user', JSON.stringify({
+        user_id: 'qa-member-user',
+        email: 'qa-member@example.com',
+        name: 'QA Member',
+        role: 'member',
+        page_permissions: ['slides'],
+        created_at: '2026-04-24T00:00:00.000Z',
+        updated_at: '2026-04-24T00:00:00.000Z',
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.evaluate(() => {
+      window.localStorage.setItem('qa-test-actor', 'member')
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-collab-approval-1',
+            owner_user_id: 'qa-member-user',
+            name: 'Member Collaborator Template',
+            description: 'Collaborator changes require approval.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'component-1',
+                type: 'text',
+                sourceLabel: '.headline',
+                x: 100,
+                y: 120,
+                width: 700,
+                content: 'Collaborator approval workflow',
+                style: { fontSize: 42, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        collaborators: [
+          {
+            template_id: 'template-collab-approval-1',
+            user_id: 'qa-reviewer-user',
+            user_email: 'qa-reviewer@example.com',
+            role: 'reviewer',
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        approvals: [],
+        audits: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+    await page.reload()
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const templateCard = page.locator('.slides-library-card', {
+      has: page.getByRole('heading', { name: 'Member Collaborator Template' }),
+    }).first()
+    await templateCard.getByRole('button', { name: 'Manage Collaborators' }).click()
+    await expect(templateCard.getByText(/qa-reviewer@example.com · reviewer/i)).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Remove' }).click()
+    await expect(page.locator('.slides-template-draft .slides-library-card', { hasText: 'Remove Collaborator' })).toHaveCount(1)
+    await expect(templateCard.getByText(/qa-reviewer@example.com · reviewer/i)).toBeVisible()
+
+    await page.evaluate(() => {
+      window.localStorage.setItem('qa-test-actor', 'admin')
+    })
+    await page.reload()
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const approvalCard = page.locator('.slides-template-draft .slides-library-card', { hasText: 'Remove Collaborator' }).first()
+    await expect(approvalCard).toBeVisible()
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm')
+      await dialog.accept()
+    })
+    await approvalCard.getByRole('button', { name: 'Reject' }).click()
+
+    await templateCard.getByRole('button', { name: 'Manage Collaborators' }).click()
+    await expect(templateCard.getByText(/qa-reviewer@example.com · reviewer/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await page.locator('#slides-audit-action').selectOption('reject-approval')
+    await expect(page.locator('.slides-library-card h3')).toContainText('reject-approval')
+  })
+
   test('SLD-FE-410 collaborator visibility allows members to use private delegated templates', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('qa-app-user', JSON.stringify({

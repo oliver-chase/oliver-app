@@ -427,7 +427,7 @@ test.describe('frontend smoke', () => {
   })
 
   test('owner rows are locked in user manager controls', async ({ page }) => {
-    await page.route('**/api/users', async route => {
+    await page.route('**/api/users**', async route => {
       const request = route.request()
       if (request.method() !== 'GET') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })

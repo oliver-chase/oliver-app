@@ -96,9 +96,11 @@ export default function HubPage() {
         )}
 
         {permissionState !== 'loading' && (
-          visibleModules.length > 0
-            ? <HubModuleList modules={visibleModules} />
-            : <p className={styles.empty}>No modules assigned. Contact your administrator.</p>
+          permissionState === 'error'
+            ? <p className={styles.empty}>Permissions are unavailable. Retry once service access is restored.</p>
+            : visibleModules.length > 0
+              ? <HubModuleList modules={visibleModules} />
+              : <p className={styles.empty}>No modules assigned. Contact your administrator.</p>
         )}
       </div>
       <div className={styles.footer}>V.TWO &middot; 2026</div>

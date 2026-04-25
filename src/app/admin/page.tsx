@@ -25,6 +25,10 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<AppUser[]>([])
   const canAccessAdmin = !isLoading && !loadError && !!appUser && isAdmin
+  const actorIdentity = useMemo(
+    () => (appUser ? { userId: appUser.user_id, email: appUser.email } : undefined),
+    [appUser],
+  )
 
   useEffect(() => {
     if (!isLoading && !canAccessAdmin) {
@@ -35,12 +39,12 @@ export default function AdminPage() {
   const loadAdminData = useCallback(async () => {
     if (!canAccessAdmin) return
     try {
-      const rows = await listUsers()
+      const rows = await listUsers(actorIdentity)
       setUsers(rows)
     } catch {
       // Keep admin chat available even if user list loading fails.
     }
-  }, [canAccessAdmin])
+  }, [actorIdentity, canAccessAdmin])
 
   useEffect(() => {
     void loadAdminData()
@@ -67,6 +71,7 @@ export default function AdminPage() {
     const flows = buildAdminFlows({
       users,
       refetch: loadAdminData,
+      actorIdentity,
     })
     return {
       pageLabel: 'Admin',

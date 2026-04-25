@@ -52,15 +52,15 @@ Goal: create one actionable backlog that covers:
 | S2.4 | Complete (`US-SLD-029`) | Ready to commit as one epic milestone |
 | S2.5 | Complete (`US-SLD-040`) | Ready to commit as one epic milestone |
 | S3.1 | Complete (`SLD-FE-400`, `SLD-BE-400`) | Ready to commit as one epic milestone |
-| S3.3 | In Progress (`SLD-FE-410`, `SLD-BE-410`) | Ownership + collaborator role milestone complete; approval workflow pending |
+| S3.3 | Complete (`SLD-FE-410`, `SLD-BE-410`) | Ownership/collaborator governance now includes approval submission + admin resolution workflow |
 | S3.2 | Complete (`SLD-FE-420`, `SLD-BE-420`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
-1. Add approval workflow for ownership transfer and collaborator role changes (`SLD-FE-410`, `SLD-BE-410`).
-2. Add PPTX export platform slice with warnings/reporting (`SLD-FE-500`, `SLD-BE-500`).
-3. Add saved activity filter presets and long-range audit export jobs as follow-up ops backlog.
+1. Add PPTX export platform slice with warnings/reporting (`SLD-FE-500`, `SLD-BE-500`).
+2. Add saved activity filter presets and long-range audit export jobs as follow-up ops backlog.
+3. Add governance SLA/escalation handling for stale pending template approvals.
 
 ## Execution and Commit Model
 

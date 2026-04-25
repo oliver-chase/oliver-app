@@ -41,8 +41,9 @@ Cloudflare Pages Function env vars (set in Pages project settings for each envir
 SUPABASE_URL=https://tjaowjiccowofzisdfhr.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role key>   # preferred
 # SUPABASE_SERVICE_KEY can be used as an alias if your environment already uses that name.
-OWNER_EMAILS=<comma-separated owner emails>     # required: include Kiana Micari's Azure login email
+OWNER_EMAILS=<comma-separated owner emails>     # optional additive owners (kiana.micari@vtwo.co is always treated as owner)
 # OWNER_USER_IDS=<comma-separated Azure oid/sub values>  # optional owner hardening
+# USERS_TRUST_CLIENT_IDENTITY=1                  # local/dev only (when not behind Cloudflare Access)
 
 # SDR draft approvals (/api/sdr-approve -> v-two-sdr approval-handler.yml)
 SDR_GITHUB_PAT=<github token with actions:write on oliver-chase/v-two-sdr>

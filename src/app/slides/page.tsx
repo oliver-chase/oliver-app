@@ -18,6 +18,7 @@ import {
 import type {
   SlideAuditEvent,
   SlideRecord,
+  SlideTemplateApproval,
   SlideTemplateCollaborator,
   SlideTemplateCollaboratorRole,
   SlideTemplateRecord,
@@ -28,15 +29,18 @@ import {
   duplicateSlide,
   duplicateTemplateAsSlide,
   listTemplateCollaborators,
+  listTemplateApprovals,
   listSlideAudits,
   listSlides,
   listTemplates,
   publishTemplateFromSlide,
   recordExportEvent,
   removeTemplateCollaborator,
+  resolveTemplateApproval,
   renameSlide,
   saveSlide,
   SlideConflictError,
+  submitTemplateApproval,
   transferTemplateOwnership,
   upsertTemplateCollaborator,
   updateTemplate,
@@ -134,6 +138,23 @@ function formatDateTime(iso: string | null | undefined): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return 'n/a'
   return date.toLocaleString()
+}
+
+function formatTemplateApprovalType(type: SlideTemplateApproval['approval_type']): string {
+  if (type === 'transfer-template') return 'Transfer Template Ownership'
+  if (type === 'upsert-collaborator') return 'Add or Update Collaborator'
+  if (type === 'remove-collaborator') return 'Remove Collaborator'
+  return type
+}
+
+function formatTemplateApprovalTarget(approval: SlideTemplateApproval): string {
+  const payload = approval.payload || {}
+  const targetEmail = typeof payload.target_user_email === 'string' ? payload.target_user_email : ''
+  const targetUserId = typeof payload.target_user_id === 'string' ? payload.target_user_id : ''
+  const role = typeof payload.role === 'string' ? payload.role : ''
+  const target = targetEmail || targetUserId || 'n/a'
+  if (!role) return target
+  return `${target} · ${role}`
 }
 
 function summarizeWarnings(warnings: string[]) {
@@ -268,6 +289,7 @@ export default function SlidesPage() {
 
   const [slides, setSlides] = useState<SlideRecord[]>([])
   const [templates, setTemplates] = useState<SlideTemplateRecord[]>([])
+  const [templateApprovals, setTemplateApprovals] = useState<SlideTemplateApproval[]>([])
   const [audits, setAudits] = useState<SlideAuditEvent[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState<string | null>(null)
@@ -278,6 +300,7 @@ export default function SlidesPage() {
   const [templateCollaboratorsByTemplate, setTemplateCollaboratorsByTemplate] = useState<Record<string, SlideTemplateCollaborator[]>>({})
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
+  const [templateApprovalBusyId, setTemplateApprovalBusyId] = useState<string | null>(null)
   const [auditActionFilter, setAuditActionFilter] = useState<'all' | SlideAuditEvent['action']>('all')
   const [auditOutcomeFilter, setAuditOutcomeFilter] = useState<'all' | SlideAuditEvent['outcome']>('all')
   const [auditEntityTypeFilter, setAuditEntityTypeFilter] = useState<'all' | SlideAuditEvent['entity_type']>('all')
@@ -306,7 +329,7 @@ export default function SlidesPage() {
   const actor = useMemo(() => ({
     user_id: appUser?.user_id || 'qa-admin-user',
     user_email: appUser?.email || 'qa-admin@example.com',
-    role: appUser?.role || 'admin',
+    role: appUser?.role || 'member',
   }), [appUser])
   const isSlidesAdmin = appUser?.role === 'admin'
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
@@ -356,6 +379,20 @@ export default function SlidesPage() {
       backgroundColor: toColorInputValue(lead.style.backgroundColor, '#ffffff'),
     }
   }, [selectedComponents])
+  const templateById = useMemo(() => {
+    const map = new Map<string, SlideTemplateRecord>()
+    for (const template of templates) map.set(template.id, template)
+    return map
+  }, [templates])
+  const pendingApprovalsByTemplate = useMemo(() => {
+    const byTemplate: Record<string, SlideTemplateApproval[]> = {}
+    for (const approval of templateApprovals) {
+      if (!byTemplate[approval.template_id]) byTemplate[approval.template_id] = []
+      byTemplate[approval.template_id].push(approval)
+    }
+    return byTemplate
+  }, [templateApprovals])
+  const showTemplateApprovalQueue = actor.role === 'admin' || templateApprovals.length > 0
 
   const cloneComponents = useCallback(
     (components: SlideComponent[]) =>
@@ -1003,9 +1040,10 @@ export default function SlidesPage() {
     setLibraryLoading(true)
     setLibraryError(null)
     try {
-      const [slideRows, templateRows, auditRows] = await Promise.all([
+      const [slideRows, templateRows, approvalRows, auditRows] = await Promise.all([
         listSlides(actor, searchValue),
         listTemplates(actor, searchValue),
+        listTemplateApprovals(actor, { status: 'pending' }),
         listSlideAudits(actor, {
           limit: AUDIT_PAGE_SIZE,
           offset: auditOffset,
@@ -1019,6 +1057,7 @@ export default function SlidesPage() {
       ])
       setSlides(slideRows)
       setTemplates(templateRows)
+      setTemplateApprovals(approvalRows)
       setAudits(auditRows.items)
       setAuditHasMore(auditRows.pagination.has_more)
     } catch (error) {
@@ -1614,13 +1653,30 @@ export default function SlidesPage() {
     setTemplateActionBusyId(template.id)
     setLibraryError(null)
     try {
-      await upsertTemplateCollaborator(actor, template.id, {
-        userEmail: target.includes('@') ? target : undefined,
-        userId: target.includes('@') ? undefined : target,
-        role: templateCollaboratorDraft.role,
-      })
+      if (actor.role === 'admin') {
+        await upsertTemplateCollaborator(actor, template.id, {
+          userEmail: target.includes('@') ? target : undefined,
+          userId: target.includes('@') ? undefined : target,
+          role: templateCollaboratorDraft.role,
+        })
+      } else {
+        await submitTemplateApproval(actor, {
+          templateId: template.id,
+          approvalType: 'upsert-collaborator',
+          userEmail: target.includes('@') ? target : undefined,
+          userId: target.includes('@') ? undefined : target,
+          role: templateCollaboratorDraft.role,
+        })
+      }
       await refreshTemplateCollaboratorRows(template.id)
-      setEditorNotice({ tone: 'info', text: `Updated collaborator access for "${template.name}".` })
+      await refreshLibraryData()
+      setEditorNotice({
+        tone: 'info',
+        text:
+          actor.role === 'admin'
+            ? `Updated collaborator access for "${template.name}".`
+            : `Submitted collaborator approval request for "${template.name}".`,
+      })
       setTemplateCollaboratorDraft((previous) =>
         previous && previous.templateId === template.id
           ? { ...previous, target: '' }
@@ -1631,24 +1687,40 @@ export default function SlidesPage() {
     } finally {
       setTemplateActionBusyId(null)
     }
-  }, [actor, refreshTemplateCollaboratorRows, templateCollaboratorDraft])
+  }, [actor, refreshLibraryData, refreshTemplateCollaboratorRows, templateCollaboratorDraft])
 
   const handleRemoveTemplateCollaborator = useCallback(async (template: SlideTemplateRecord, collaborator: SlideTemplateCollaborator) => {
     setTemplateActionBusyId(template.id)
     setLibraryError(null)
     try {
-      await removeTemplateCollaborator(actor, template.id, {
-        userId: collaborator.user_id,
-        userEmail: collaborator.user_email || undefined,
-      })
+      if (actor.role === 'admin') {
+        await removeTemplateCollaborator(actor, template.id, {
+          userId: collaborator.user_id,
+          userEmail: collaborator.user_email || undefined,
+        })
+      } else {
+        await submitTemplateApproval(actor, {
+          templateId: template.id,
+          approvalType: 'remove-collaborator',
+          userId: collaborator.user_id,
+          userEmail: collaborator.user_email || undefined,
+        })
+      }
       await refreshTemplateCollaboratorRows(template.id)
-      setEditorNotice({ tone: 'info', text: `Removed collaborator access for "${collaborator.user_email || collaborator.user_id}".` })
+      await refreshLibraryData()
+      setEditorNotice({
+        tone: 'info',
+        text:
+          actor.role === 'admin'
+            ? `Removed collaborator access for "${collaborator.user_email || collaborator.user_id}".`
+            : `Submitted collaborator removal approval for "${collaborator.user_email || collaborator.user_id}".`,
+      })
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
-  }, [actor, refreshTemplateCollaboratorRows])
+  }, [actor, refreshLibraryData, refreshTemplateCollaboratorRows])
 
   const handleTransferTemplateOwnership = useCallback(async (template: SlideTemplateRecord) => {
     if (templateActionBusyId) return
@@ -1662,17 +1734,32 @@ export default function SlidesPage() {
     setTemplateActionBusyId(template.id)
     setLibraryError(null)
     try {
-      await transferTemplateOwnership(actor, template.id, {
-        userEmail: target.includes('@') ? target : undefined,
-        userId: target.includes('@') ? undefined : target,
-      })
+      if (actor.role === 'admin') {
+        await transferTemplateOwnership(actor, template.id, {
+          userEmail: target.includes('@') ? target : undefined,
+          userId: target.includes('@') ? undefined : target,
+        })
+      } else {
+        await submitTemplateApproval(actor, {
+          templateId: template.id,
+          approvalType: 'transfer-template',
+          userEmail: target.includes('@') ? target : undefined,
+          userId: target.includes('@') ? undefined : target,
+        })
+      }
       await refreshLibraryData()
       setTemplateTransferDraft(null)
       if (templateCollaboratorPanelId === template.id) {
         setTemplateCollaboratorPanelId(null)
         setTemplateCollaboratorDraft(null)
       }
-      setEditorNotice({ tone: 'info', text: `Transferred template "${template.name}" ownership to ${target}.` })
+      setEditorNotice({
+        tone: 'info',
+        text:
+          actor.role === 'admin'
+            ? `Transferred template "${template.name}" ownership to ${target}.`
+            : `Submitted ownership transfer approval for "${template.name}" to ${target}.`,
+      })
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -1699,6 +1786,36 @@ export default function SlidesPage() {
       setTemplateActionBusyId(null)
     }
   }, [actor, refreshLibraryData, templateCollaboratorPanelId])
+
+  const handleResolveTemplateApproval = useCallback(async (approval: SlideTemplateApproval, decision: 'approve' | 'reject') => {
+    if (templateApprovalBusyId) return
+    if (decision === 'reject') {
+      const confirmed = window.confirm(`Reject approval request "${formatTemplateApprovalType(approval.approval_type)}" for this template?`)
+      if (!confirmed) return
+    }
+
+    setTemplateApprovalBusyId(approval.id)
+    setLibraryError(null)
+    try {
+      await resolveTemplateApproval(actor, approval.id, decision)
+      await refreshLibraryData()
+      if (templateCollaboratorPanelId === approval.template_id) {
+        await refreshTemplateCollaboratorRows(approval.template_id)
+      }
+      const templateName = templateById.get(approval.template_id)?.name || approval.template_id
+      setEditorNotice({
+        tone: 'info',
+        text:
+          decision === 'approve'
+            ? `Approved "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}".`
+            : `Rejected "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}".`,
+      })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateApprovalBusyId(null)
+    }
+  }, [actor, refreshLibraryData, refreshTemplateCollaboratorRows, templateApprovalBusyId, templateById, templateCollaboratorPanelId])
 
   const applyStyleToSelection = useCallback((patch: Partial<SlideComponent['style']>) => {
     if (!result || selectedComponentIds.length === 0) {
@@ -2844,6 +2961,56 @@ export default function SlidesPage() {
             {workspaceTab === 'templates' && (
               <div className="slides-library-section">
                 <h2>Template Library</h2>
+                {showTemplateApprovalQueue && (
+                  <div className="slides-template-draft">
+                    <p className="slides-card-note">
+                      {actor.role === 'admin' ? 'Pending Governance Approvals' : 'My Pending Approval Requests'}
+                    </p>
+                    {templateApprovals.length === 0 && (
+                      <p className="slides-card-note">
+                        {actor.role === 'admin'
+                          ? 'No pending template approval requests.'
+                          : 'No pending requests submitted yet.'}
+                      </p>
+                    )}
+                    {templateApprovals.map((approval) => {
+                      const templateName = templateById.get(approval.template_id)?.name || approval.template_id
+                      const busy = templateApprovalBusyId === approval.id
+                      return (
+                        <article key={approval.id} className="slides-library-card">
+                          <div>
+                            <h3>{formatTemplateApprovalType(approval.approval_type)}</h3>
+                            <p>Template: {templateName}</p>
+                            <p>Target: {formatTemplateApprovalTarget(approval)}</p>
+                            <p>
+                              Requested by: {approval.requested_by_email || approval.requested_by_user_id} · {formatDateTime(approval.created_at)}
+                            </p>
+                          </div>
+                          {actor.role === 'admin' && (
+                            <div className="slides-inline-actions">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary"
+                                onClick={() => void handleResolveTemplateApproval(approval, 'approve')}
+                                disabled={busy}
+                              >
+                                {busy ? 'Saving…' : 'Approve'}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                onClick={() => void handleResolveTemplateApproval(approval, 'reject')}
+                                disabled={busy}
+                              >
+                                {busy ? 'Saving…' : 'Reject'}
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
                 {templates.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
@@ -2860,6 +3027,11 @@ export default function SlidesPage() {
                       <p>
                         Visibility: {template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(template.updated_at)}
                       </p>
+                      {(pendingApprovalsByTemplate[template.id] || []).length > 0 && (
+                        <p className="slides-card-note">
+                          Pending approvals: {(pendingApprovalsByTemplate[template.id] || []).length}
+                        </p>
+                      )}
                     </div>
                     <div className="slides-inline-actions">
                       <button
@@ -3043,6 +3215,9 @@ export default function SlidesPage() {
                       <option value="transfer-template">Transfer Template</option>
                       <option value="upsert-collaborator">Upsert Collaborator</option>
                       <option value="remove-collaborator">Remove Collaborator</option>
+                      <option value="submit-approval">Submit Approval</option>
+                      <option value="approve-approval">Approve Approval</option>
+                      <option value="reject-approval">Reject Approval</option>
                       <option value="export-html">Export HTML</option>
                       <option value="export-pdf">Export PDF</option>
                     </select>

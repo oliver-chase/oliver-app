@@ -7,6 +7,9 @@ import type {
   SlideSaveResponse,
   SlideTemplateCollaborator,
   SlideTemplateCollaboratorRole,
+  SlideTemplateApproval,
+  SlideTemplateApprovalStatus,
+  SlideTemplateApprovalType,
   SlideTemplateRecord,
 } from '@/components/slides/persistence-types'
 
@@ -17,8 +20,10 @@ interface LocalSlidesStore {
   slides: SlideRecord[]
   templates: SlideTemplateRecord[]
   collaborators: SlideTemplateCollaborator[]
+  approvals: SlideTemplateApproval[]
   audits: SlideAuditEvent[]
   nextAuditId: number
+  nextApprovalId: number
 }
 
 interface PublishTemplateOptions {
@@ -42,6 +47,14 @@ interface UpsertTemplateCollaboratorOptions {
   userId?: string
   userEmail?: string
   role: SlideTemplateCollaboratorRole
+}
+
+interface SubmitTemplateApprovalOptions {
+  templateId: string
+  approvalType: SlideTemplateApprovalType
+  userId?: string
+  userEmail?: string
+  role?: SlideTemplateCollaboratorRole
 }
 
 export interface SlideAuditQueryOptions {
@@ -191,8 +204,10 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       slides: [],
       templates: initialTemplates(actor),
       collaborators: [],
+      approvals: [],
       audits: [],
       nextAuditId: 1,
+      nextApprovalId: 1,
     }
   }
 
@@ -202,8 +217,10 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       slides: [],
       templates: initialTemplates(actor),
       collaborators: [],
+      approvals: [],
       audits: [],
       nextAuditId: 1,
+      nextApprovalId: 1,
     }
     writeLocalStore(store)
     return store
@@ -216,16 +233,20 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     }
     if (!Array.isArray(parsed.slides)) parsed.slides = []
     if (!Array.isArray(parsed.collaborators)) parsed.collaborators = []
+    if (!Array.isArray(parsed.approvals)) parsed.approvals = []
     if (!Array.isArray(parsed.audits)) parsed.audits = []
     if (!Number.isFinite(parsed.nextAuditId) || parsed.nextAuditId < 1) parsed.nextAuditId = 1
+    if (!Number.isFinite(parsed.nextApprovalId) || parsed.nextApprovalId < 1) parsed.nextApprovalId = 1
     return parsed
   } catch {
     const store: LocalSlidesStore = {
       slides: [],
       templates: initialTemplates(actor),
       collaborators: [],
+      approvals: [],
       audits: [],
       nextAuditId: 1,
+      nextApprovalId: 1,
     }
     writeLocalStore(store)
     return store
@@ -292,6 +313,35 @@ function isLocalTemplateVisibleToActor(
   if (template.is_shared) return true
   if (template.owner_user_id === actor.user_id) return true
   return getLocalCollaboratorRole(store, template.id, actor.user_id) !== null
+}
+
+function makeLocalTemplateApproval(
+  store: LocalSlidesStore,
+  actor: SlideActor,
+  input: {
+    templateId: string
+    approvalType: SlideTemplateApprovalType
+    payload: Record<string, unknown>
+  },
+): SlideTemplateApproval {
+  const stamp = nowIso()
+  const approval: SlideTemplateApproval = {
+    id: `approval-${store.nextApprovalId}`,
+    template_id: input.templateId,
+    requested_by_user_id: actor.user_id,
+    requested_by_email: actor.user_email || null,
+    approval_type: input.approvalType,
+    payload: input.payload,
+    status: 'pending',
+    review_note: null,
+    reviewed_by_user_id: null,
+    reviewed_at: null,
+    created_at: stamp,
+    updated_at: stamp,
+  }
+  store.nextApprovalId += 1
+  store.approvals.unshift(approval)
+  return approval
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1021,6 +1071,204 @@ export async function removeTemplateCollaborator(
         collaborator_user_id: target,
       })
       writeLocalStore(store)
+    },
+  )
+}
+
+export async function listTemplateApprovals(
+  actorInput: SlideActor,
+  options: { templateId?: string; status?: SlideTemplateApprovalStatus } = {},
+): Promise<SlideTemplateApproval[]> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'template-approvals',
+        user_id: actor.user_id,
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      if (options.templateId) params.set('template_id', options.templateId)
+      if (options.status) params.set('status', options.status)
+      const response = await requestJson<{ items: SlideTemplateApproval[] }>(`/api/slides?${params.toString()}`)
+      return response.items || []
+    },
+    () => {
+      const store = readLocalStore(actor)
+      let rows = store.approvals.slice()
+      if (options.templateId) rows = rows.filter((entry) => entry.template_id === options.templateId)
+      if (options.status) rows = rows.filter((entry) => entry.status === options.status)
+      if (actor.role !== 'admin') rows = rows.filter((entry) => entry.requested_by_user_id === actor.user_id)
+      return rows.sort((a, b) => b.created_at.localeCompare(a.created_at))
+    },
+  )
+}
+
+export async function submitTemplateApproval(
+  actorInput: SlideActor,
+  options: SubmitTemplateApprovalOptions,
+): Promise<SlideTemplateApproval> {
+  const actor = normalizeActor(actorInput)
+  const templateId = options.templateId.trim()
+  const userId = options.userId?.trim() || ''
+  const userEmail = options.userEmail?.trim().toLowerCase() || ''
+  if (!templateId) throw new SlideApiError('Template id is required for approval submission.', 400)
+  if (!userId && !userEmail) throw new SlideApiError('Target user id or email is required for approval submission.', 400)
+  if (options.approvalType === 'upsert-collaborator' && !options.role) {
+    throw new SlideApiError('Role is required for collaborator approval submission.', 400)
+  }
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ approval: SlideTemplateApproval }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'submit-template-approval',
+          actor,
+          template_id: templateId,
+          approval_type: options.approvalType,
+          target_user_id: userId || undefined,
+          target_user_email: userEmail || undefined,
+          role: options.role || undefined,
+        }),
+      })
+      if (!response.approval) throw new SlideApiError('Approval submission failed.', 500)
+      return response.approval
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const template = store.templates.find((entry) => entry.id === templateId)
+      if (!template) throw new SlideApiError('Template not found for approval submission.', 404)
+      const isOwner = template.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only owners/admins can submit governance approvals.', 403)
+      }
+
+      const payload = {
+        target_user_id: userId || userEmail,
+        target_user_email: userEmail || null,
+        ...(options.role ? { role: options.role } : {}),
+      }
+      const approval = makeLocalTemplateApproval(store, actor, {
+        templateId,
+        approvalType: options.approvalType,
+        payload,
+      })
+      makeAuditEvent(store, actor, 'submit-approval', 'success', 'template', templateId, {
+        approval_id: approval.id,
+        approval_type: options.approvalType,
+        ...payload,
+      })
+      writeLocalStore(store)
+      return approval
+    },
+  )
+}
+
+export async function resolveTemplateApproval(
+  actorInput: SlideActor,
+  approvalId: string,
+  decision: 'approve' | 'reject',
+  reviewNote = '',
+): Promise<SlideTemplateApproval> {
+  const actor = normalizeActor(actorInput)
+  const trimmedApprovalId = approvalId.trim()
+  if (!trimmedApprovalId) throw new SlideApiError('Approval id is required.', 400)
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ approval: SlideTemplateApproval }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'resolve-template-approval',
+          actor,
+          approval_id: trimmedApprovalId,
+          decision,
+          review_note: reviewNote.trim() || undefined,
+        }),
+      })
+      if (!response.approval) throw new SlideApiError('Approval resolution failed.', 500)
+      return response.approval
+    },
+    async () => {
+      if (actor.role !== 'admin') {
+        throw new SlideApiError('Forbidden. Only admins can resolve approvals.', 403)
+      }
+      const store = readLocalStore(actor)
+      const index = store.approvals.findIndex((entry) => entry.id === trimmedApprovalId)
+      if (index < 0) throw new SlideApiError('Approval not found.', 404)
+      const approval = store.approvals[index]
+      if (approval.status !== 'pending') throw new SlideApiError('Approval is not pending.', 409)
+      const note = reviewNote.trim() || null
+
+      if (decision === 'reject') {
+        const rejected: SlideTemplateApproval = {
+          ...approval,
+          status: 'rejected',
+          review_note: note,
+          reviewed_by_user_id: actor.user_id,
+          reviewed_at: nowIso(),
+          updated_at: nowIso(),
+        }
+        store.approvals[index] = rejected
+        makeAuditEvent(store, actor, 'reject-approval', 'success', 'template', approval.template_id, {
+          approval_id: approval.id,
+          approval_type: approval.approval_type,
+          review_note: note,
+        })
+        writeLocalStore(store)
+        return rejected
+      }
+
+      const payload = approval.payload || {}
+      const targetUserId =
+        typeof payload.target_user_id === 'string' ? payload.target_user_id : undefined
+      const targetUserEmail =
+        typeof payload.target_user_email === 'string' ? payload.target_user_email : undefined
+
+      if (approval.approval_type === 'transfer-template') {
+        await transferTemplateOwnership(actor, approval.template_id, {
+          userId: targetUserId,
+          userEmail: targetUserEmail,
+        })
+      } else if (approval.approval_type === 'upsert-collaborator') {
+        const role =
+          payload.role === 'editor' || payload.role === 'reviewer' || payload.role === 'viewer'
+            ? payload.role
+            : 'viewer'
+        await upsertTemplateCollaborator(actor, approval.template_id, {
+          userId: targetUserId,
+          userEmail: targetUserEmail,
+          role,
+        })
+      } else if (approval.approval_type === 'remove-collaborator') {
+        await removeTemplateCollaborator(actor, approval.template_id, {
+          userId: targetUserId,
+          userEmail: targetUserEmail,
+        })
+      }
+
+      const updatedStore = readLocalStore(actor)
+      const updatedIndex = updatedStore.approvals.findIndex((entry) => entry.id === trimmedApprovalId)
+      const approved: SlideTemplateApproval = {
+        ...(updatedStore.approvals[updatedIndex] || approval),
+        status: 'approved',
+        review_note: note,
+        reviewed_by_user_id: actor.user_id,
+        reviewed_at: nowIso(),
+        updated_at: nowIso(),
+      }
+      if (updatedIndex >= 0) updatedStore.approvals[updatedIndex] = approved
+      else updatedStore.approvals.unshift(approved)
+
+      makeAuditEvent(updatedStore, actor, 'approve-approval', 'success', 'template', approval.template_id, {
+        approval_id: approval.id,
+        approval_type: approval.approval_type,
+        review_note: note,
+      })
+      writeLocalStore(updatedStore)
+      return approved
     },
   )
 }

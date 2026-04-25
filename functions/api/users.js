@@ -24,6 +24,7 @@ import { jsonResponse, errorResponse } from './_shared/ai.js';
 const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides']);
 const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides'];
 const USER_FIELDS = 'user_id,email,name,role,page_permissions,created_at,updated_at';
+const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -79,8 +80,7 @@ function uniquePermissions(raw) {
 
 function parseOwnerPolicy(env) {
   const ownerEmails = new Set(
-    (env.OWNER_EMAILS || '')
-      .split(',')
+    [...DEFAULT_OWNER_EMAILS, ...(env.OWNER_EMAILS || '').split(',')]
       .map(item => normalizeEmail(item))
       .filter(Boolean),
   );

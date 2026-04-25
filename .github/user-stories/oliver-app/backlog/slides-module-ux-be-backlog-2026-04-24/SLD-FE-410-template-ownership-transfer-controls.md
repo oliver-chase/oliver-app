@@ -1,7 +1,7 @@
 ---
 ID: SLD-FE-410
 Title: Template Ownership + Collaborator Controls
-Status: Partial (Approvals Pending)
+Status: Complete
 Verified: true
 Backdated: 2026-04-25
 ---
@@ -17,4 +17,4 @@ Acceptance Criteria:
 - [x] Owner/admin users can assign and remove collaborator roles (editor/reviewer/viewer) from template cards.
 - [x] Collaborator members can see delegated private templates and duplicate them to My Slides.
 - [x] Regression coverage validates transfer flow and activity filtering for transfer events.
-- [ ] Extend this story with approval UX for ownership transfer and collaborator role changes.
+- [x] Approval UX supports owner-submitted governance requests and admin approve/reject resolution from Template Library.

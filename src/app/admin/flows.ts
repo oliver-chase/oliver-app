@@ -1,11 +1,12 @@
 import type { OliverFlow } from '@/components/shared/OliverContext'
 import type { AppUser, PagePermission } from '@/types/auth'
-import { upsertUser, updateUserPermissions, updateUserRole } from '@/lib/users'
+import { upsertUser, updateUserPermissions, updateUserRole, type UserRequestActor } from '@/lib/users'
 import { upsertToken } from '@/lib/tokens'
 
 type Ctx = {
   users: AppUser[]
   refetch: () => Promise<void> | void
+  actorIdentity?: UserRequestActor
 }
 
 const PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides']
@@ -55,7 +56,7 @@ function tokenCategory(name: string): string {
 }
 
 export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
-  const { users, refetch } = ctx
+  const { users, refetch, actorIdentity } = ctx
 
   return [
     {
@@ -88,9 +89,9 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         const name = asString(answers.name)
         const role = asString(answers.role)
         const permissions = parsePermissions(asString(answers.permissions))
-        await upsertUser({ user_id: userId, email, name })
-        if (role === 'admin' || role === 'user') await updateUserRole(userId, role)
-        if (permissions.length > 0) await updateUserPermissions(userId, permissions)
+        await upsertUser({ user_id: userId, email, name }, actorIdentity)
+        if (role === 'admin' || role === 'user') await updateUserRole(userId, role, actorIdentity)
+        if (permissions.length > 0) await updateUserPermissions(userId, permissions, actorIdentity)
         await refetch()
         return `User upserted: ${email}.`
       },
@@ -121,7 +122,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         const user = users.find(u => u.user_id === userId)
         if (user?.is_owner) return 'Owner role is immutable.'
         if (role !== 'admin' && role !== 'user') return 'Invalid role.'
-        await updateUserRole(userId, role)
+        await updateUserRole(userId, role, actorIdentity)
         await refetch()
         return `Role updated to ${role}.`
       },
@@ -151,7 +152,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         if (user.is_owner) return 'Owner permissions are immutable.'
         if (user.role === 'admin') return 'Admins already have all module access.'
         const updated = Array.from(new Set([...user.page_permissions, permission]))
-        await updateUserPermissions(userId, updated)
+        await updateUserPermissions(userId, updated, actorIdentity)
         await refetch()
         return `Granted ${permission} to ${user.email}.`
       },
@@ -181,7 +182,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
         if (user.is_owner) return 'Owner permissions are immutable.'
         if (user.role === 'admin') return 'Downgrade role from admin first if you need scoped permissions.'
         const updated = user.page_permissions.filter(p => p !== permission)
-        await updateUserPermissions(userId, updated)
+        await updateUserPermissions(userId, updated, actorIdentity)
         await refetch()
         return `Revoked ${permission} from ${user.email}.`
       },

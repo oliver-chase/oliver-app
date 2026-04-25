@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AppUser, PagePermission, Role } from '@/types/auth'
+import { useUser } from '@/context/UserContext'
 import { listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
 import { getPermissionModules } from '@/modules/registry'
 import styles from './admin.module.css'
@@ -9,16 +10,21 @@ import styles from './admin.module.css'
 const ALL_PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
 
 export function UserManager() {
+  const { appUser } = useUser()
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const actorIdentity = useMemo(
+    () => (appUser ? { userId: appUser.user_id, email: appUser.email } : undefined),
+    [appUser],
+  )
 
   useEffect(() => {
-    listUsers()
+    listUsers(actorIdentity)
       .then(u => { setUsers(u); setLoading(false) })
       .catch(err => { setError(err instanceof Error ? err.message : String(err)); setLoading(false) })
-  }, [])
+  }, [actorIdentity])
 
   async function handleRoleChange(userId: string, role: Role) {
     const target = users.find(u => u.user_id === userId)
@@ -26,7 +32,7 @@ export function UserManager() {
     setSaving(userId)
     setError(null)
     try {
-      await updateUserRole(userId, role)
+      await updateUserRole(userId, role, actorIdentity)
       setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -46,7 +52,7 @@ export function UserManager() {
     setSaving(userId)
     setError(null)
     try {
-      await updateUserPermissions(userId, updated)
+      await updateUserPermissions(userId, updated, actorIdentity)
       setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, page_permissions: updated } : u))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

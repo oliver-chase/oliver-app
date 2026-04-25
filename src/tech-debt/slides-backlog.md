@@ -10,7 +10,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Start from template | Template duplication works, then opens in Import workspace. | No thumbnail, no visual picker quality signal; template choice is mostly text-only. | SLD-FE-210, SLD-BE-210 |
 | Edit imported slide | Scaled 16:9 canvas renderer, resize handles, inline text editing, and bounded drag/nudge controls are available. | Advanced snapping/guides are still missing for precision layouts. | TBD |
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | TBD |
-| Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, and collaborator role controls (editor/reviewer/viewer). | No approval workflow yet for role changes or ownership transfer acceptance. | SLD-FE-410, SLD-BE-410 |
+| Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), and approval request/resolution workflow for governance changes. | No approval SLA/escalation automation yet for stale requests. | SLD-FE-410, SLD-BE-410 |
 | Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
 | Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. | No saved filter presets or full-range export job for long audit histories. | TBD |
 
@@ -52,8 +52,8 @@ KPI: Template reuse rate and admin audit resolution time both improve release-ov
 | --- | --- | --- | --- | --- | --- |
 | SLD-FE-400 | Template visibility controls in publish workflow | Frontend | P1 | Done (2026-04-25) | User can set template visibility (private/shared) with clear role constraints. |
 | SLD-BE-400 | Template ACL and ownership enforcement | Backend | P1 | Done (2026-04-25) | API enforces visibility/edit/delete rights by owner/role with audit entries. |
-| SLD-FE-410 | Template ownership + collaborator role controls | Frontend | P1 | In Progress (2026-04-25) | Owner/admin can transfer template ownership and manage collaborator role assignments without dead-end manual remediation. |
-| SLD-BE-410 | Template ownership + collaborator governance contract | Backend | P1 | In Progress (2026-04-25) | API enforces owner/admin governance rights and verifies destination accounts have slides access. |
+| SLD-FE-410 | Template ownership + collaborator role controls | Frontend | P1 | Done (2026-04-25) | Owner governance actions submit approval requests for admin resolution; admin queue supports approve/reject with audit visibility. |
+| SLD-BE-410 | Template ownership + collaborator governance contract | Backend | P1 | Done (2026-04-25) | API enforces owner/admin governance rights, persists template approvals, and applies/rejects pending requests with audit events. |
 | SLD-FE-420 | Audit explorer with filter/search/export | Frontend | P2 | Done (2026-04-25) | Activity tab supports filters by actor/action/outcome/date and exportable views. |
 | SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Done (2026-04-25) | API supports server-side filtering/pagination and returns predictable query latency. |
 
@@ -70,5 +70,5 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 ## Next Features In Line
 
 1. SLD-FE-500 + SLD-BE-500: Add native PPTX export flows with warnings reporting.
-2. SLD-FE-410 + SLD-BE-410: Add approval workflow for ownership transfer and collaborator role changes.
-3. Define a new audit-ops ticket for saved activity filter presets and long-range export jobs.
+2. Define a new audit-ops ticket for saved activity filter presets and long-range export jobs.
+3. Add governance SLA notifications/escalation for stale pending template approvals.

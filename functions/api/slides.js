@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits|template-collaborators&search=&limit=&offset=
+// GET /api/slides?resource=slides|templates|audits|template-collaborators|template-approvals&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
@@ -9,6 +9,8 @@ const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
+const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
+const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -195,6 +197,20 @@ function sanitizeCollaboratorRole(value) {
   return trimmed;
 }
 
+function sanitizeApprovalType(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!TEMPLATE_APPROVAL_TYPES.includes(trimmed)) return null;
+  return trimmed;
+}
+
+function sanitizeApprovalStatus(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!TEMPLATE_APPROVAL_STATUSES.includes(trimmed)) return null;
+  return trimmed;
+}
+
 function normalizeMetadata(rawMetadata) {
   if (!isObject(rawMetadata)) return {};
   return rawMetadata;
@@ -241,6 +257,24 @@ function normalizeTemplateCollaboratorRow(row) {
     user_id: row.user_id,
     user_email: row.user_email || null,
     role: row.role,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeTemplateApprovalRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    id: row.id,
+    template_id: row.template_id,
+    requested_by_user_id: row.requested_by_user_id,
+    requested_by_email: row.requested_by_email || null,
+    approval_type: row.approval_type,
+    payload: row.payload || {},
+    status: row.status,
+    review_note: row.review_note || null,
+    reviewed_by_user_id: row.reviewed_by_user_id || null,
+    reviewed_at: row.reviewed_at || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -325,6 +359,21 @@ async function readAppUsersByIds(env, userIds) {
     }
   }
   return map;
+}
+
+async function readTemplateApprovalById(env, approvalId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approvalId) + '&select=*&limit=1',
+  );
+  const rows = await response.json().catch(() => []);
+  return rows[0] || null;
+}
+
+async function isTemplateGovernanceManager(env, actor, template) {
+  if (actor.role === 'admin') return true;
+  if (!template) return false;
+  return template.owner_user_id === actor.user_id;
 }
 
 async function insertAudit(env, payload) {
@@ -1044,6 +1093,192 @@ async function handleRemoveTemplateCollaboratorAction(env, actor, body) {
   return jsonResponse({ ok: true });
 }
 
+async function applyTemplateApprovalOperation(env, actor, approvalType, templateId, payload) {
+  if (approvalType === 'transfer-template') {
+    return handleTransferTemplateOwnershipAction(env, actor, {
+      template_id: templateId,
+      target_user_id: payload.target_user_id || null,
+      target_user_email: payload.target_user_email || null,
+    });
+  }
+  if (approvalType === 'upsert-collaborator') {
+    return handleUpsertTemplateCollaboratorAction(env, actor, {
+      template_id: templateId,
+      target_user_id: payload.target_user_id || null,
+      target_user_email: payload.target_user_email || null,
+      role: payload.role || null,
+    });
+  }
+  if (approvalType === 'remove-collaborator') {
+    return handleRemoveTemplateCollaboratorAction(env, actor, {
+      template_id: templateId,
+      target_user_id: payload.target_user_id || null,
+      target_user_email: payload.target_user_email || null,
+    });
+  }
+  return errorResponse('Unsupported approval operation.', 400);
+}
+
+async function handleSubmitTemplateApprovalAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for submit-template-approval.', 400);
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for approval submission.', 404);
+  const canManage = await isTemplateGovernanceManager(env, actor, template);
+  if (!canManage) return errorResponse('Forbidden. Only owners/admins can submit governance approvals.', 403);
+
+  const approvalType = sanitizeApprovalType(body.approval_type);
+  if (!approvalType) return errorResponse('approval_type must be transfer-template, upsert-collaborator, or remove-collaborator.', 400);
+
+  const targetUserId = typeof body.target_user_id === 'string' ? body.target_user_id.trim() : '';
+  const targetUserEmail = normalizeEmail(body.target_user_email || '');
+  const role = sanitizeCollaboratorRole(body.role);
+
+  if (!targetUserId && !targetUserEmail) {
+    return errorResponse('target_user_id or target_user_email is required for approval submission.', 400);
+  }
+  if (approvalType === 'upsert-collaborator' && !role) {
+    return errorResponse('role is required for upsert-collaborator approvals.', 400);
+  }
+
+  let targetUser;
+  try {
+    targetUser = await readAppUserByIdentifier(env, targetUserId, targetUserEmail);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Target user lookup failed';
+    return errorResponse(message, 502);
+  }
+  if (!targetUser) return errorResponse('Target user not found for approval submission.', 404);
+  if (!isAuthorizedSlidesActor(targetUser)) return errorResponse('Target user does not have slides access.', 403);
+
+  const payload = {
+    target_user_id: targetUser.user_id,
+    target_user_email: targetUser.email || null,
+    ...(role ? { role } : {}),
+  };
+
+  const response = await supabaseFetch(env, '/rest/v1/slide_template_approvals', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      template_id: template.id,
+      requested_by_user_id: actor.user_id,
+      requested_by_email: actor.email || null,
+      approval_type: approvalType,
+      payload,
+      status: 'pending',
+    }),
+  });
+  const rows = await response.json().catch(() => []);
+  const approval = normalizeTemplateApprovalRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'submit-approval',
+    outcome: 'success',
+    details: {
+      approval_id: approval?.id || null,
+      approval_type: approvalType,
+      target_user_id: payload.target_user_id,
+      target_user_email: payload.target_user_email,
+      role: payload.role || null,
+    },
+  });
+
+  return jsonResponse({ approval }, 201);
+}
+
+async function handleResolveTemplateApprovalAction(env, actor, body) {
+  if (actor.role !== 'admin') {
+    return errorResponse('Forbidden. Only admins can resolve template approvals.', 403);
+  }
+
+  const approvalId = typeof body.approval_id === 'string' ? body.approval_id.trim() : '';
+  if (!approvalId) return errorResponse('approval_id required for resolve-template-approval.', 400);
+  const decision = typeof body.decision === 'string' ? body.decision.trim().toLowerCase() : '';
+  if (decision !== 'approve' && decision !== 'reject') {
+    return errorResponse('decision must be approve or reject.', 400);
+  }
+  const reviewNote = typeof body.review_note === 'string' ? body.review_note.trim() : '';
+
+  const approval = await readTemplateApprovalById(env, approvalId);
+  if (!approval) return errorResponse('Approval not found for resolution.', 404);
+  if (approval.status !== 'pending') return errorResponse('Approval is not pending and cannot be resolved.', 409);
+
+  if (decision === 'reject') {
+    const rejectResponse = await supabaseFetch(
+      env,
+      '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          status: 'rejected',
+          reviewed_by_user_id: actor.user_id,
+          reviewed_at: new Date().toISOString(),
+          review_note: reviewNote || null,
+          updated_at: new Date().toISOString(),
+        }),
+      },
+    );
+    const rows = await rejectResponse.json().catch(() => []);
+    const rejected = normalizeTemplateApprovalRow(rows[0] || null);
+
+    await insertAudit(env, {
+      actor_user_id: actor.user_id,
+      actor_email: actor.email || null,
+      entity_type: 'template',
+      entity_id: approval.template_id,
+      action: 'reject-approval',
+      outcome: 'success',
+      details: { approval_id: approval.id, approval_type: approval.approval_type, review_note: reviewNote || null },
+    });
+
+    return jsonResponse({ approval: rejected });
+  }
+
+  const payload = isObject(approval.payload) ? approval.payload : {};
+  const operationResponse = await applyTemplateApprovalOperation(env, actor, approval.approval_type, approval.template_id, payload);
+  if (!operationResponse.ok) {
+    const text = await operationResponse.text().catch(() => 'Approval operation failed');
+    return errorResponse(text || 'Approval operation failed', operationResponse.status || 500);
+  }
+
+  const approveResponse = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        status: 'approved',
+        reviewed_by_user_id: actor.user_id,
+        reviewed_at: new Date().toISOString(),
+        review_note: reviewNote || null,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+  const rows = await approveResponse.json().catch(() => []);
+  const approved = normalizeTemplateApprovalRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: approval.template_id,
+    action: 'approve-approval',
+    outcome: 'success',
+    details: { approval_id: approval.id, approval_type: approval.approval_type, review_note: reviewNote || null },
+  });
+
+  return jsonResponse({ approval: approved });
+}
+
 async function handleRecordExportAction(env, actor, body) {
   const slideId = typeof body.slide_id === 'string' ? body.slide_id.trim() : '';
   const format = body.format === 'pdf' ? 'pdf' : 'html';
@@ -1166,6 +1401,28 @@ export async function onRequestGet(context) {
     return jsonResponse({ items });
   }
 
+  if (resource === 'template-approvals') {
+    const templateId = (url.searchParams.get('template_id') || '').trim();
+    const status = sanitizeApprovalStatus(url.searchParams.get('status') || 'pending');
+
+    let path = '/rest/v1/slide_template_approvals?select=*&order=created_at.desc';
+    if (templateId) {
+      path += '&template_id=eq.' + encodeURIComponent(templateId);
+    }
+    if (status) {
+      path += '&status=eq.' + encodeURIComponent(status);
+    }
+    if (actor.role !== 'admin') {
+      path += '&requested_by_user_id=eq.' + encodeURIComponent(actor.user_id);
+    }
+    path += '&limit=' + String(limit) + '&offset=' + String(offset);
+
+    const response = await supabaseFetch(env, path);
+    const rows = await response.json().catch(() => []);
+    const items = rows.map(normalizeTemplateApprovalRow).filter(Boolean);
+    return jsonResponse({ items });
+  }
+
   if (resource === 'audits') {
     const action = (url.searchParams.get('action') || '').trim();
     const outcome = (url.searchParams.get('outcome') || '').trim();
@@ -1177,7 +1434,25 @@ export async function onRequestGet(context) {
     if (actor.role !== 'admin') {
       path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
     }
-    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'transfer-template', 'upsert-collaborator', 'remove-collaborator', 'export-html', 'export-pdf'].includes(action)) {
+    if (
+      action &&
+      [
+        'save',
+        'autosave',
+        'delete',
+        'duplicate',
+        'rename',
+        'publish-template',
+        'transfer-template',
+        'upsert-collaborator',
+        'remove-collaborator',
+        'submit-approval',
+        'approve-approval',
+        'reject-approval',
+        'export-html',
+        'export-pdf',
+      ].includes(action)
+    ) {
       path += '&action=eq.' + encodeURIComponent(action);
     }
     if (outcome && ['success', 'failure'].includes(outcome)) {
@@ -1211,7 +1486,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, or template-collaborators.', 400);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, template-collaborators, or template-approvals.', 400);
 }
 
 export async function onRequestPost(context) {
@@ -1243,6 +1518,8 @@ export async function onRequestPost(context) {
   if (action === 'transfer-template-owner') return handleTransferTemplateOwnershipAction(env, actor, body);
   if (action === 'upsert-template-collaborator') return handleUpsertTemplateCollaboratorAction(env, actor, body);
   if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);
+  if (action === 'submit-template-approval') return handleSubmitTemplateApprovalAction(env, actor, body);
+  if (action === 'resolve-template-approval') return handleResolveTemplateApprovalAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);
