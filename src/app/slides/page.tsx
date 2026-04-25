@@ -225,6 +225,20 @@ function getApprovalLastEscalatedAt(approval: SlideTemplateApproval): string | n
   return last && typeof last.created_at === 'string' ? last.created_at : null
 }
 
+function toUserFacingSlidesError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || '')
+  const trimmed = raw.trim()
+  if (!trimmed) return 'Slides request failed.'
+  if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
+    const rayMatch = trimmed.match(/Ray ID:\s*([A-Za-z0-9]+)/i)
+    if (rayMatch && rayMatch[1]) {
+      return `Slides service is temporarily unavailable (Cloudflare Ray ID ${rayMatch[1]}).`
+    }
+    return 'Slides service is temporarily unavailable.'
+  }
+  return trimmed.length > 320 ? `${trimmed.slice(0, 320)}...` : trimmed
+}
+
 function getApprovalSlaState(approval: SlideTemplateApproval): {
   tone: 'healthy' | 'at-risk' | 'overdue'
   label: string
@@ -364,7 +378,7 @@ function clampCanvasCoordinates(
 
 export default function SlidesPage() {
   const { allowRender } = useModuleAccess('slides')
-  const { appUser } = useUser()
+  const { appUser, isLoading: isUserLoading, loadError: userLoadError } = useUser()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('import')
@@ -448,10 +462,11 @@ export default function SlidesPage() {
   const historyBounceRef = useRef(false)
 
   const actor = useMemo(() => ({
-    user_id: appUser?.user_id || 'qa-admin-user',
-    user_email: appUser?.email || 'qa-admin@example.com',
+    user_id: appUser?.user_id || '',
+    user_email: appUser?.email || '',
     role: appUser?.role || 'member',
   }), [appUser])
+  const hasActorIdentity = Boolean(actor.user_id || actor.user_email)
   const isSlidesAdmin = appUser?.role === 'admin'
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
   const trimmedSearchValue = searchValue.trim()
@@ -1173,6 +1188,14 @@ export default function SlidesPage() {
   }, [])
 
   const refreshLibraryData = useCallback(async () => {
+    if (!hasActorIdentity) {
+      setLibraryLoading(false)
+      if (!isUserLoading && userLoadError) {
+        setLibraryError(`Unable to load Slides identity. ${userLoadError}`)
+      }
+      return
+    }
+
     setLibraryLoading(true)
     setLibraryError(null)
     try {
@@ -1206,13 +1229,13 @@ export default function SlidesPage() {
       if (slideRowsResult.status === 'fulfilled') {
         setSlides(slideRowsResult.value)
       } else {
-        blockingErrors.push(slideRowsResult.reason instanceof Error ? slideRowsResult.reason.message : String(slideRowsResult.reason))
+        blockingErrors.push(toUserFacingSlidesError(slideRowsResult.reason))
       }
 
       if (templateRowsResult.status === 'fulfilled') {
         setTemplates(templateRowsResult.value)
       } else {
-        blockingErrors.push(templateRowsResult.reason instanceof Error ? templateRowsResult.reason.message : String(templateRowsResult.reason))
+        blockingErrors.push(toUserFacingSlidesError(templateRowsResult.reason))
       }
 
       if (approvalRowsResult.status === 'fulfilled') {
@@ -1245,7 +1268,7 @@ export default function SlidesPage() {
         setLibraryError(blockingErrors[0])
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setLibraryLoading(false)
     }
@@ -1258,7 +1281,10 @@ export default function SlidesPage() {
     auditExportStatusFilter,
     auditOffset,
     auditOutcomeFilter,
+    hasActorIdentity,
+    isUserLoading,
     searchValue,
+    userLoadError,
   ])
 
   useEffect(() => {
@@ -1341,7 +1367,7 @@ export default function SlidesPage() {
       setAuditPresetName('')
       setEditorNotice({ tone: 'info', text: `Saved activity preset "${preset.name}".` })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setAuditPresetBusy(false)
     }
@@ -1372,7 +1398,7 @@ export default function SlidesPage() {
       setSelectedAuditPresetId('')
       setEditorNotice({ tone: 'info', text: `Deleted activity preset "${selectedAuditPreset.name}".` })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setAuditPresetBusy(false)
     }
@@ -1452,12 +1478,12 @@ export default function SlidesPage() {
       }
 
       if (options?.autosave) {
-        queueAutosaveRetry(error instanceof Error ? error.message : String(error))
+        queueAutosaveRetry(toUserFacingSlidesError(error))
         return null
       }
 
       setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : String(error))
+      setSaveError(toUserFacingSlidesError(error))
       return null
     }
   }, [activeRevision, activeSlideId, actor, normalizeComponentsForPersistence, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
@@ -1783,7 +1809,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
       loadSlide(copy, { skipUnsavedConfirm: true })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
@@ -1799,7 +1825,7 @@ export default function SlidesPage() {
         setActiveRevision(updated.revision)
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     }
   }, [activeSlideId, actor, refreshLibraryData])
 
@@ -1826,7 +1852,7 @@ export default function SlidesPage() {
         setExportHtml('')
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     }
   }, [activeSlideId, actor, clearHistory, refreshLibraryData])
 
@@ -1837,7 +1863,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
       loadSlide(slide, { skipUnsavedConfirm: true })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
@@ -1875,7 +1901,7 @@ export default function SlidesPage() {
       closePublishTemplateDraft()
       setEditorNotice({ tone: 'info', text: `Template "${name}" published.` })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
       setTemplatePublishBusy(false)
     }
   }, [actor, closePublishTemplateDraft, isSlidesAdmin, refreshLibraryData, templatePublishBusy, templatePublishDraft])
@@ -1893,7 +1919,7 @@ export default function SlidesPage() {
       await updateTemplate(actor, template.id, { isShared: nextShared })
       await refreshLibraryData()
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -1932,7 +1958,7 @@ export default function SlidesPage() {
     try {
       await refreshTemplateCollaboratorRows(template.id)
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     }
   }, [refreshTemplateCollaboratorRows, templateCollaboratorPanelId])
 
@@ -1977,7 +2003,7 @@ export default function SlidesPage() {
           : previous,
       )
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2010,7 +2036,7 @@ export default function SlidesPage() {
             : `Submitted collaborator removal approval for "${collaborator.user_email || collaborator.user_id}".`,
       })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2055,7 +2081,7 @@ export default function SlidesPage() {
             : `Submitted ownership transfer approval for "${template.name}" to ${target}.`,
       })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2075,7 +2101,7 @@ export default function SlidesPage() {
         setTemplateCollaboratorDraft(null)
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2105,7 +2131,7 @@ export default function SlidesPage() {
             : `Rejected "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}".`,
       })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2133,7 +2159,7 @@ export default function SlidesPage() {
         text: `Escalated "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}" to the governance queue.`,
       })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2151,7 +2177,7 @@ export default function SlidesPage() {
         text: `Approval sweep processed ${result.processed} pending requests and escalated ${result.escalated}.`,
       })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2403,7 +2429,7 @@ export default function SlidesPage() {
         })
       }
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setAuditExportRequestBusy(false)
     }
@@ -2426,7 +2452,7 @@ export default function SlidesPage() {
       downloadTextFile(file.content, file.filename, 'text/csv;charset=utf-8')
       setEditorNotice({ tone: 'info', text: `Downloaded ${file.filename}.` })
     } catch (error) {
-      setLibraryError(error instanceof Error ? error.message : String(error))
+      setLibraryError(toUserFacingSlidesError(error))
     } finally {
       setAuditExportDownloadBusyId(null)
     }
@@ -2544,7 +2570,7 @@ export default function SlidesPage() {
           : `Exported ${slideCount} slide(s) to PPTX.`,
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = toUserFacingSlidesError(error)
       setSaveError(`PPTX export failed: ${message}`)
       const auditSlideIds = options?.auditSlideIds || []
       if (auditSlideIds.length > 0) {
@@ -2649,7 +2675,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
     } catch (error) {
       setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : String(error))
+      setSaveError(toUserFacingSlidesError(error))
     }
   }, [actor, normalizeComponentsForPersistence, rawHtml.length, refreshLibraryData, result, slideTitle])
 

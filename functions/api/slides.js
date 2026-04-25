@@ -486,7 +486,10 @@ async function supabaseFetch(env, path, init = {}) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`${init.method || 'GET'} ${path} failed: ${response.status} ${text}`);
+    const trimmed = typeof text === 'string' ? text.trim() : '';
+    const compact = trimmed.replace(/\s+/g, ' ');
+    const summary = compact.length > 600 ? compact.slice(0, 600) + '...' : compact;
+    throw new Error(`${init.method || 'GET'} ${path} failed: ${response.status}${summary ? ' ' + summary : ''}`);
   }
 
   return response;
@@ -2018,32 +2021,69 @@ function addAuditSearch(path, query) {
   return path + '&or=' + encodeURIComponent(clause);
 }
 
-function safeSlidesErrorResponse(error, fallbackMessage) {
+function createCorrelationId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (_) {
+    // Fall through to timestamp-based identifier.
+  }
+  return 'slides-' + Date.now().toString(36);
+}
+
+function withCorrelationId(response, correlationId) {
+  try {
+    response.headers.set('x-correlation-id', correlationId);
+  } catch (_) {
+    // Ignore header mutation failures.
+  }
+  return response;
+}
+
+function summarizeUnhandledError(error) {
   const detail = error instanceof Error ? error.message : String(error || '');
+  const trimmed = detail.trim();
+  if (!trimmed) return '';
+  if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
+    const rayMatch = trimmed.match(/Ray ID:\s*([A-Za-z0-9]+)/i);
+    if (rayMatch && rayMatch[1]) {
+      return 'upstream runtime exception (cloudflare ray ' + rayMatch[1] + ')';
+    }
+    return 'upstream runtime exception';
+  }
+  const compact = trimmed.replace(/\s+/g, ' ');
+  return compact.length > 280 ? compact.slice(0, 280) + '...' : compact;
+}
+
+function safeSlidesErrorResponse(error, fallbackMessage, correlationId) {
+  const detail = summarizeUnhandledError(error);
   const message = detail
-    ? `${fallbackMessage} ${detail}`
-    : fallbackMessage;
-  return errorResponse(message, 503);
+    ? `${fallbackMessage} (ref ${correlationId}). ${detail}`
+    : `${fallbackMessage} (ref ${correlationId}).`;
+  return withCorrelationId(errorResponse(message, 503), correlationId);
 }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const missing = assertSupabaseConfigured(env);
-  if (missing) return missing;
-
-  const authz = await authorizeActorForRead(request, env);
-  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
-
-  const actor = authz.actor;
-  const url = new URL(request.url);
-  const resource = (url.searchParams.get('resource') || 'slides').toLowerCase();
-  const search = url.searchParams.get('search') || '';
-  const limitRaw = Number.parseInt(url.searchParams.get('limit') || '50', 10);
-  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
-  const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
-  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+  const correlationId = createCorrelationId();
 
   try {
+    const missing = assertSupabaseConfigured(env);
+    if (missing) return withCorrelationId(missing, correlationId);
+
+    const authz = await authorizeActorForRead(request, env);
+    if (!authz.ok) return withCorrelationId(errorResponse(authz.error, authz.status || 403), correlationId);
+
+    const actor = authz.actor;
+    const url = new URL(request.url);
+    const resource = (url.searchParams.get('resource') || 'slides').toLowerCase();
+    const search = url.searchParams.get('search') || '';
+    const limitRaw = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+    const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+
   if (resource === 'slides') {
     let path = '/rest/v1/slides?deleted_at=is.null&select=*&order=updated_at.desc&limit=' + String(limit);
     if (actor.role !== 'admin') {
@@ -2221,31 +2261,33 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400);
+  return withCorrelationId(errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400), correlationId);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.');
+    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.', correlationId);
   }
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const missing = assertSupabaseConfigured(env);
-  if (missing) return missing;
-
-  let body;
-  try {
-    body = await request.json();
-  } catch (_) {
-    return errorResponse('Invalid JSON body', 400);
-  }
-
-  const authz = await authorizeActor(request, body, env);
-  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
-
-  const actor = authz.actor;
-  const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
+  const correlationId = createCorrelationId();
 
   try {
+    const missing = assertSupabaseConfigured(env);
+    if (missing) return withCorrelationId(missing, correlationId);
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (_) {
+      return withCorrelationId(errorResponse('Invalid JSON body', 400), correlationId);
+    }
+
+    const authz = await authorizeActor(request, body, env);
+    if (!authz.ok) return withCorrelationId(errorResponse(authz.error, authz.status || 403), correlationId);
+
+    const actor = authz.actor;
+    const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
+
   if (action === 'save') return handleSaveAction(env, actor, body);
   if (action === 'duplicate-slide') return handleDuplicateSlideAction(env, actor, body);
   if (action === 'duplicate-template') return handleDuplicateTemplateAction(env, actor, body);
@@ -2267,8 +2309,8 @@ export async function onRequestPost(context) {
   if (action === 'download-audit-export-job') return handleDownloadAuditExportJobAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
-  return errorResponse('Unsupported action for /api/slides.', 400);
+  return withCorrelationId(errorResponse('Unsupported action for /api/slides.', 400), correlationId);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.');
+    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.', correlationId);
   }
 }

@@ -126,6 +126,34 @@ class SlideApiError extends Error {
   }
 }
 
+function extractCloudflareRayId(payload: string): string | null {
+  const match = payload.match(/Ray ID:\s*([A-Za-z0-9]+)/i)
+  return match && match[1] ? match[1] : null
+}
+
+function summarizeHttpFailurePayload(payload: string): string {
+  const trimmed = payload.trim()
+  if (!trimmed) return ''
+
+  if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
+    const rayId = extractCloudflareRayId(trimmed)
+    return rayId
+      ? `Upstream runtime exception (Cloudflare Ray ID ${rayId}).`
+      : 'Upstream runtime exception.'
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as { error?: unknown; message?: unknown }
+    if (typeof parsed.error === 'string' && parsed.error.trim()) return parsed.error.trim()
+    if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message.trim()
+  } catch {
+    // Non-JSON payload.
+  }
+
+  const compact = trimmed.replace(/\s+/g, ' ')
+  return compact.length > 320 ? `${compact.slice(0, 320)}...` : compact
+}
+
 export class SlideConflictError extends Error {
   serverSlide: SlideRecord
 
@@ -492,7 +520,11 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    throw new SlideApiError(`${init?.method || 'GET'} ${path} failed: ${response.status} ${text}`, response.status)
+    const summary = summarizeHttpFailurePayload(text)
+    throw new SlideApiError(
+      `${init?.method || 'GET'} ${path} failed: ${response.status}${summary ? ` ${summary}` : ''}`,
+      response.status,
+    )
   }
 
   return response.json() as Promise<T>
@@ -501,7 +533,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 function shouldFallbackToLocal(error: unknown): boolean {
   if (FORCE_LOCAL_MODE) return true
   if (error instanceof SlideConflictError) return false
-  if (error instanceof SlideApiError) return [404, 405, 501, 503].includes(error.status)
+  if (error instanceof SlideApiError) return [404, 405, 500, 501, 502, 503, 504].includes(error.status)
   if (error instanceof TypeError) return true
   return false
 }
