@@ -80,10 +80,30 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   color: var(--color-text-primary);
 }
 
+.slides-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
 .slides-subtitle {
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+.slides-workspace-pill {
+  margin: 0;
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
 }
 
 .slides-recovery {
@@ -141,6 +161,44 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
+}
+
+.slides-import-layout {
+  margin-top: var(--spacing-lg);
+  display: grid;
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+}
+
+.slides-import-panel {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+  padding: var(--spacing-md);
+}
+
+.slides-import-panel .slides-actions {
+  margin-top: var(--spacing-md);
+}
+
+.slides-import-panel .slides-label {
+  margin-top: var(--spacing-md);
+}
+
+.slides-import-panel .slides-textarea {
+  min-height: calc(var(--spacing-56) * 3);
+}
+
+.slides-panel-heading h2 {
+  margin: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.slides-panel-heading p {
+  margin: var(--spacing-2xs) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .slides-inline-actions {
@@ -233,6 +291,12 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   border-top: 1px solid var(--color-border-soft);
   display: grid;
   gap: var(--spacing-sm);
+}
+
+.slides-import-panel-save .slides-save-panel {
+  margin-top: var(--spacing-sm);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .slides-checkbox-row {
@@ -782,6 +846,10 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   }
 
   .slides-card { padding: var(--spacing-lg); }
+
+  .slides-import-layout {
+    grid-template-columns: 1fr;
+  }
 
   .slides-component-grid-header,
   .slides-component-grid-row {

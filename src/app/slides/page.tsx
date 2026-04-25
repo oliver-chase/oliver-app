@@ -426,6 +426,13 @@ export default function SlidesPage() {
   const isSlidesAdmin = appUser?.role === 'admin'
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
   const trimmedSearchValue = searchValue.trim()
+  const workspaceLabel = workspaceTab === 'import'
+    ? 'Import Workspace'
+    : workspaceTab === 'my-slides'
+      ? 'My Slides'
+      : workspaceTab === 'templates'
+        ? 'Template Library'
+        : 'Activity Feed'
   const searchLabel = workspaceTab === 'activity' ? 'Search activity' : 'Search library'
   const searchPlaceholder = workspaceTab === 'activity' ? 'Search activity events' : 'Search slides or templates'
   const hasActiveAuditFilters =
@@ -2687,10 +2694,15 @@ export default function SlidesPage() {
 
         <main className="page slides-page" id="main-content">
           <section className="slides-card">
-            <h1 className="slides-title">HTML to Editable Components</h1>
-            <p className="slides-subtitle">
-              Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas with keyboard-first controls, alignment tools, autosave, export, and saved activity presets.
-            </p>
+            <div className="slides-heading-row">
+              <div>
+                <h1 className="slides-title">HTML to Editable Components</h1>
+                <p className="slides-subtitle">
+                  Import slide HTML, parse into editable layers, and finish on a 16:9 canvas with autosave and export controls.
+                </p>
+              </div>
+              <p className="slides-workspace-pill">{workspaceLabel}</p>
+            </div>
 
             {recoveryDraft && (
               <div className="slides-recovery" role="status">
@@ -2729,25 +2741,6 @@ export default function SlidesPage() {
 
             {workspaceTab === 'import' && (
               <>
-                <div className="slides-actions">
-                  <button type="button" className="btn btn-primary" onClick={openFilePicker} disabled={parseStatus === 'parsing'}>
-                    Import HTML File
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => void runParseWithProgress(rawHtml)}
-                    disabled={parseStatus === 'parsing'}
-                  >
-                    Parse Pasted HTML
-                  </button>
-                  {parseStatus === 'parsing' && (
-                    <button type="button" className="btn btn-danger" onClick={cancelParse}>
-                      Cancel Parse
-                    </button>
-                  )}
-                </div>
-
                 <input
                   ref={fileInputRef}
                   id="slides-html-file"
@@ -2757,122 +2750,157 @@ export default function SlidesPage() {
                   hidden
                 />
 
-                <div className="slides-progress" role="status" aria-live="polite">
-                  <div className="slides-progress-label">
-                    <span>{parseMessage}</span>
-                    <span>{parseProgress}%</span>
-                  </div>
-                  <div className="slides-progress-track" aria-hidden="true">
-                    <div className="slides-progress-fill" style={{ width: `${parseProgress}%` }} />
-                  </div>
-                </div>
-
-                <label className="slides-label" htmlFor="slides-raw-html">Raw HTML</label>
-                <textarea
-                  id="slides-raw-html"
-                  className="slides-textarea"
-                  value={rawHtml}
-                  onChange={(event) => {
-                    setRawHtml(event.target.value)
-                    if (result) setDirty()
-                  }}
-                  placeholder="<div class='slide-canvas' style='width:1920px;height:1080px;'>...</div>"
-                  disabled={parseStatus === 'parsing'}
-                />
-
-                {importError && (
-                  <div className="slides-error" role="alert">
-                    <div>
-                      Import failed ({importError.code.replace(/_/g, ' ')}): {importError.message}
+                <div className="slides-import-layout">
+                  <section className="slides-import-panel">
+                    <div className="slides-panel-heading">
+                      <h2>Import HTML</h2>
+                      <p>Upload a file or paste markup, then parse into editable layers.</p>
                     </div>
-                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => setImportError(null)}>
-                      Clear
-                    </button>
-                  </div>
-                )}
 
-                <div className="slides-save-panel">
-                  <label className="slides-label" htmlFor="slides-title">Slide Title</label>
-                  <input
-                    id="slides-title"
-                    className="slides-input"
-                    value={slideTitle}
-                    onChange={(event) => {
-                      setSlideTitle(event.target.value)
-                      if (result) setDirty()
-                    }}
-                    placeholder="Untitled Slide"
-                  />
+                    <div className="slides-actions">
+                      <button type="button" className="btn btn-primary" onClick={openFilePicker} disabled={parseStatus === 'parsing'}>
+                        Import HTML File
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => void runParseWithProgress(rawHtml)}
+                        disabled={parseStatus === 'parsing'}
+                      >
+                        Parse Pasted HTML
+                      </button>
+                      {parseStatus === 'parsing' && (
+                        <button type="button" className="btn btn-danger" onClick={cancelParse}>
+                          Cancel Parse
+                        </button>
+                      )}
+                    </div>
 
-                  <div className="slides-inline-actions">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => void handleSave()}
-                      disabled={!result || saveStatus === 'saving'}
-                    >
-                      {saveStatus === 'saving' ? 'Saving…' : 'Save Slide'}
-                    </button>
-                    <label className="slides-checkbox-row">
+                    <div className="slides-progress" role="status" aria-live="polite">
+                      <div className="slides-progress-label">
+                        <span>{parseMessage}</span>
+                        <span>{parseProgress}%</span>
+                      </div>
+                      <div className="slides-progress-track" aria-hidden="true">
+                        <div className="slides-progress-fill" style={{ width: `${parseProgress}%` }} />
+                      </div>
+                    </div>
+
+                    <label className="slides-label" htmlFor="slides-raw-html">Raw HTML</label>
+                    <textarea
+                      id="slides-raw-html"
+                      className="slides-textarea"
+                      value={rawHtml}
+                      onChange={(event) => {
+                        setRawHtml(event.target.value)
+                        if (result) setDirty()
+                      }}
+                      placeholder="<div class='slide-canvas' style='width:1920px;height:1080px;'>...</div>"
+                      disabled={parseStatus === 'parsing'}
+                    />
+
+                    {importError && (
+                      <div className="slides-error" role="alert">
+                        <div>
+                          Import failed ({importError.code.replace(/_/g, ' ')}): {importError.message}
+                        </div>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setImportError(null)}>
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="slides-import-panel slides-import-panel-save">
+                    <div className="slides-panel-heading">
+                      <h2>Save and Autosave</h2>
+                      <p>Set title, track revisions, and handle retries or conflicts.</p>
+                    </div>
+
+                    <div className="slides-save-panel">
+                      <label className="slides-label" htmlFor="slides-title">Slide Title</label>
                       <input
-                        type="checkbox"
-                        checked={autosaveEnabled}
+                        id="slides-title"
+                        className="slides-input"
+                        value={slideTitle}
                         onChange={(event) => {
-                          const enabled = event.target.checked
-                          setAutosaveEnabled(enabled)
-                          if (!enabled && autosaveRetryState) {
-                            setAutosaveRetryState(null)
-                            setSaveStatus(result ? 'dirty' : 'clean')
-                            setSaveError(null)
-                          }
+                          setSlideTitle(event.target.value)
+                          if (result) setDirty()
                         }}
+                        placeholder="Untitled Slide"
                       />
-                      Autosave every 5s when dirty
-                    </label>
-                  </div>
 
-                  <p className="slides-save-status" data-save-status={saveStatus}>
-                    Save status: {saveStatus}
-                    {lastSavedAt ? ` · Last saved ${formatDateTime(lastSavedAt)}` : ''}
-                  </p>
-
-                  {saveError && (
-                    <p className="slides-error" role="alert">
-                      {saveError}
-                    </p>
-                  )}
-
-                  {autosaveRetryState && (
-                    <div className="slides-retry" role="status">
-                      <p>
-                        Autosave retry queued. Attempt {autosaveRetryState.attempt} with {Math.ceil(autosaveRetryState.delayMs / 1000)}s backoff.
-                      </p>
                       <div className="slides-inline-actions">
-                        <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleSave({ autosave: true })}>
-                          Retry Autosave Now
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => void handleSave()}
+                          disabled={!result || saveStatus === 'saving'}
+                        >
+                          {saveStatus === 'saving' ? 'Saving…' : 'Save Slide'}
                         </button>
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={scheduleAutosaveRetryNow}>
-                          Requeue Immediate Retry
-                        </button>
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={dismissAutosaveRetry}>
-                          Dismiss Retry Queue
-                        </button>
+                        <label className="slides-checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={autosaveEnabled}
+                            onChange={(event) => {
+                              const enabled = event.target.checked
+                              setAutosaveEnabled(enabled)
+                              if (!enabled && autosaveRetryState) {
+                                setAutosaveRetryState(null)
+                                setSaveStatus(result ? 'dirty' : 'clean')
+                                setSaveError(null)
+                              }
+                            }}
+                          />
+                          Autosave every 5s when dirty
+                        </label>
                       </div>
-                    </div>
-                  )}
 
-                  {saveStatus === 'conflict' && conflictServerSlide && (
-                    <div className="slides-conflict">
-                      <p>
-                        Conflict with server revision {conflictServerSlide.revision}.
+                      <p className="slides-save-status" data-save-status={saveStatus}>
+                        Save status: {saveStatus}
+                        {lastSavedAt ? ` · Last saved ${formatDateTime(lastSavedAt)}` : ''}
                       </p>
-                      <div className="slides-inline-actions">
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={handleConflictReload}>Reload Server Version</button>
-                        <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleConflictOverwrite()}>Overwrite Server</button>
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleConflictSaveAsCopy()}>Save as Copy</button>
-                      </div>
+
+                      {saveError && (
+                        <p className="slides-error" role="alert">
+                          {saveError}
+                        </p>
+                      )}
+
+                      {autosaveRetryState && (
+                        <div className="slides-retry" role="status">
+                          <p>
+                            Autosave retry queued. Attempt {autosaveRetryState.attempt} with {Math.ceil(autosaveRetryState.delayMs / 1000)}s backoff.
+                          </p>
+                          <div className="slides-inline-actions">
+                            <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleSave({ autosave: true })}>
+                              Retry Autosave Now
+                            </button>
+                            <button type="button" className="btn btn-sm btn-ghost" onClick={scheduleAutosaveRetryNow}>
+                              Requeue Immediate Retry
+                            </button>
+                            <button type="button" className="btn btn-sm btn-ghost" onClick={dismissAutosaveRetry}>
+                              Dismiss Retry Queue
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {saveStatus === 'conflict' && conflictServerSlide && (
+                        <div className="slides-conflict">
+                          <p>
+                            Conflict with server revision {conflictServerSlide.revision}.
+                          </p>
+                          <div className="slides-inline-actions">
+                            <button type="button" className="btn btn-sm btn-ghost" onClick={handleConflictReload}>Reload Server Version</button>
+                            <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleConflictOverwrite()}>Overwrite Server</button>
+                            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleConflictSaveAsCopy()}>Save as Copy</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </section>
                 </div>
 
                 {result && (
