@@ -3441,6 +3441,37 @@ export default function SlidesPage() {
                 {templates.map((template) => (
                   <article key={template.id} className="slides-library-card">
                     <div>
+                      <div className="slides-template-preview" aria-hidden="true">
+                        <div
+                          className="slides-template-preview-stage"
+                          style={{
+                            width: `${template.canvas.width}px`,
+                            height: `${template.canvas.height}px`,
+                            transform: `scale(${Math.min(220 / template.canvas.width, 124 / template.canvas.height)})`,
+                          }}
+                        >
+                          {template.components
+                            .filter((component) => component.visible !== false)
+                            .slice(0, 10)
+                            .map((component) => (
+                              <div
+                                key={`${template.id}:${component.id}`}
+                                className="slides-template-preview-component"
+                                data-preview-type={component.type}
+                                style={buildCanvasComponentStyle(component)}
+                              >
+                                {component.type === 'logo' ? (
+                                  <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
+                                ) : (
+                                  <div
+                                    className="slides-template-preview-content"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
+                                  />
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
                       <h3>{template.name}</h3>
                       <p>{template.description || 'No description'}</p>
                       <p>Owner: {template.owner_user_id || 'n/a'}</p>

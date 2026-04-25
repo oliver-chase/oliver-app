@@ -510,6 +510,7 @@ test.describe('slides regression', () => {
     await page.getByRole('button', { name: 'Template Library' }).click()
     const templateCard = page.locator('.slides-library-card', { hasText: templateName }).first()
     await expect(templateCard).toBeVisible()
+    await expect(templateCard.locator('.slides-template-preview')).toBeVisible()
     await expect(templateCard.getByText(/Visibility:\s*Shared/i)).toBeVisible()
     await templateCard.getByRole('button', { name: 'Make Private' }).click()
     await expect(templateCard.getByText(/Visibility:\s*Private/i)).toBeVisible()

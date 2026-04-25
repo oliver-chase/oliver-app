@@ -7,7 +7,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 
 | Journey Stage | Current Behavior | Gap / Risk | Ticket(s) |
 | --- | --- | --- | --- |
-| Start from template | Template duplication works, then opens in Import workspace. | No thumbnail, no visual picker quality signal; template choice is mostly text-only. | SLD-FE-210, SLD-BE-210 |
+| Start from template | Template duplication works, then opens in Import workspace. Template cards now include visual canvas previews. | Quick preview picker/search quality scoring and backend pre-rendered thumbnail assets are still missing. | SLD-FE-210, SLD-BE-210 |
 | Edit imported slide | Scaled 16:9 canvas renderer, resize handles, inline text editing, and bounded drag/nudge controls are available. | Advanced snapping/guides are still missing for precision layouts. | SLD-FE-340 |
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | SLD-FE-150, SLD-BE-150 |
 | Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), and approval request/resolution workflow for governance changes. | No approval SLA/escalation automation yet for stale requests. | SLD-FE-440, SLD-BE-440 |
@@ -85,7 +85,7 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 ## Next Features In Line
 
 1. SLD-FE-500 + SLD-BE-500 + SLD-BE-510: Add native PPTX export with async orchestration and warnings reporting.
-2. SLD-FE-210 + SLD-BE-210: Add template preview thumbnails and quick preview picker.
+2. SLD-FE-210 + SLD-BE-210: Expand template preview flow with quick-preview picker and backend thumbnail asset generation.
 3. SLD-FE-430 + SLD-BE-430: Add saved audit presets and long-range export jobs.
 4. SLD-BE-440: Add automated SLA escalation orchestration (manual escalation path already shipped).
 5. SLD-FE-340: Add snapping/guides for precision editing workflows.
