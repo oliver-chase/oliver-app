@@ -18,6 +18,18 @@ interface LocalSlidesStore {
   nextAuditId: number
 }
 
+interface PublishTemplateOptions {
+  name?: string
+  description?: string
+  isShared?: boolean
+}
+
+interface UpdateTemplateOptions {
+  name?: string
+  description?: string
+  isShared?: boolean
+}
+
 class SlideApiError extends Error {
   status: number
 
@@ -53,6 +65,7 @@ function normalizeActor(actor: SlideActor): SlideActor {
   return {
     user_id: actor.user_id || 'unknown-user',
     user_email: actor.user_email || '',
+    role: actor.role || 'admin',
   }
 }
 
@@ -479,6 +492,9 @@ export async function duplicateTemplateAsSlide(actorInput: SlideActor, templateI
       const store = readLocalStore(actor)
       const template = store.templates.find((row) => row.id === templateId)
       if (!template) throw new SlideApiError('Template not found for duplicate', 404)
+      if (!template.is_shared && template.owner_user_id !== actor.user_id && actor.role !== 'admin') {
+        throw new SlideApiError('Forbidden. Template is not visible to this user.', 403)
+      }
       const slide = toSlideRecordFromTemplate(template, actor)
       store.slides.unshift(slide)
       makeAuditEvent(store, actor, 'duplicate', 'success', 'template', template.id, { slide_id: slide.id })
@@ -540,14 +556,30 @@ export async function deleteSlide(actorInput: SlideActor, slideId: string): Prom
   )
 }
 
-export async function publishTemplateFromSlide(actorInput: SlideActor, slideId: string, name?: string): Promise<SlideTemplateRecord> {
+export async function publishTemplateFromSlide(
+  actorInput: SlideActor,
+  slideId: string,
+  optionsOrName?: string | PublishTemplateOptions,
+): Promise<SlideTemplateRecord> {
   const actor = normalizeActor(actorInput)
+  const options: PublishTemplateOptions =
+    typeof optionsOrName === 'string' ? { name: optionsOrName } : (optionsOrName || {})
+  const templateName = options.name?.trim()
+  const templateDescription = options.description?.trim() || 'Published from My Slides'
+  const isShared = options.isShared === true
 
   return withLocalFallback(
     async () => {
       const response = await requestJson<{ template: SlideTemplateRecord }>('/api/slides', {
         method: 'POST',
-        body: JSON.stringify({ action: 'publish-template', actor, slide_id: slideId, name }),
+        body: JSON.stringify({
+          action: 'publish-template',
+          actor,
+          slide_id: slideId,
+          name: templateName || undefined,
+          description: templateDescription,
+          is_shared: isShared,
+        }),
       })
       return response.template
     },
@@ -555,13 +587,16 @@ export async function publishTemplateFromSlide(actorInput: SlideActor, slideId: 
       const store = readLocalStore(actor)
       const slide = store.slides.find((entry) => entry.id === slideId)
       if (!slide) throw new SlideApiError('Slide not found for template publish', 404)
+      if (isShared && actor.role !== 'admin') {
+        throw new SlideApiError('Forbidden. Only admins can publish shared templates.', 403)
+      }
       const stamp = nowIso()
       const template: SlideTemplateRecord = {
         id: safeRandomId('template'),
         owner_user_id: actor.user_id,
-        name: name || `${slide.title} Template`,
-        description: 'Published from My Slides',
-        is_shared: false,
+        name: templateName || `${slide.title} Template`,
+        description: templateDescription,
+        is_shared: isShared,
         canvas: slide.canvas,
         components: slide.components,
         metadata: { source_slide_id: slide.id },
@@ -572,6 +607,95 @@ export async function publishTemplateFromSlide(actorInput: SlideActor, slideId: 
       makeAuditEvent(store, actor, 'publish-template', 'success', 'template', template.id, { source_slide_id: slide.id })
       writeLocalStore(store)
       return template
+    },
+  )
+}
+
+export async function updateTemplate(
+  actorInput: SlideActor,
+  templateId: string,
+  options: UpdateTemplateOptions,
+): Promise<SlideTemplateRecord> {
+  const actor = normalizeActor(actorInput)
+  const name = options.name?.trim()
+  const description = options.description?.trim()
+  const isShared = typeof options.isShared === 'boolean' ? options.isShared : undefined
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ template: SlideTemplateRecord }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'update-template',
+          actor,
+          template_id: templateId,
+          name,
+          description,
+          is_shared: isShared,
+        }),
+      })
+      return response.template
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const index = store.templates.findIndex((template) => template.id === templateId)
+      if (index < 0) throw new SlideApiError('Template not found for update', 404)
+      const existing = store.templates[index]
+      const isOwner = existing.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+      if (isShared === true && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only admins can set template visibility to shared.', 403)
+      }
+
+      const updated: SlideTemplateRecord = {
+        ...existing,
+        name: name || existing.name,
+        description: description || existing.description,
+        is_shared: isShared ?? existing.is_shared,
+        updated_at: nowIso(),
+      }
+
+      store.templates[index] = updated
+      makeAuditEvent(store, actor, 'rename', 'success', 'template', templateId, {
+        operation: 'update-template',
+        is_shared: updated.is_shared,
+      })
+      writeLocalStore(store)
+      return updated
+    },
+  )
+}
+
+export async function archiveTemplate(actorInput: SlideActor, templateId: string): Promise<void> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      await requestJson<{ ok: true }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'archive-template',
+          actor,
+          template_id: templateId,
+        }),
+      })
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const existing = store.templates.find((template) => template.id === templateId)
+      if (!existing) throw new SlideApiError('Template not found for archive', 404)
+      const isOwner = existing.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+
+      store.templates = store.templates.filter((template) => template.id !== templateId)
+      makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'archive-template' })
+      writeLocalStore(store)
     },
   )
 }

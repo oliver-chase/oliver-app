@@ -21,6 +21,8 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Library search no-match UX + template visibility filtering before backend limit | `US-SLD-028` | S2.3 | Code Present |
 | Slides chatbot command parity for save/export/navigation with flow runtime guardrails | `US-SLD-029` | S2.4 | Code Present |
 | Slides chatbot direct HTML export download execution | `US-SLD-040` | S2.5 | Code Present |
+| Template publish visibility controls (private/shared) with role-aware UX constraints | `SLD-FE-400` | S3.1 | Code Present |
+| Template ACL and ownership governance for visibility edits/archive actions | `SLD-BE-400` | S3.1 | Code Present |
 | Slide/template data model + RLS | `US-SLD-030` | S3 | Code Present |
 | Save API + autosave state contract | `US-SLD-031` | S3 | Code Present |
 | Template Library + My Slides FE/BE wiring | `US-SLD-032` | S3 | Code Present |

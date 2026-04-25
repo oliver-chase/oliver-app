@@ -17,6 +17,7 @@ import {
 } from '@/components/slides/import-validation'
 import type { SlideAuditEvent, SlideRecord, SlideTemplateRecord } from '@/components/slides/persistence-types'
 import {
+  archiveTemplate,
   deleteSlide,
   duplicateSlide,
   duplicateTemplateAsSlide,
@@ -28,6 +29,7 @@ import {
   renameSlide,
   saveSlide,
   SlideConflictError,
+  updateTemplate,
 } from '@/lib/slides'
 import { useUser } from '@/context/UserContext'
 import { SLIDES_COMMANDS } from '@/app/slides/commands'
@@ -87,6 +89,13 @@ interface CanvasResizeState {
 interface CanvasEditorNotice {
   tone: 'info' | 'error'
   text: string
+}
+
+interface TemplatePublishDraft {
+  slideId: string
+  name: string
+  description: string
+  isShared: boolean
 }
 
 function readHistoryIndex(state: unknown): number | null {
@@ -240,6 +249,9 @@ export default function SlidesPage() {
   const [audits, setAudits] = useState<SlideAuditEvent[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState<string | null>(null)
+  const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
+  const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
+  const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
@@ -261,7 +273,9 @@ export default function SlidesPage() {
   const actor = useMemo(() => ({
     user_id: appUser?.user_id || 'qa-admin-user',
     user_email: appUser?.email || 'qa-admin@example.com',
+    role: appUser?.role || 'admin',
   }), [appUser])
+  const isSlidesAdmin = appUser?.role === 'admin'
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
   const trimmedSearchValue = searchValue.trim()
   const searchLabel = workspaceTab === 'activity' ? 'Search activity' : 'Search library'
@@ -1438,15 +1452,77 @@ export default function SlidesPage() {
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
-  const handlePublishTemplate = useCallback(async (slide: SlideRecord) => {
-    const name = window.prompt('Template name', `${slide.title} Template`)
-    if (!name || !name.trim()) return
+  const openPublishTemplateDraft = useCallback((slide: SlideRecord) => {
+    setLibraryError(null)
+    setTemplatePublishDraft({
+      slideId: slide.id,
+      name: `${slide.title} Template`,
+      description: 'Published from My Slides',
+      isShared: false,
+    })
+  }, [])
 
+  const closePublishTemplateDraft = useCallback(() => {
+    setTemplatePublishDraft(null)
+    setTemplatePublishBusy(false)
+  }, [])
+
+  const handlePublishTemplate = useCallback(async () => {
+    if (!templatePublishDraft || templatePublishBusy) return
+    const name = templatePublishDraft.name.trim()
+    if (!name) {
+      setLibraryError('Template name is required.')
+      return
+    }
+
+    setTemplatePublishBusy(true)
     try {
-      await publishTemplateFromSlide(actor, slide.id, name.trim())
+      await publishTemplateFromSlide(actor, templatePublishDraft.slideId, {
+        name,
+        description: templatePublishDraft.description.trim() || 'Published from My Slides',
+        isShared: isSlidesAdmin ? templatePublishDraft.isShared : false,
+      })
+      await refreshLibraryData()
+      closePublishTemplateDraft()
+      setEditorNotice({ tone: 'info', text: `Template "${name}" published.` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+      setTemplatePublishBusy(false)
+    }
+  }, [actor, closePublishTemplateDraft, isSlidesAdmin, refreshLibraryData, templatePublishBusy, templatePublishDraft])
+
+  const handleTemplateVisibilityToggle = useCallback(async (template: SlideTemplateRecord) => {
+    const nextShared = !template.is_shared
+    if (nextShared && !isSlidesAdmin) {
+      setLibraryError('Only admins can publish shared templates.')
+      return
+    }
+
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      await updateTemplate(actor, template.id, { isShared: nextShared })
       await refreshLibraryData()
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor, isSlidesAdmin, refreshLibraryData])
+
+  const handleArchiveTemplate = useCallback(async (template: SlideTemplateRecord) => {
+    const approved = window.confirm(`Archive template "${template.name}"?`)
+    if (!approved) return
+
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      await archiveTemplate(actor, template.id)
+      await refreshLibraryData()
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
     }
   }, [actor, refreshLibraryData])
 
@@ -2487,9 +2563,83 @@ export default function SlidesPage() {
                       <button type="button" className="btn btn-sm btn-primary" onClick={() => loadSlide(slide)}>Load</button>
                       <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleDuplicateSlide(slide.id)}>Duplicate</button>
                       <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleRenameSlide(slide)}>Rename</button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handlePublishTemplate(slide)}>Publish Template</button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => openPublishTemplateDraft(slide)}
+                      >
+                        Publish Template
+                      </button>
                       <button type="button" className="btn btn-sm btn-danger" onClick={() => void handleDeleteSlide(slide)}>Delete</button>
                     </div>
+                    {templatePublishDraft?.slideId === slide.id && (
+                      <div className="slides-template-draft">
+                        <label className="slides-label" htmlFor="slides-template-name">Template Name</label>
+                        <input
+                          id="slides-template-name"
+                          className="slides-input"
+                          value={templatePublishDraft.name}
+                          onChange={(event) =>
+                            setTemplatePublishDraft((previous) =>
+                              previous ? { ...previous, name: event.target.value } : previous,
+                            )}
+                          placeholder={`${slide.title} Template`}
+                        />
+
+                        <label className="slides-label" htmlFor="slides-template-description">Template Description</label>
+                        <input
+                          id="slides-template-description"
+                          className="slides-input"
+                          value={templatePublishDraft.description}
+                          onChange={(event) =>
+                            setTemplatePublishDraft((previous) =>
+                              previous ? { ...previous, description: event.target.value } : previous,
+                            )}
+                          placeholder="Published from My Slides"
+                        />
+
+                        <label className="slides-label" htmlFor="slides-template-visibility">Visibility</label>
+                        <select
+                          id="slides-template-visibility"
+                          className="slides-select"
+                          value={templatePublishDraft.isShared ? 'shared' : 'private'}
+                          onChange={(event) =>
+                            setTemplatePublishDraft((previous) =>
+                              previous
+                                ? { ...previous, isShared: event.target.value === 'shared' && isSlidesAdmin }
+                                : previous,
+                            )}
+                          disabled={!isSlidesAdmin}
+                        >
+                          <option value="private">Private (owner only)</option>
+                          <option value="shared" disabled={!isSlidesAdmin}>Shared (team library)</option>
+                        </select>
+                        {!isSlidesAdmin && (
+                          <p className="slides-card-note">
+                            Shared template publishing is restricted to admins. Your template will remain private.
+                          </p>
+                        )}
+
+                        <div className="slides-inline-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => void handlePublishTemplate()}
+                            disabled={templatePublishBusy}
+                          >
+                            {templatePublishBusy ? 'Publishing…' : 'Confirm Publish Template'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={closePublishTemplateDraft}
+                            disabled={templatePublishBusy}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>
@@ -2522,6 +2672,28 @@ export default function SlidesPage() {
                       >
                         Duplicate to My Slides
                       </button>
+                      {(isSlidesAdmin || template.owner_user_id === actor.user_id) && (
+                        <>
+                          {(template.is_shared || isSlidesAdmin) && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              onClick={() => void handleTemplateVisibilityToggle(template)}
+                              disabled={templateActionBusyId === template.id}
+                            >
+                              {template.is_shared ? 'Make Private' : 'Make Shared'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => void handleArchiveTemplate(template)}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            Archive Template
+                          </button>
+                        </>
+                      )}
                     </div>
                   </article>
                 ))}

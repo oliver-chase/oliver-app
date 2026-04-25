@@ -61,6 +61,7 @@ export interface SlideAuditEvent {
 export interface SlideActor {
   user_id: string
   user_email?: string
+  role?: string
 }
 
 export interface SlideSaveInput {

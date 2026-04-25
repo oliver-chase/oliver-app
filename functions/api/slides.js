@@ -7,6 +7,7 @@ import { jsonResponse, errorResponse } from './_shared/ai.js';
 
 const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
+const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -164,6 +165,13 @@ function sanitizeTitle(value) {
   if (!trimmed) return null;
   if (trimmed.length > MAX_TITLE_LENGTH) return null;
   return trimmed;
+}
+
+function sanitizeTemplateDescription(value, fallback = '') {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_TEMPLATE_DESCRIPTION_LENGTH) return null;
+  return trimmed || fallback;
 }
 
 function normalizeMetadata(rawMetadata) {
@@ -563,13 +571,19 @@ async function handleDeleteSlideAction(env, actor, body) {
 async function handlePublishTemplateAction(env, actor, body) {
   const slideId = typeof body.slide_id === 'string' ? body.slide_id.trim() : '';
   const explicitName = typeof body.name === 'string' ? body.name.trim() : '';
+  const explicitDescription = sanitizeTemplateDescription(body.description, 'Published from My Slides');
+  const requestedShared = body.is_shared === true;
   if (!slideId) return errorResponse('slide_id required for publish-template.', 400);
+  if (explicitDescription === null) return errorResponse('Invalid template description.', 400);
 
   const slide = await readSlideById(env, slideId);
   if (!slide || slide.deleted_at) return errorResponse('Slide not found for publish-template.', 404);
 
   if (actor.role !== 'admin' && slide.owner_user_id !== actor.user_id) {
     return errorResponse('Forbidden. You do not own this slide.', 403);
+  }
+  if (requestedShared && actor.role !== 'admin') {
+    return errorResponse('Forbidden. Only admins can publish shared templates.', 403);
   }
 
   const templateName = sanitizeTitle(explicitName || `${slide.title} Template`);
@@ -578,8 +592,8 @@ async function handlePublishTemplateAction(env, actor, body) {
   const payload = {
     owner_user_id: actor.user_id,
     name: templateName,
-    description: 'Published from My Slides',
-    is_shared: false,
+    description: explicitDescription,
+    is_shared: requestedShared,
     canvas: slide.canvas || { width: 1920, height: 1080 },
     components_json: Array.isArray(slide.components_json) ? slide.components_json : [],
     metadata: {
@@ -610,6 +624,108 @@ async function handlePublishTemplateAction(env, actor, body) {
   });
 
   return jsonResponse({ template }, 201);
+}
+
+async function handleUpdateTemplateAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for update-template.', 400);
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for update.', 404);
+
+  const actorIsAdmin = actor.role === 'admin';
+  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. You do not own this template.', 403);
+  }
+
+  const nextName = typeof body.name === 'string' ? sanitizeTitle(body.name) : null;
+  if (typeof body.name === 'string' && !nextName) return errorResponse('Invalid template name.', 400);
+
+  const nextDescription = Object.prototype.hasOwnProperty.call(body, 'description')
+    ? sanitizeTemplateDescription(body.description, template.description || '')
+    : undefined;
+  if (nextDescription === null) return errorResponse('Invalid template description.', 400);
+
+  const hasSharedInput = Object.prototype.hasOwnProperty.call(body, 'is_shared');
+  const requestedShared = hasSharedInput ? body.is_shared === true : undefined;
+  if (requestedShared === true && !actorIsAdmin) {
+    return errorResponse('Forbidden. Only admins can set template visibility to shared.', 403);
+  }
+
+  const updatePayload = {
+    ...(nextName ? { name: nextName } : {}),
+    ...(typeof nextDescription === 'string' ? { description: nextDescription } : {}),
+    ...(typeof requestedShared === 'boolean' ? { is_shared: requestedShared } : {}),
+    updated_by: actor.user_id,
+    updated_at: new Date().toISOString(),
+  };
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(updatePayload),
+    },
+  );
+
+  const rows = await response.json().catch(() => []);
+  const updated = normalizeTemplateRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'rename',
+    outcome: 'success',
+    details: {
+      operation: 'update-template',
+      changed_shared_visibility: typeof requestedShared === 'boolean',
+    },
+  });
+
+  return jsonResponse({ template: updated });
+}
+
+async function handleArchiveTemplateAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for archive-template.', 400);
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for archive.', 404);
+
+  const actorIsAdmin = actor.role === 'admin';
+  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. You do not own this template.', 403);
+  }
+
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        is_archived: true,
+        updated_by: actor.user_id,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'delete',
+    outcome: 'success',
+    details: { operation: 'archive-template' },
+  });
+
+  return jsonResponse({ ok: true });
 }
 
 async function handleRecordExportAction(env, actor, body) {
@@ -726,6 +842,8 @@ export async function onRequestPost(context) {
   if (action === 'rename-slide') return handleRenameSlideAction(env, actor, body);
   if (action === 'delete-slide') return handleDeleteSlideAction(env, actor, body);
   if (action === 'publish-template') return handlePublishTemplateAction(env, actor, body);
+  if (action === 'update-template') return handleUpdateTemplateAction(env, actor, body);
+  if (action === 'archive-template') return handleArchiveTemplateAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);

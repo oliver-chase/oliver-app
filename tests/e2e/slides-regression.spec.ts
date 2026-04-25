@@ -483,6 +483,85 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card')).toHaveCount(3)
   })
 
+  test('SLD-FE-400 and SLD-BE-400 support visibility controls and template ownership governance', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.removeItem('oliver-slides-store-v1')
+    })
+    await gotoAndSettle(page, '/slides')
+
+    const unique = Date.now().toString(36)
+    const templateName = `Governance Shared Template ${unique}`
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Template Governance</h1></div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.locator('#slides-title').fill('Governance Slide')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await page.getByRole('button', { name: 'Publish Template' }).first().click()
+    await page.locator('#slides-template-name').fill(templateName)
+    await page.locator('#slides-template-description').fill('Governance test template')
+    await page.locator('#slides-template-visibility').selectOption('shared')
+    await page.getByRole('button', { name: 'Confirm Publish Template' }).click()
+
+    await page.getByRole('button', { name: 'Template Library' }).click()
+    const templateCard = page.locator('.slides-library-card', { hasText: templateName }).first()
+    await expect(templateCard).toBeVisible()
+    await expect(templateCard.getByText(/Visibility:\s*Shared/i)).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Make Private' }).click()
+    await expect(templateCard.getByText(/Visibility:\s*Private/i)).toBeVisible()
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm')
+      await dialog.accept()
+    })
+    await templateCard.getByRole('button', { name: 'Archive Template' }).click()
+    await expect(page.locator('.slides-library-card', { hasText: templateName })).toHaveCount(0)
+  })
+
+  test('SLD-FE-400 restricts shared-template publishing controls for non-admin users', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.removeItem('oliver-slides-store-v1')
+      window.localStorage.setItem('qa-app-user', JSON.stringify({
+        user_id: 'qa-member-user',
+        email: 'qa-member@example.com',
+        name: 'QA Member',
+        role: 'member',
+        page_permissions: ['slides'],
+        created_at: '2026-04-24T00:00:00.000Z',
+        updated_at: '2026-04-24T00:00:00.000Z',
+      }))
+    })
+    await gotoAndSettle(page, '/slides')
+
+    const unique = Date.now().toString(36)
+    const templateName = `Member Private Template ${unique}`
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Member Template</h1></div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.locator('#slides-title').fill('Member Slide')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await page.getByRole('button', { name: 'Publish Template' }).first().click()
+    await expect(page.locator('#slides-template-visibility')).toBeDisabled()
+    await expect(page.getByText(/Shared template publishing is restricted to admins/i)).toBeVisible()
+    await page.locator('#slides-template-name').fill(templateName)
+    await page.getByRole('button', { name: 'Confirm Publish Template' }).click()
+
+    await page.getByRole('button', { name: 'Template Library' }).click()
+    const templateCard = page.locator('.slides-library-card', { hasText: templateName }).first()
+    await expect(templateCard).toBeVisible()
+    await expect(templateCard.getByText(/Visibility:\s*Private/i)).toBeVisible()
+    await expect(templateCard.getByRole('button', { name: 'Make Shared' })).toHaveCount(0)
+  })
+
   test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

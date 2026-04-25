@@ -117,7 +117,8 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 }
 
 .slides-search,
-.slides-input {
+.slides-input,
+.slides-select {
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -128,7 +129,8 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 }
 
 .slides-search:focus,
-.slides-input:focus {
+.slides-input:focus,
+.slides-select:focus {
   outline: none;
   border-color: var(--color-brand-pink);
   box-shadow: 0 0 0 var(--spacing-2xs) var(--color-pink-overlay-sm);
@@ -630,6 +632,23 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 
 .slides-library-card p {
   margin: var(--spacing-2xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.slides-template-draft {
+  border-top: 1px solid var(--color-border-soft);
+  padding-top: var(--spacing-sm);
+  display: grid;
+  gap: var(--spacing-xs);
+}
+
+.slides-template-draft .slides-label {
+  margin-top: 0;
+}
+
+.slides-card-note {
+  margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
