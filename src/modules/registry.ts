@@ -46,7 +46,7 @@ const MODULES: ModuleDefinition[] = [
   {
     id: 'slides',
     name: 'Slide Editor',
-    description: 'Import slide HTML, review structured component output, then save/autosave to My Slides with template and export support.',
+    description: 'Import slide HTML, save to My Slides, and manage templates.',
     href: '/slides',
     pageLabel: 'Slide Editor',
     defaultPlaceholder: 'Import or paste slide HTML, then save or export...',
@@ -61,6 +61,7 @@ const MODULES: ModuleDefinition[] = [
     defaultPlaceholder: 'Ask about the CRM roadmap…',
     defaultGreeting: "Hi, I'm Oliver. CRM & Business Development is in the backlog.",
     comingSoon: true,
+    showInHub: false,
   },
 ]
 
