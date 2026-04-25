@@ -675,6 +675,35 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   font-size: var(--font-size-xs);
 }
 
+.slides-approval-sla {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--spacing-xs);
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.slides-approval-sla-healthy {
+  color: var(--color-status-active);
+  background: var(--color-status-active-bg);
+  border-color: var(--color-status-active);
+}
+
+.slides-approval-sla-at-risk {
+  color: var(--color-amber);
+  background: var(--color-amber-light);
+  border-color: var(--color-amber);
+}
+
+.slides-approval-sla-overdue {
+  color: var(--color-red);
+  background: var(--color-red-light);
+  border-color: var(--color-danger-border);
+}
+
 .slides-audit-pagination {
   justify-content: flex-start;
 }

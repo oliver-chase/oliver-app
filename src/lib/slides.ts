@@ -327,6 +327,7 @@ function normalizeAuditActionFilter(value: string | undefined): SlideAuditAction
     'upsert-collaborator',
     'remove-collaborator',
     'submit-approval',
+    'escalate-approval',
     'approve-approval',
     'reject-approval',
     'export-html',
@@ -1466,6 +1467,79 @@ export async function resolveTemplateApproval(
       })
       writeLocalStore(updatedStore)
       return approved
+    },
+  )
+}
+
+export async function escalateTemplateApproval(
+  actorInput: SlideActor,
+  approvalId: string,
+  reason = '',
+): Promise<SlideTemplateApproval> {
+  const actor = normalizeActor(actorInput)
+  const trimmedApprovalId = approvalId.trim()
+  const trimmedReason = reason.trim()
+  if (!trimmedApprovalId) throw new SlideApiError('Approval id is required.', 400)
+  if (trimmedReason.length > 280) throw new SlideApiError('Escalation reason must be 280 characters or fewer.', 400)
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ approval: SlideTemplateApproval }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'escalate-template-approval',
+          actor,
+          approval_id: trimmedApprovalId,
+          reason: trimmedReason || undefined,
+        }),
+      })
+      if (!response.approval) throw new SlideApiError('Approval escalation failed.', 500)
+      return response.approval
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const index = store.approvals.findIndex((entry) => entry.id === trimmedApprovalId)
+      if (index < 0) throw new SlideApiError('Approval not found.', 404)
+      const approval = store.approvals[index]
+      if (approval.status !== 'pending') throw new SlideApiError('Approval is not pending.', 409)
+
+      const template = store.templates.find((entry) => entry.id === approval.template_id)
+      const isRequester = approval.requested_by_user_id === actor.user_id
+      const isTemplateOwner = template?.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isRequester && !isTemplateOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only requesters, owners, or admins can escalate approvals.', 403)
+      }
+
+      const payload = approval.payload && typeof approval.payload === 'object' ? approval.payload : {}
+      const existingEscalations = Array.isArray((payload as { escalations?: unknown }).escalations)
+        ? (payload as { escalations: Array<Record<string, unknown>> }).escalations
+        : []
+      const escalation = {
+        escalated_by_user_id: actor.user_id,
+        escalated_by_email: actor.user_email || null,
+        reason: trimmedReason || null,
+        created_at: nowIso(),
+      }
+      const nextPayload = {
+        ...payload,
+        escalations: [...existingEscalations, escalation],
+        escalation_count: existingEscalations.length + 1,
+        last_escalated_at: escalation.created_at,
+      }
+      const updated: SlideTemplateApproval = {
+        ...approval,
+        payload: nextPayload,
+        updated_at: nowIso(),
+      }
+      store.approvals[index] = updated
+      makeAuditEvent(store, actor, 'escalate-approval', 'success', 'template', approval.template_id, {
+        approval_id: approval.id,
+        approval_type: approval.approval_type,
+        escalation_count: existingEscalations.length + 1,
+      })
+      writeLocalStore(store)
+      return updated
     },
   )
 }

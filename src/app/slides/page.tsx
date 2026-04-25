@@ -31,6 +31,7 @@ import {
   duplicateSlide,
   duplicateTemplateAsSlide,
   deleteAuditPreset,
+  escalateTemplateApproval,
   listAuditPresets,
   listTemplateCollaborators,
   listTemplateApprovals,
@@ -160,6 +161,83 @@ function formatTemplateApprovalTarget(approval: SlideTemplateApproval): string {
   const target = targetEmail || targetUserId || 'n/a'
   if (!role) return target
   return `${target} · ${role}`
+}
+
+function formatApprovalAgeLabel(createdAt: string): string {
+  const parsed = Date.parse(createdAt)
+  if (!Number.isFinite(parsed)) return 'n/a'
+  const deltaMs = Math.max(0, Date.now() - parsed)
+  const totalHours = Math.floor(deltaMs / (60 * 60 * 1000))
+  if (totalHours < 1) return 'under 1h'
+  if (totalHours < 24) return `${totalHours}h`
+  const days = Math.floor(totalHours / 24)
+  const remHours = totalHours % 24
+  if (remHours === 0) return `${days}d`
+  return `${days}d ${remHours}h`
+}
+
+function getApprovalEscalationCount(approval: SlideTemplateApproval): number {
+  const payload = approval.payload || {}
+  const explicit = Number((payload as { escalation_count?: unknown }).escalation_count)
+  if (Number.isFinite(explicit) && explicit >= 0) return explicit
+  const entries = Array.isArray((payload as { escalations?: unknown }).escalations)
+    ? (payload as { escalations: unknown[] }).escalations
+    : []
+  return entries.length
+}
+
+function getApprovalLastEscalatedAt(approval: SlideTemplateApproval): string | null {
+  const payload = approval.payload || {}
+  const explicit = typeof (payload as { last_escalated_at?: unknown }).last_escalated_at === 'string'
+    ? (payload as { last_escalated_at: string }).last_escalated_at
+    : ''
+  if (explicit) return explicit
+  const entries = Array.isArray((payload as { escalations?: unknown }).escalations)
+    ? (payload as { escalations: Array<Record<string, unknown>> }).escalations
+    : []
+  const last = entries[entries.length - 1]
+  return last && typeof last.created_at === 'string' ? last.created_at : null
+}
+
+function getApprovalSlaState(approval: SlideTemplateApproval): {
+  tone: 'healthy' | 'at-risk' | 'overdue'
+  label: string
+  ageLabel: string
+  escalationCount: number
+  lastEscalatedAt: string | null
+  canEscalate: boolean
+} {
+  const parsed = Date.parse(approval.created_at)
+  const ageMs = Number.isFinite(parsed) ? Math.max(0, Date.now() - parsed) : 0
+  const ageHours = ageMs / (60 * 60 * 1000)
+  if (ageHours >= 48) {
+    return {
+      tone: 'overdue',
+      label: 'SLA Overdue (48h+)',
+      ageLabel: formatApprovalAgeLabel(approval.created_at),
+      escalationCount: getApprovalEscalationCount(approval),
+      lastEscalatedAt: getApprovalLastEscalatedAt(approval),
+      canEscalate: true,
+    }
+  }
+  if (ageHours >= 24) {
+    return {
+      tone: 'at-risk',
+      label: 'SLA At Risk (24h+)',
+      ageLabel: formatApprovalAgeLabel(approval.created_at),
+      escalationCount: getApprovalEscalationCount(approval),
+      lastEscalatedAt: getApprovalLastEscalatedAt(approval),
+      canEscalate: true,
+    }
+  }
+  return {
+    tone: 'healthy',
+    label: 'SLA Healthy',
+    ageLabel: formatApprovalAgeLabel(approval.created_at),
+    escalationCount: getApprovalEscalationCount(approval),
+    lastEscalatedAt: getApprovalLastEscalatedAt(approval),
+    canEscalate: false,
+  }
 }
 
 function summarizeWarnings(warnings: string[]) {
@@ -1935,6 +2013,34 @@ export default function SlidesPage() {
     }
   }, [actor, refreshLibraryData, refreshTemplateCollaboratorRows, templateApprovalBusyId, templateById, templateCollaboratorPanelId])
 
+  const handleEscalateTemplateApproval = useCallback(async (approval: SlideTemplateApproval) => {
+    if (templateApprovalBusyId) return
+    const reasonInput = window.prompt('Optional escalation note for this approval (max 280 chars):', '')
+    if (reasonInput === null) return
+
+    const reason = reasonInput.trim()
+    if (reason.length > 280) {
+      setLibraryError('Escalation note must be 280 characters or fewer.')
+      return
+    }
+
+    setTemplateApprovalBusyId(approval.id)
+    setLibraryError(null)
+    try {
+      await escalateTemplateApproval(actor, approval.id, reason)
+      await refreshLibraryData()
+      const templateName = templateById.get(approval.template_id)?.name || approval.template_id
+      setEditorNotice({
+        tone: 'info',
+        text: `Escalated "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}" to the governance queue.`,
+      })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateApprovalBusyId(null)
+    }
+  }, [actor, refreshLibraryData, templateApprovalBusyId, templateById])
+
   const applyStyleToSelection = useCallback((patch: Partial<SlideComponent['style']>) => {
     if (!result || selectedComponentIds.length === 0) {
       setEditorNotice({ tone: 'error', text: 'Select at least one layer before applying styles.' })
@@ -3264,6 +3370,7 @@ export default function SlidesPage() {
                     {templateApprovals.map((approval) => {
                       const templateName = templateById.get(approval.template_id)?.name || approval.template_id
                       const busy = templateApprovalBusyId === approval.id
+                      const sla = getApprovalSlaState(approval)
                       return (
                         <article key={approval.id} className="slides-library-card">
                           <div>
@@ -3273,27 +3380,52 @@ export default function SlidesPage() {
                             <p>
                               Requested by: {approval.requested_by_email || approval.requested_by_user_id} · {formatDateTime(approval.created_at)}
                             </p>
+                            <p>
+                              SLA:{' '}
+                              <span className={`slides-approval-sla slides-approval-sla-${sla.tone}`}>
+                                {sla.label}
+                              </span>{' '}
+                              · Age: {sla.ageLabel}
+                            </p>
+                            {sla.escalationCount > 0 && (
+                              <p className="slides-card-note">
+                                Escalations: {sla.escalationCount}
+                                {sla.lastEscalatedAt ? ` · Last escalation: ${formatDateTime(sla.lastEscalatedAt)}` : ''}
+                              </p>
+                            )}
                           </div>
-                          {actor.role === 'admin' && (
-                            <div className="slides-inline-actions">
+                          <div className="slides-inline-actions">
+                            {actor.role === 'admin' && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary"
+                                  onClick={() => void handleResolveTemplateApproval(approval, 'approve')}
+                                  disabled={busy}
+                                >
+                                  {busy ? 'Saving…' : 'Approve'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => void handleResolveTemplateApproval(approval, 'reject')}
+                                  disabled={busy}
+                                >
+                                  {busy ? 'Saving…' : 'Reject'}
+                                </button>
+                              </>
+                            )}
+                            {sla.canEscalate && (
                               <button
                                 type="button"
-                                className="btn btn-sm btn-primary"
-                                onClick={() => void handleResolveTemplateApproval(approval, 'approve')}
+                                className="btn btn-sm btn-ghost"
+                                onClick={() => void handleEscalateTemplateApproval(approval)}
                                 disabled={busy}
                               >
-                                {busy ? 'Saving…' : 'Approve'}
+                                {busy ? 'Saving…' : sla.escalationCount > 0 ? 'Escalate Again' : 'Escalate'}
                               </button>
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-danger"
-                                onClick={() => void handleResolveTemplateApproval(approval, 'reject')}
-                                disabled={busy}
-                              >
-                                {busy ? 'Saving…' : 'Reject'}
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </article>
                       )
                     })}
@@ -3581,6 +3713,7 @@ export default function SlidesPage() {
                       <option value="upsert-collaborator">Upsert Collaborator</option>
                       <option value="remove-collaborator">Remove Collaborator</option>
                       <option value="submit-approval">Submit Approval</option>
+                      <option value="escalate-approval">Escalate Approval</option>
                       <option value="approve-approval">Approve Approval</option>
                       <option value="reject-approval">Reject Approval</option>
                       <option value="export-html">Export HTML</option>

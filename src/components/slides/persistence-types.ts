@@ -74,6 +74,7 @@ export type SlideAuditAction =
   | 'upsert-collaborator'
   | 'remove-collaborator'
   | 'submit-approval'
+  | 'escalate-approval'
   | 'approve-approval'
   | 'reject-approval'
   | 'export-html'

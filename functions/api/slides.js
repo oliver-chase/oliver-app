@@ -11,6 +11,7 @@ const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
+const MAX_APPROVAL_ESCALATION_REASON_LENGTH = 280;
 const AUDIT_PRESET_SCOPES = ['personal', 'shared'];
 const AUDIT_ACTIONS = [
   'save',
@@ -23,6 +24,7 @@ const AUDIT_ACTIONS = [
   'upsert-collaborator',
   'remove-collaborator',
   'submit-approval',
+  'escalate-approval',
   'approve-approval',
   'reject-approval',
   'export-html',
@@ -254,6 +256,13 @@ function sanitizeApprovalStatus(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().toLowerCase();
   if (!TEMPLATE_APPROVAL_STATUSES.includes(trimmed)) return null;
+  return trimmed;
+}
+
+function sanitizeEscalationReason(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_APPROVAL_ESCALATION_REASON_LENGTH) return null;
   return trimmed;
 }
 
@@ -1367,6 +1376,75 @@ async function handleResolveTemplateApprovalAction(env, actor, body) {
   return jsonResponse({ approval: approved });
 }
 
+async function handleEscalateTemplateApprovalAction(env, actor, body) {
+  const approvalId = typeof body.approval_id === 'string' ? body.approval_id.trim() : '';
+  if (!approvalId) return errorResponse('approval_id required for escalate-template-approval.', 400);
+
+  const reason = sanitizeEscalationReason(body.reason);
+  if (reason === null) {
+    return errorResponse('reason must be 280 characters or fewer for escalate-template-approval.', 400);
+  }
+
+  const approval = await readTemplateApprovalById(env, approvalId);
+  if (!approval) return errorResponse('Approval not found for escalation.', 404);
+  if (approval.status !== 'pending') return errorResponse('Approval is not pending and cannot be escalated.', 409);
+
+  const template = await readTemplateById(env, approval.template_id);
+  const isRequester = approval.requested_by_user_id === actor.user_id;
+  const isTemplateOwner = !!template && template.owner_user_id === actor.user_id;
+  const isAdmin = actor.role === 'admin';
+  if (!isRequester && !isTemplateOwner && !isAdmin) {
+    return errorResponse('Forbidden. Only requesters, owners, or admins can escalate approvals.', 403);
+  }
+
+  const payload = isObject(approval.payload) ? approval.payload : {};
+  const priorEscalations = Array.isArray(payload.escalations) ? payload.escalations : [];
+  const now = new Date().toISOString();
+  const escalationRecord = {
+    escalated_by_user_id: actor.user_id,
+    escalated_by_email: actor.email || null,
+    reason: reason || null,
+    created_at: now,
+  };
+
+  const patchResponse = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        payload: {
+          ...payload,
+          escalations: [...priorEscalations, escalationRecord],
+          escalation_count: priorEscalations.length + 1,
+          last_escalated_at: now,
+        },
+        updated_at: now,
+      }),
+    },
+  );
+  const rows = await patchResponse.json().catch(() => []);
+  const escalated = normalizeTemplateApprovalRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: approval.template_id,
+    action: 'escalate-approval',
+    outcome: 'success',
+    details: {
+      approval_id: approval.id,
+      approval_type: approval.approval_type,
+      escalation_count: priorEscalations.length + 1,
+      reason: reason || null,
+    },
+  });
+
+  return jsonResponse({ approval: escalated });
+}
+
 async function handleUpsertAuditPresetAction(env, actor, body) {
   const name = sanitizeAuditPresetName(body.name);
   if (!name) return errorResponse('Valid preset name is required for upsert-audit-preset.', 400);
@@ -1729,6 +1807,7 @@ export async function onRequestPost(context) {
   if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);
   if (action === 'submit-template-approval') return handleSubmitTemplateApprovalAction(env, actor, body);
   if (action === 'resolve-template-approval') return handleResolveTemplateApprovalAction(env, actor, body);
+  if (action === 'escalate-template-approval') return handleEscalateTemplateApprovalAction(env, actor, body);
   if (action === 'upsert-audit-preset') return handleUpsertAuditPresetAction(env, actor, body);
   if (action === 'delete-audit-preset') return handleDeleteAuditPresetAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);

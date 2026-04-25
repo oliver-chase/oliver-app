@@ -61,8 +61,8 @@ KPI: Template reuse rate and admin audit resolution time both improve release-ov
 | SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Done (2026-04-25) | API supports server-side filtering/pagination and returns predictable query latency. |
 | SLD-FE-430 | Activity filter presets + saved views | Frontend | P2 | In Progress (2026-04-25) | Save/apply/delete presets are implemented; expand preset management UX and shared-governance constraints as needed. |
 | SLD-BE-430 | Long-range audit export jobs + presets contract | Backend | P2 | In Progress (2026-04-25) | Preset persistence contract is implemented; async long-range compliance export jobs remain open. |
-| SLD-FE-440 | Approval aging SLA signal + escalation UI | Frontend | P2 | Backlog | Approval queue surfaces SLA age states and escalation actions without dead-end requester UX. |
-| SLD-BE-440 | Template approval SLA + escalation automation | Backend | P2 | Backlog | Overdue approvals escalate through deterministic, idempotent automation and audit tracking. |
+| SLD-FE-440 | Approval aging SLA signal + escalation UI | Frontend | P2 | Done (2026-04-25) | Template approval queue now surfaces SLA age states (healthy/at-risk/overdue) and escalation reminders for requesters/admins. |
+| SLD-BE-440 | Template approval SLA + escalation automation | Backend | P2 | In Progress (2026-04-25) | Manual escalation API/audit flow is live; scheduled/idempotent overdue escalation automation remains open. |
 
 ## EPIC SLD-E4: Export Platform
 Goal: Expand deliverable options while preserving editable output quality.
@@ -87,6 +87,6 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 1. SLD-FE-500 + SLD-BE-500 + SLD-BE-510: Add native PPTX export with async orchestration and warnings reporting.
 2. SLD-FE-210 + SLD-BE-210: Add template preview thumbnails and quick preview picker.
 3. SLD-FE-430 + SLD-BE-430: Add saved audit presets and long-range export jobs.
-4. SLD-FE-440 + SLD-BE-440: Add approval SLA aging signals and escalation automation.
+4. SLD-BE-440: Add automated SLA escalation orchestration (manual escalation path already shipped).
 5. SLD-FE-340: Add snapping/guides for precision editing workflows.
 6. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
