@@ -16,6 +16,7 @@ Goal: create one actionable backlog that covers:
 - Locked-layer guardrails now enforce immutability for protected components across keyboard, pointer, resize, and toolbar styling/alignment actions.
 - Library search now has explicit no-match guidance across My Slides/templates/activity and template visibility is constrained server-side before query limiting.
 - Slides chatbot coverage now includes parse/save/export/navigation command intents with guarded zero-step flow runtime handling.
+- Slides chatbot now supports direct HTML export download command execution to remove export dead-end follow-ups.
 - Existing parser hardening stories (`US-O13`..`US-O16`) remain tracked as historical backlog provenance and now map cleanly into canonical slides coverage.
 
 ## Epic Breakdown
@@ -29,6 +30,7 @@ Goal: create one actionable backlog that covers:
 | S2.2 | Interaction Safety Hardening | `US-SLD-027` | Net-new |
 | S2.3 | Library Search Hardening | `US-SLD-028` | Net-new |
 | S2.4 | Chat Command Parity Hardening | `US-SLD-029` | Net-new |
+| S2.5 | Chat Export Execution Hardening | `US-SLD-040` | Net-new |
 | S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
 
 ## Epic Status (Current Branch)
@@ -42,6 +44,7 @@ Goal: create one actionable backlog that covers:
 | S2.2 | Complete (`US-SLD-027`) | Ready to commit as one epic milestone |
 | S2.3 | Complete (`US-SLD-028`) | Ready to commit as one epic milestone |
 | S2.4 | Complete (`US-SLD-029`) | Ready to commit as one epic milestone |
+| S2.5 | Complete (`US-SLD-040`) | Ready to commit as one epic milestone |
 | S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion

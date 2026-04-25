@@ -1716,6 +1716,9 @@ export default function SlidesPage() {
         case 'slides-generate-export':
           run = () => { generateExport() }
           break
+        case 'slides-download-html':
+          run = () => { void handleExportHtml() }
+          break
         case 'slides-open-my-slides':
           run = () => { handleWorkspaceTabChange('my-slides') }
           break
@@ -1742,6 +1745,13 @@ export default function SlidesPage() {
         return `Saved "${saved.title}" (revision ${saved.revision}).`
       },
       generateExport,
+      downloadHtmlExport: async () => {
+        if (!result) return 'No parsed slide is available. Parse HTML first, then download export.'
+        await handleExportHtml()
+        return activeSlideId
+          ? 'Downloaded HTML export and recorded the export audit event.'
+          : 'Downloaded HTML export.'
+      },
       openWorkspaceTab: handleWorkspaceTabChange,
     })
 
@@ -1762,7 +1772,7 @@ export default function SlidesPage() {
         active_slide_id: activeSlideId,
       }),
     })
-  }, [activeSlideId, generateExport, handleSave, handleWorkspaceTabChange, openFilePicker, parseHtmlSync, rawHtml, result, runParseWithProgress, saveStatus])
+  }, [activeSlideId, generateExport, handleExportHtml, handleSave, handleWorkspaceTabChange, openFilePicker, parseHtmlSync, rawHtml, result, runParseWithProgress, saveStatus])
 
   useRegisterOliver(oliverConfig)
 

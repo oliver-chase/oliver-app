@@ -20,6 +20,7 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Locked-layer immutability across manipulation/style operations | `US-SLD-027` | S2.2 | Code Present |
 | Library search no-match UX + template visibility filtering before backend limit | `US-SLD-028` | S2.3 | Code Present |
 | Slides chatbot command parity for save/export/navigation with flow runtime guardrails | `US-SLD-029` | S2.4 | Code Present |
+| Slides chatbot direct HTML export download execution | `US-SLD-040` | S2.5 | Code Present |
 | Slide/template data model + RLS | `US-SLD-030` | S3 | Code Present |
 | Save API + autosave state contract | `US-SLD-031` | S3 | Code Present |
 | Template Library + My Slides FE/BE wiring | `US-SLD-032` | S3 | Code Present |

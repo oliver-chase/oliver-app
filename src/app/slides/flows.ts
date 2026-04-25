@@ -9,13 +9,14 @@ type Ctx = {
   parseHtml: (html: string) => SlideImportResult
   saveSlide: (titleOverride?: string) => Promise<string>
   generateExport: () => string
+  downloadHtmlExport: () => Promise<string>
   openWorkspaceTab: (tab: WorkspaceTab) => boolean
 }
 
 const asString = (v: unknown) => (v == null ? '' : String(v))
 
 export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
-  const { rawHtml, openFilePicker, parseHtml, saveSlide, generateExport, openWorkspaceTab } = ctx
+  const { rawHtml, openFilePicker, parseHtml, saveSlide, generateExport, downloadHtmlExport, openWorkspaceTab } = ctx
 
   return [
     {
@@ -106,6 +107,14 @@ export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
         if (!html) return 'No parsed slide is available. Parse HTML first, then generate export.'
         return `Generated export HTML (${html.length} characters). Use Download HTML to save the file.`
       },
+    },
+    {
+      id: 'slides-download-html',
+      label: 'Download HTML Export',
+      hint: 'Download the exported HTML artifact directly',
+      aliases: ['download html export', 'export html file', 'save html export'],
+      steps: [],
+      run: async () => downloadHtmlExport(),
     },
     {
       id: 'slides-open-my-slides',

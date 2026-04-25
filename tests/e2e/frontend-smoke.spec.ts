@@ -623,6 +623,29 @@ test.describe('frontend smoke', () => {
     await expect(page.getByRole('heading', { name: 'My Slides' })).toBeVisible()
   })
 
+  test('US-SLD-040 slides chatbot can download HTML export directly without dead-end follow-up', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:120px;top:120px;width:900px;">Command Export</h1>
+    </div>`
+    await page.locator('#slides-raw-html').fill(rawHtml)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+
+    const downloadPromise = page.waitForEvent('download')
+    await input.fill('download html export')
+    await input.press('Enter')
+    const download = await downloadPromise
+
+    expect(await download.suggestedFilename()).toMatch(/\.html$/)
+    expect(await download.failure()).toBeNull()
+    await expect(page.getByText(/Downloaded HTML export/)).toBeVisible()
+  })
+
   test('non-admin user cannot access admin and does not see admin links', async ({ browser }) => {
     const context = await browser.newContext()
     const page = await context.newPage()

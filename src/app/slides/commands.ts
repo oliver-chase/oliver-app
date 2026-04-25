@@ -34,6 +34,14 @@ export const SLIDES_COMMANDS: CommandMeta[] = [
     granular: true,
   },
   {
+    id: 'slides-download-html',
+    label: 'Download HTML Export',
+    group: 'Quick',
+    hint: 'Download the exported HTML artifact directly',
+    aliases: ['download html export', 'export html file', 'save html export'],
+    granular: true,
+  },
+  {
     id: 'slides-open-my-slides',
     label: 'Open My Slides',
     group: 'Quick',
