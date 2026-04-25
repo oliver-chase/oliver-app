@@ -45,20 +45,21 @@ export default function HubPage() {
   return (
     <>
       {account && (
-        <div className={styles.sessionBar}>
-          <span className={styles.sessionEmail}>{account.username}</span>
-          <div className={styles.sessionActions}>
-            {isAdmin && (
-              <>
-                <Link href="/design-system" className={styles.adminBtn}>Design System</Link>
-                <Link href="/admin" className={styles.adminBtn}>Admin</Link>
-              </>
-            )}
-            <button type="button" className={styles.adminBtn} onClick={() => logout()}>
-              Sign out
-            </button>
+        <>
+          {isAdmin && (
+            <div className={styles.sessionBarLeft}>
+              <Link href="/admin" className={styles.adminBtn}>Admin</Link>
+            </div>
+          )}
+          <div className={styles.sessionBar}>
+            <span className={styles.sessionEmail}>{account.username}</span>
+            <div className={styles.sessionActions}>
+              <button type="button" className={styles.adminBtn} onClick={() => logout()}>
+                Sign out
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className={styles.hub}>

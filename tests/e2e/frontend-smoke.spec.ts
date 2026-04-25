@@ -48,9 +48,7 @@ test.describe('frontend smoke', () => {
     await expect(page.getByRole('link', { name: 'SDR & Outreach' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Slide Editor' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'CRM & Business Development' })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Design System' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Open Admin dashboard')).toBeVisible()
 
     await page.getByRole('link', { name: 'Account Strategy & Planning' }).click()
     await expect(page).toHaveURL(/\/accounts\/?$/)
@@ -68,13 +66,10 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/slides\/?$/)
 
     await gotoAndSettle(page, '/')
-    await page.getByRole('link', { name: 'Design System' }).scrollIntoViewIfNeeded()
-    await page.getByRole('link', { name: 'Design System' }).click()
-    await expect(page).toHaveURL(/\/design-system\/?$/)
-
-    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Admin', exact: true }).click()
     await expect(page).toHaveURL(/\/admin\/?$/)
+    await page.getByRole('link', { name: 'Open Design System' }).click()
+    await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
   test('major routes render a non-empty shell', async ({ page }) => {
