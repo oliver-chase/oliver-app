@@ -44,6 +44,7 @@ SUPABASE_SERVICE_ROLE_KEY=<service role key>   # preferred
 OWNER_EMAILS=<comma-separated owner emails>     # optional additive owners (kiana.micari@vtwo.co is always treated as owner)
 # OWNER_USER_IDS=<comma-separated Azure oid/sub values>  # optional owner hardening
 # USERS_TRUST_CLIENT_IDENTITY=1                  # local/dev only (when not behind Cloudflare Access)
+# SLIDES_TRUST_CLIENT_IDENTITY=1                 # optional slides override; falls back to USERS_TRUST_CLIENT_IDENTITY when unset
 
 # SDR draft approvals (/api/sdr-approve -> v-two-sdr approval-handler.yml)
 SDR_GITHUB_PAT=<github token with actions:write on oliver-chase/v-two-sdr>

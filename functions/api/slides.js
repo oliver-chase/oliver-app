@@ -52,18 +52,30 @@ function normalizeActorBody(raw) {
   };
 }
 
+function shouldTrustClientIdentity(env) {
+  if (env.SLIDES_TRUST_CLIENT_IDENTITY === '1') return true;
+  if (env.SLIDES_TRUST_CLIENT_IDENTITY === '0') return false;
+  return env.USERS_TRUST_CLIENT_IDENTITY === '1';
+}
+
 function resolveActorIdentity(request, body, env) {
   const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
   if (cfAccessEmail) {
     return { source: 'cf-access', userId: '', email: cfAccessEmail };
   }
 
-  const trustClientIdentity = env.SLIDES_TRUST_CLIENT_IDENTITY === '1';
+  const trustClientIdentity = shouldTrustClientIdentity(env);
   if (!trustClientIdentity) return null;
 
   const bodyActor = normalizeActorBody(body?.actor || body || {});
-  const userId = bodyActor.user_id || (typeof body?.user_id === 'string' ? body.user_id.trim() : '');
-  const userEmail = bodyActor.user_email || normalizeEmail(body?.user_email || '');
+  const userId = bodyActor.user_id
+    || (typeof body?.user_id === 'string' ? body.user_id.trim() : '')
+    || (typeof body?.actor_user_id === 'string' ? body.actor_user_id.trim() : '')
+    || (request.headers.get('x-user-id') || '').trim();
+  const userEmail = bodyActor.user_email
+    || normalizeEmail(body?.user_email || '')
+    || normalizeEmail(body?.actor_email || '')
+    || normalizeEmail(request.headers.get('x-user-email') || '');
 
   if (!userId && !userEmail) return null;
   return { source: 'client', userId, email: userEmail };
@@ -75,12 +87,22 @@ function resolveActorIdentityFromQuery(request, env) {
     return { source: 'cf-access', userId: '', email: cfAccessEmail };
   }
 
-  const trustClientIdentity = env.SLIDES_TRUST_CLIENT_IDENTITY === '1';
+  const trustClientIdentity = shouldTrustClientIdentity(env);
   if (!trustClientIdentity) return null;
 
   const url = new URL(request.url);
-  const userId = (url.searchParams.get('user_id') || '').trim();
-  const userEmail = normalizeEmail(url.searchParams.get('user_email') || '');
+  const userId = (
+    request.headers.get('x-user-id')
+    || url.searchParams.get('user_id')
+    || url.searchParams.get('actor_user_id')
+    || ''
+  ).trim();
+  const userEmail = normalizeEmail(
+    request.headers.get('x-user-email')
+    || url.searchParams.get('user_email')
+    || url.searchParams.get('actor_email')
+    || '',
+  );
 
   if (!userId && !userEmail) return null;
   return { source: 'client', userId, email: userEmail };
