@@ -113,6 +113,31 @@ export interface SlideAuditFilterPreset {
   updated_at: string
 }
 
+export type SlideAuditExportJobStatus = 'queued' | 'running' | 'completed' | 'failed'
+
+export interface SlideAuditExportJob {
+  id: string
+  requested_by_user_id: string
+  requested_by_email: string | null
+  status: SlideAuditExportJobStatus
+  filters: {
+    search: string
+    action: SlideAuditAction | 'all'
+    outcome: SlideAuditOutcome | 'all'
+    entity_type: SlideAuditEvent['entity_type'] | 'all'
+    date_from: string
+    date_to: string
+  }
+  row_count: number
+  file_name: string | null
+  csv_content?: string | null
+  error_message: string | null
+  requested_at: string
+  started_at: string | null
+  completed_at: string | null
+  updated_at: string
+}
+
 export interface SlideActor {
   user_id: string
   user_email?: string

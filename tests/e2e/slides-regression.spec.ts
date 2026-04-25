@@ -1254,6 +1254,52 @@ test.describe('slides regression', () => {
     await expect(page.locator('#slides-audit-preset-select')).not.toContainText('Failure Exports')
   })
 
+  test('SLD-FE-431 and SLD-BE-430 queue filtered audit export jobs and support csv downloads', async ({ page }) => {
+    await page.addInitScript(() => {
+      const audits = Array.from({ length: 6 }, (_, index) => ({
+        id: index + 1,
+        actor_user_id: 'qa-admin-user',
+        actor_email: 'qa-admin@example.com',
+        entity_type: index % 2 === 0 ? 'slide' : 'template',
+        entity_id: `audit-${index + 1}`,
+        action: index % 2 === 0 ? 'save' : 'export-html',
+        outcome: 'success',
+        error_class: null,
+        details: { index: index + 1 },
+        created_at: `2026-04-${String(index + 10).padStart(2, '0')}T12:00:00.000Z`,
+      }))
+
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [],
+        audits,
+        nextAuditId: 7,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Activity' }).click()
+
+    await page.locator('#slides-audit-action').selectOption('save')
+    await expect(page.locator('.slides-library-card:not(.slides-audit-export-job-card)')).toHaveCount(3)
+
+    await page.getByRole('button', { name: 'Queue Filtered Export Job' }).click()
+    const exportJobCards = page.locator('.slides-audit-export-job-card')
+    await expect(exportJobCards).toHaveCount(1)
+    await expect(exportJobCards.first()).toContainText('Completed')
+    await expect(exportJobCards.first()).toContainText('Rows: 3')
+
+    const downloadPromise = page.waitForEvent('download')
+    await exportJobCards.first().getByRole('button', { name: 'Download CSV' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/^slide-audit-export-.*\.csv$/)
+
+    await page.locator('#slides-audit-export-status').selectOption('failed')
+    await expect(page.locator('.slides-audit-export-job-card')).toHaveCount(0)
+    await page.locator('#slides-audit-export-status').selectOption('completed')
+    await expect(page.locator('.slides-audit-export-job-card')).toHaveCount(1)
+  })
+
   test('SLD-FE-500 exports current slide to PPTX and surfaces unsupported-component warnings', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

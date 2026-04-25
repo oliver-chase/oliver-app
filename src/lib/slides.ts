@@ -1,6 +1,7 @@
 import type {
   SlideActor,
   SlideAuditAction,
+  SlideAuditExportJob,
   SlideAuditEvent,
   SlideAuditFilterPreset,
   SlideAuditPresetScope,
@@ -25,6 +26,7 @@ interface LocalSlidesStore {
   approvals: SlideTemplateApproval[]
   audits: SlideAuditEvent[]
   auditPresets: SlideAuditFilterPreset[]
+  auditExportJobs: SlideAuditExportJob[]
   nextAuditId: number
   nextApprovalId: number
 }
@@ -97,6 +99,21 @@ export interface SlideAuditQueryResult {
     has_more: boolean
     next_offset: number
   }
+}
+
+export interface SlideAuditExportQueryOptions {
+  limit?: number
+  offset?: number
+  status?: SlideAuditExportJob['status'] | 'all'
+}
+
+export interface SlideAuditExportJobRequest {
+  search?: string
+  action?: SlideAuditAction | 'all'
+  outcome?: 'success' | 'failure' | 'all'
+  entityType?: 'slide' | 'template' | 'all'
+  dateFrom?: string
+  dateTo?: string
 }
 
 class SlideApiError extends Error {
@@ -228,6 +245,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       approvals: [],
       audits: [],
       auditPresets: [],
+      auditExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -242,6 +260,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       approvals: [],
       audits: [],
       auditPresets: [],
+      auditExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -259,6 +278,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     if (!Array.isArray(parsed.approvals)) parsed.approvals = []
     if (!Array.isArray(parsed.audits)) parsed.audits = []
     if (!Array.isArray(parsed.auditPresets)) parsed.auditPresets = []
+    if (!Array.isArray(parsed.auditExportJobs)) parsed.auditExportJobs = []
     if (!Number.isFinite(parsed.nextAuditId) || parsed.nextAuditId < 1) parsed.nextAuditId = 1
     if (!Number.isFinite(parsed.nextApprovalId) || parsed.nextApprovalId < 1) parsed.nextApprovalId = 1
     return parsed
@@ -270,6 +290,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       approvals: [],
       audits: [],
       auditPresets: [],
+      auditExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -358,10 +379,53 @@ function normalizeAuditPresetScope(value: string | undefined): SlideAuditPresetS
   return value === 'shared' ? 'shared' : 'personal'
 }
 
+function normalizeAuditExportStatus(
+  value: string | undefined,
+): SlideAuditExportJob['status'] | 'all' {
+  if (value === 'queued' || value === 'running' || value === 'completed' || value === 'failed') return value
+  return 'all'
+}
+
 function normalizePresetDateValue(value: string | undefined): string {
   if (!value) return ''
   const trimmed = value.trim()
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : ''
+}
+
+function filterLocalAudits(
+  rows: SlideAuditEvent[],
+  actor: SlideActor,
+  options: {
+    search?: string
+    action?: SlideAuditAction | 'all'
+    outcome?: 'success' | 'failure' | 'all'
+    entityType?: 'slide' | 'template' | 'all'
+    dateFrom?: string
+    dateTo?: string
+  } = {},
+): SlideAuditEvent[] {
+  const search = options.search || ''
+  return rows
+    .filter((event) => (actor.role === 'admin' ? true : event.actor_user_id === actor.user_id))
+    .filter((event) => {
+      if (options.action && options.action !== 'all' && event.action !== options.action) return false
+      if (options.outcome && options.outcome !== 'all' && event.outcome !== options.outcome) return false
+      if (options.entityType && options.entityType !== 'all' && event.entity_type !== options.entityType) return false
+      if (options.dateFrom && event.created_at < `${options.dateFrom}T00:00:00.000Z`) return false
+      if (options.dateTo && event.created_at > `${options.dateTo}T23:59:59.999Z`) return false
+      if (!search.trim()) return true
+      const query = search.trim().toLowerCase()
+      const haystack = [
+        event.action,
+        event.entity_type,
+        event.entity_id,
+        event.outcome,
+        event.error_class || '',
+        event.actor_email || '',
+        event.actor_user_id,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
 }
 
 function getLocalCollaboratorRole(
@@ -548,40 +612,42 @@ export async function listSlideAudits(
       if (optionsInput.dateFrom) params.set('date_from', optionsInput.dateFrom)
       if (optionsInput.dateTo) params.set('date_to', optionsInput.dateTo)
 
-      const response = await requestJson<SlideAuditQueryResult>(`/api/slides?${params.toString()}`)
-      return {
-        items: response.items || [],
-        pagination: response.pagination || {
-          offset,
-          limit,
-          has_more: false,
-          next_offset: offset,
-        },
+      try {
+        const response = await requestJson<SlideAuditQueryResult>(`/api/slides?${params.toString()}`)
+        return {
+          items: response.items || [],
+          pagination: response.pagination || {
+            offset,
+            limit,
+            has_more: false,
+            next_offset: offset,
+          },
+        }
+      } catch (error) {
+        if (error instanceof SlideApiError && error.status >= 500) {
+          return {
+            items: [],
+            pagination: {
+              offset,
+              limit,
+              has_more: false,
+              next_offset: offset,
+            },
+          }
+        }
+        throw error
       }
     },
     () => {
       const store = readLocalStore(actor)
-      const filtered = store.audits
-        .filter((event) => (actor.role === 'admin' ? true : event.actor_user_id === actor.user_id))
-        .filter((event) => {
-          if (optionsInput.action && optionsInput.action !== 'all' && event.action !== optionsInput.action) return false
-          if (optionsInput.outcome && optionsInput.outcome !== 'all' && event.outcome !== optionsInput.outcome) return false
-          if (optionsInput.entityType && optionsInput.entityType !== 'all' && event.entity_type !== optionsInput.entityType) return false
-          if (optionsInput.dateFrom && event.created_at < `${optionsInput.dateFrom}T00:00:00.000Z`) return false
-          if (optionsInput.dateTo && event.created_at > `${optionsInput.dateTo}T23:59:59.999Z`) return false
-          if (!search.trim()) return true
-          const query = search.trim().toLowerCase()
-          const haystack = [
-            event.action,
-            event.entity_type,
-            event.entity_id,
-            event.outcome,
-            event.error_class || '',
-            event.actor_email || '',
-            event.actor_user_id,
-          ].join(' ').toLowerCase()
-          return haystack.includes(query)
-        })
+      const filtered = filterLocalAudits(store.audits, actor, {
+        search,
+        action: optionsInput.action,
+        outcome: optionsInput.outcome,
+        entityType: optionsInput.entityType,
+        dateFrom: optionsInput.dateFrom,
+        dateTo: optionsInput.dateTo,
+      })
 
       const pageRows = filtered.slice(offset, offset + limit + 1)
       const hasMore = pageRows.length > limit
@@ -613,7 +679,7 @@ export async function listAuditPresets(actorInput: SlideActor): Promise<SlideAud
         const response = await requestJson<{ items: SlideAuditFilterPreset[] }>(`/api/slides?${params.toString()}`)
         return response.items || []
       } catch (error) {
-        if (error instanceof SlideApiError && (error.status === 400 || error.status === 404)) {
+        if (error instanceof SlideApiError && (error.status === 400 || error.status === 404 || error.status >= 500)) {
           return []
         }
         throw error
@@ -731,6 +797,174 @@ export async function deleteAuditPreset(actorInput: SlideActor, presetId: string
       }
       store.auditPresets = store.auditPresets.filter((preset) => preset.id !== trimmedPresetId)
       writeLocalStore(store)
+    },
+  )
+}
+
+export async function listAuditExportJobs(
+  actorInput: SlideActor,
+  options: SlideAuditExportQueryOptions = {},
+): Promise<SlideAuditExportJob[]> {
+  const actor = normalizeActor(actorInput)
+  const limitRaw = Number.isFinite(options.limit) ? Number(options.limit) : 30
+  const offsetRaw = Number.isFinite(options.offset) ? Number(options.offset) : 0
+  const limit = Math.max(1, Math.min(200, limitRaw))
+  const offset = Math.max(0, offsetRaw)
+  const status = normalizeAuditExportStatus(options.status)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'audit-export-jobs',
+        user_id: actor.user_id,
+        limit: String(limit),
+        offset: String(offset),
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      if (status !== 'all') params.set('status', status)
+      const response = await requestJson<{ items: SlideAuditExportJob[] }>(`/api/slides?${params.toString()}`)
+      return response.items || []
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const rows = store.auditExportJobs
+        .filter((job) => (actor.role === 'admin' ? true : job.requested_by_user_id === actor.user_id))
+        .filter((job) => (status === 'all' ? true : job.status === status))
+        .sort((a, b) => b.requested_at.localeCompare(a.requested_at))
+      return rows.slice(offset, offset + limit)
+    },
+  )
+}
+
+export async function requestAuditExportJob(
+  actorInput: SlideActor,
+  input: SlideAuditExportJobRequest = {},
+): Promise<SlideAuditExportJob> {
+  const actor = normalizeActor(actorInput)
+  const normalizedFilters = {
+    search: (input.search || '').trim(),
+    action: normalizeAuditActionFilter(input.action),
+    outcome: normalizeAuditOutcomeFilter(input.outcome),
+    entityType: normalizeAuditEntityFilter(input.entityType),
+    dateFrom: normalizePresetDateValue(input.dateFrom),
+    dateTo: normalizePresetDateValue(input.dateTo),
+  }
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ job: SlideAuditExportJob }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'request-audit-export-job',
+          actor,
+          search: normalizedFilters.search,
+          action_filter: normalizedFilters.action,
+          outcome: normalizedFilters.outcome,
+          entity_type: normalizedFilters.entityType,
+          date_from: normalizedFilters.dateFrom || undefined,
+          date_to: normalizedFilters.dateTo || undefined,
+        }),
+      })
+      if (!response.job) throw new SlideApiError('Audit export job request failed.', 500)
+      return response.job
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const filtered = filterLocalAudits(store.audits, actor, {
+        search: normalizedFilters.search,
+        action: normalizedFilters.action,
+        outcome: normalizedFilters.outcome,
+        entityType: normalizedFilters.entityType,
+        dateFrom: normalizedFilters.dateFrom,
+        dateTo: normalizedFilters.dateTo,
+      })
+      const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`
+      const csvRows = filtered.map((event) =>
+        [
+          event.created_at,
+          event.action,
+          event.entity_type,
+          event.entity_id,
+          event.outcome,
+          event.actor_user_id,
+          event.actor_email || '',
+          event.error_class || '',
+        ].map((value) => escapeCsv(String(value))).join(','),
+      )
+      const csvContent = [
+        'created_at,action,entity_type,entity_id,outcome,actor_user_id,actor_email,error_class',
+        ...csvRows,
+      ].join('\n')
+      const stamp = nowIso()
+      const safeStamp = stamp.replace(/[:.]/g, '-')
+      const job: SlideAuditExportJob = {
+        id: safeRandomId('audit-export'),
+        requested_by_user_id: actor.user_id,
+        requested_by_email: actor.user_email || null,
+        status: 'completed',
+        filters: {
+          search: normalizedFilters.search,
+          action: normalizedFilters.action,
+          outcome: normalizedFilters.outcome,
+          entity_type: normalizedFilters.entityType,
+          date_from: normalizedFilters.dateFrom,
+          date_to: normalizedFilters.dateTo,
+        },
+        row_count: filtered.length,
+        file_name: `slide-audit-export-${safeStamp}.csv`,
+        csv_content: csvContent,
+        error_message: null,
+        requested_at: stamp,
+        started_at: stamp,
+        completed_at: stamp,
+        updated_at: stamp,
+      }
+      store.auditExportJobs.unshift(job)
+      if (store.auditExportJobs.length > 100) {
+        store.auditExportJobs = store.auditExportJobs.slice(0, 100)
+      }
+      writeLocalStore(store)
+      return job
+    },
+  )
+}
+
+export async function downloadAuditExportJob(
+  actorInput: SlideActor,
+  jobId: string,
+): Promise<{ filename: string; content: string }> {
+  const actor = normalizeActor(actorInput)
+  const trimmedId = jobId.trim()
+  if (!trimmedId) throw new SlideApiError('Audit export job id is required.', 400)
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ filename: string; content: string }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'download-audit-export-job',
+          actor,
+          job_id: trimmedId,
+        }),
+      })
+      if (!response.filename || typeof response.content !== 'string') {
+        throw new SlideApiError('Audit export job download failed.', 500)
+      }
+      return response
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const job = store.auditExportJobs.find((entry) => entry.id === trimmedId)
+      if (!job) throw new SlideApiError('Audit export job not found.', 404)
+      const canRead = actor.role === 'admin' || job.requested_by_user_id === actor.user_id
+      if (!canRead) throw new SlideApiError('Forbidden. Cannot access this audit export job.', 403)
+      if (job.status !== 'completed' || !job.csv_content) {
+        throw new SlideApiError('Audit export job is not ready for download.', 409)
+      }
+      return {
+        filename: job.file_name || 'slide-audit-export.csv',
+        content: job.csv_content,
+      }
     },
   )
 }

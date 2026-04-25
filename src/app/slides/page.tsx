@@ -18,6 +18,7 @@ import {
 } from '@/components/slides/import-validation'
 import type {
   SlideAuditEvent,
+  SlideAuditExportJob,
   SlideAuditFilterPreset,
   SlideRecord,
   SlideTemplateApproval,
@@ -30,9 +31,11 @@ import {
   deleteSlide,
   duplicateSlide,
   duplicateTemplateAsSlide,
+  downloadAuditExportJob,
   deleteAuditPreset,
   escalateTemplateApproval,
   listAuditPresets,
+  listAuditExportJobs,
   listTemplateCollaborators,
   listTemplateApprovals,
   listSlideAudits,
@@ -40,6 +43,7 @@ import {
   listTemplates,
   publishTemplateFromSlide,
   recordExportEvent,
+  requestAuditExportJob,
   removeTemplateCollaborator,
   resolveTemplateApproval,
   runTemplateApprovalEscalationSweep,
@@ -145,6 +149,27 @@ function formatDateTime(iso: string | null | undefined): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return 'n/a'
   return date.toLocaleString()
+}
+
+function formatAuditExportStatus(status: SlideAuditExportJob['status']): string {
+  if (status === 'queued') return 'Queued'
+  if (status === 'running') return 'Running'
+  if (status === 'completed') return 'Completed'
+  if (status === 'failed') return 'Failed'
+  return status
+}
+
+function formatAuditExportFilters(filters: SlideAuditExportJob['filters']): string {
+  const segments: string[] = []
+  if (filters.search) segments.push(`Search "${filters.search}"`)
+  if (filters.action !== 'all') segments.push(`Action ${filters.action}`)
+  if (filters.outcome !== 'all') segments.push(`Outcome ${filters.outcome}`)
+  if (filters.entity_type !== 'all') segments.push(`Entity ${filters.entity_type}`)
+  if (filters.date_from || filters.date_to) {
+    segments.push(`Date ${filters.date_from || '...'} to ${filters.date_to || '...'}`)
+  }
+  if (segments.length === 0) return 'All activity filters'
+  return segments.join(' · ')
 }
 
 function formatTemplateApprovalType(type: SlideTemplateApproval['approval_type']): string {
@@ -393,10 +418,14 @@ export default function SlidesPage() {
   const [auditOffset, setAuditOffset] = useState(0)
   const [auditHasMore, setAuditHasMore] = useState(false)
   const [auditPresets, setAuditPresets] = useState<SlideAuditFilterPreset[]>([])
+  const [auditExportJobs, setAuditExportJobs] = useState<SlideAuditExportJob[]>([])
+  const [auditExportStatusFilter, setAuditExportStatusFilter] = useState<'all' | SlideAuditExportJob['status']>('all')
   const [selectedAuditPresetId, setSelectedAuditPresetId] = useState('')
   const [auditPresetName, setAuditPresetName] = useState('')
   const [auditPresetScope, setAuditPresetScope] = useState<'personal' | 'shared'>('personal')
   const [auditPresetBusy, setAuditPresetBusy] = useState(false)
+  const [auditExportRequestBusy, setAuditExportRequestBusy] = useState(false)
+  const [auditExportDownloadBusyId, setAuditExportDownloadBusyId] = useState<string | null>(null)
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
@@ -1147,7 +1176,14 @@ export default function SlidesPage() {
     setLibraryLoading(true)
     setLibraryError(null)
     try {
-      const [slideRowsResult, templateRowsResult, approvalRowsResult, auditRowsResult, auditPresetRowsResult] = await Promise.allSettled([
+      const [
+        slideRowsResult,
+        templateRowsResult,
+        approvalRowsResult,
+        auditRowsResult,
+        auditPresetRowsResult,
+        auditExportJobRowsResult,
+      ] = await Promise.allSettled([
         listSlides(actor, searchValue),
         listTemplates(actor, searchValue),
         listTemplateApprovals(actor, { status: 'pending' }),
@@ -1162,6 +1198,7 @@ export default function SlidesPage() {
           dateTo: auditDateTo,
         }),
         listAuditPresets(actor),
+        listAuditExportJobs(actor, { status: auditExportStatusFilter }),
       ])
 
       const blockingErrors: string[] = []
@@ -1198,6 +1235,12 @@ export default function SlidesPage() {
         setAuditPresets([])
       }
 
+      if (auditExportJobRowsResult.status === 'fulfilled') {
+        setAuditExportJobs(auditExportJobRowsResult.value)
+      } else {
+        setAuditExportJobs([])
+      }
+
       if (blockingErrors.length > 0) {
         setLibraryError(blockingErrors[0])
       }
@@ -1206,7 +1249,17 @@ export default function SlidesPage() {
     } finally {
       setLibraryLoading(false)
     }
-  }, [actor, auditActionFilter, auditDateFrom, auditDateTo, auditEntityTypeFilter, auditOffset, auditOutcomeFilter, searchValue])
+  }, [
+    actor,
+    auditActionFilter,
+    auditDateFrom,
+    auditDateTo,
+    auditEntityTypeFilter,
+    auditExportStatusFilter,
+    auditOffset,
+    auditOutcomeFilter,
+    searchValue,
+  ])
 
   useEffect(() => {
     setAuditOffset(0)
@@ -2323,6 +2376,61 @@ export default function SlidesPage() {
     ].join('\n')
     downloadTextFile(csv, 'slide-audit-events.csv', 'text/csv;charset=utf-8')
   }, [audits, downloadTextFile])
+
+  const handleRequestAuditExportJob = useCallback(async () => {
+    setAuditExportRequestBusy(true)
+    setLibraryError(null)
+    try {
+      const job = await requestAuditExportJob(actor, {
+        search: searchValue,
+        action: auditActionFilter,
+        outcome: auditOutcomeFilter,
+        entityType: auditEntityTypeFilter,
+        dateFrom: auditDateFrom,
+        dateTo: auditDateTo,
+      })
+      await refreshLibraryData()
+      const statusLabel = formatAuditExportStatus(job.status)
+      if (job.status === 'completed') {
+        setEditorNotice({
+          tone: 'info',
+          text: `Audit export ready: ${job.row_count} row(s) generated.`,
+        })
+      } else {
+        setEditorNotice({
+          tone: 'info',
+          text: `Audit export job queued (${statusLabel}).`,
+        })
+      }
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAuditExportRequestBusy(false)
+    }
+  }, [
+    actor,
+    auditActionFilter,
+    auditDateFrom,
+    auditDateTo,
+    auditEntityTypeFilter,
+    auditOutcomeFilter,
+    refreshLibraryData,
+    searchValue,
+  ])
+
+  const handleDownloadAuditExport = useCallback(async (job: SlideAuditExportJob) => {
+    setAuditExportDownloadBusyId(job.id)
+    setLibraryError(null)
+    try {
+      const file = await downloadAuditExportJob(actor, job.id)
+      downloadTextFile(file.content, file.filename, 'text/csv;charset=utf-8')
+      setEditorNotice({ tone: 'info', text: `Downloaded ${file.filename}.` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAuditExportDownloadBusyId(null)
+    }
+  }, [actor, downloadTextFile])
 
   const copyParsedJson = useCallback(async () => {
     if (!result) return
@@ -3916,6 +4024,70 @@ export default function SlidesPage() {
                   >
                     Export Current View CSV
                   </button>
+                </div>
+
+                <div className="slides-audit-export-jobs">
+                  <div className="slides-audit-export-jobs-toolbar">
+                    <label className="slides-editor-field" htmlFor="slides-audit-export-status">
+                      <span>Export Job Status</span>
+                      <select
+                        id="slides-audit-export-status"
+                        className="slides-select"
+                        value={auditExportStatusFilter}
+                        onChange={(event) => setAuditExportStatusFilter(event.target.value as typeof auditExportStatusFilter)}
+                      >
+                        <option value="all">All statuses</option>
+                        <option value="queued">Queued</option>
+                        <option value="running">Running</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={() => void handleRequestAuditExportJob()}
+                      disabled={auditExportRequestBusy}
+                    >
+                      {auditExportRequestBusy ? 'Queuing Export…' : 'Queue Filtered Export Job'}
+                    </button>
+                  </div>
+
+                  {auditExportJobs.length === 0 && (
+                    <p className="slides-empty">
+                      No audit export jobs found for this status filter.
+                    </p>
+                  )}
+                  {auditExportJobs.map((job) => (
+                    <article key={job.id} className="slides-library-card slides-audit-export-job-card">
+                      <div>
+                        <h3>Audit Export Job</h3>
+                        <p>
+                          Status:{' '}
+                          <span
+                            className={`slides-audit-export-status slides-audit-export-status-${job.status}`}
+                          >
+                            {formatAuditExportStatus(job.status)}
+                          </span>
+                          {' · '}Rows: {job.row_count}
+                        </p>
+                        <p>Requested: {formatDateTime(job.requested_at)}</p>
+                        <p>Filters: {formatAuditExportFilters(job.filters)}</p>
+                        {job.file_name && <p>File: {job.file_name}</p>}
+                        {job.error_message && <p>Error: {job.error_message}</p>}
+                      </div>
+                      <div className="slides-inline-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => void handleDownloadAuditExport(job)}
+                          disabled={job.status !== 'completed' || auditExportDownloadBusyId === job.id}
+                        >
+                          {auditExportDownloadBusyId === job.id ? 'Downloading…' : 'Download CSV'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
 
                 {audits.length === 0 && (

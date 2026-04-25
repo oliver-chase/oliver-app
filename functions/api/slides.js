@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits|audit-presets|template-collaborators|template-approvals&search=&limit=&offset=
+// GET /api/slides?resource=slides|templates|audits|audit-presets|audit-export-jobs|template-collaborators|template-approvals&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
@@ -9,12 +9,14 @@ const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
-const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides'];
+const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews'];
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
 const MAX_APPROVAL_ESCALATION_REASON_LENGTH = 280;
 const AUDIT_PRESET_SCOPES = ['personal', 'shared'];
+const AUDIT_EXPORT_JOB_STATUSES = ['queued', 'running', 'completed', 'failed'];
+const MAX_AUDIT_EXPORT_ROWS = 10000;
 const AUDIT_ACTIONS = [
   'save',
   'autosave',
@@ -329,6 +331,14 @@ function sanitizeAuditPresetScope(value, fallback = 'personal') {
   return trimmed;
 }
 
+function sanitizeAuditExportStatus(value, fallback = 'all') {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed === 'all') return 'all';
+  if (!AUDIT_EXPORT_JOB_STATUSES.includes(trimmed)) return fallback;
+  return trimmed;
+}
+
 function sanitizeAuditPresetName(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -421,6 +431,46 @@ function normalizeAuditPresetRow(row) {
     date_to: typeof row.date_to === 'string' ? row.date_to : '',
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+function normalizeAuditExportJobRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const rawFilters = isObject(row.filters) ? row.filters : {};
+  const search = typeof rawFilters.search === 'string' ? rawFilters.search : '';
+  const action = typeof rawFilters.action === 'string' && (rawFilters.action === 'all' || AUDIT_ACTIONS.includes(rawFilters.action))
+    ? rawFilters.action
+    : 'all';
+  const outcome = typeof rawFilters.outcome === 'string' && (rawFilters.outcome === 'all' || AUDIT_OUTCOMES.includes(rawFilters.outcome))
+    ? rawFilters.outcome
+    : 'all';
+  const entityType = typeof rawFilters.entity_type === 'string' && (rawFilters.entity_type === 'all' || AUDIT_ENTITY_TYPES.includes(rawFilters.entity_type))
+    ? rawFilters.entity_type
+    : 'all';
+  const dateFrom = typeof rawFilters.date_from === 'string' ? rawFilters.date_from : '';
+  const dateTo = typeof rawFilters.date_to === 'string' ? rawFilters.date_to : '';
+
+  return {
+    id: row.id,
+    requested_by_user_id: row.requested_by_user_id,
+    requested_by_email: row.requested_by_email || null,
+    status: sanitizeAuditExportStatus(row.status, 'queued'),
+    filters: {
+      search,
+      action,
+      outcome,
+      entity_type: entityType,
+      date_from: dateFrom,
+      date_to: dateTo,
+    },
+    row_count: Number.isFinite(row.row_count) ? Math.max(0, Number(row.row_count)) : 0,
+    file_name: typeof row.file_name === 'string' && row.file_name.trim() ? row.file_name : null,
+    csv_content: typeof row.csv_content === 'string' ? row.csv_content : null,
+    error_message: typeof row.error_message === 'string' ? row.error_message : null,
+    requested_at: row.requested_at || row.created_at || null,
+    started_at: row.started_at || null,
+    completed_at: row.completed_at || null,
+    updated_at: row.updated_at || row.created_at || null,
   };
 }
 
@@ -518,6 +568,17 @@ async function readAuditPresetById(env, presetId) {
   const response = await supabaseFetch(
     env,
     '/rest/v1/slide_audit_filter_presets?id=eq.' + encodeURIComponent(presetId) + '&is_archived=eq.false&select=*&limit=1',
+  );
+  const rows = await response.json().catch(() => []);
+  return rows[0] || null;
+}
+
+async function readAuditExportJobById(env, jobId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_audit_export_jobs?id=eq.' +
+      encodeURIComponent(jobId) +
+      '&select=id,requested_by_user_id,requested_by_email,status,filters,row_count,file_name,csv_content,error_message,requested_at,started_at,completed_at,updated_at&limit=1',
   );
   const rows = await response.json().catch(() => []);
   return rows[0] || null;
@@ -1745,6 +1806,205 @@ async function handleRecordExportAction(env, actor, body) {
   return jsonResponse({ ok: true });
 }
 
+function normalizeAuditExportFiltersFromBody(body) {
+  const search = typeof body.search === 'string' ? body.search.trim() : '';
+  const actionFilter = typeof body.action_filter === 'string' && (body.action_filter === 'all' || AUDIT_ACTIONS.includes(body.action_filter))
+    ? body.action_filter
+    : 'all';
+  const outcomeFilter = typeof body.outcome === 'string' && (body.outcome === 'all' || AUDIT_OUTCOMES.includes(body.outcome))
+    ? body.outcome
+    : 'all';
+  const entityTypeFilter = typeof body.entity_type === 'string' && (body.entity_type === 'all' || AUDIT_ENTITY_TYPES.includes(body.entity_type))
+    ? body.entity_type
+    : 'all';
+  const dateFrom = typeof body.date_from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_from.trim())
+    ? body.date_from.trim()
+    : '';
+  const dateTo = typeof body.date_to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_to.trim())
+    ? body.date_to.trim()
+    : '';
+
+  return {
+    search,
+    action: actionFilter,
+    outcome: outcomeFilter,
+    entity_type: entityTypeFilter,
+    date_from: dateFrom,
+    date_to: dateTo,
+  };
+}
+
+function escapeCsvCell(value) {
+  return '"' + String(value || '').replace(/"/g, '""') + '"';
+}
+
+function buildAuditCsv(rows) {
+  const header = 'created_at,action,entity_type,entity_id,outcome,actor_user_id,actor_email,error_class';
+  const body = rows.map((event) =>
+    [
+      event.created_at || '',
+      event.action || '',
+      event.entity_type || '',
+      event.entity_id || '',
+      event.outcome || '',
+      event.actor_user_id || '',
+      event.actor_email || '',
+      event.error_class || '',
+    ].map((value) => escapeCsvCell(value)).join(','),
+  );
+  return [header, ...body].join('\n');
+}
+
+function buildAuditQueryPath(actor, filters, limit = MAX_AUDIT_EXPORT_ROWS, offset = 0) {
+  const resolvedLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, MAX_AUDIT_EXPORT_ROWS) : 100;
+  const resolvedOffset = Number.isFinite(offset) && offset >= 0 ? offset : 0;
+  let path = '/rest/v1/slide_audit_events?select=*&order=created_at.desc&limit=' + String(resolvedLimit) + '&offset=' + String(resolvedOffset);
+
+  if (actor.role !== 'admin') {
+    path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
+  }
+  if (filters.action && filters.action !== 'all' && AUDIT_ACTIONS.includes(filters.action)) {
+    path += '&action=eq.' + encodeURIComponent(filters.action);
+  }
+  if (filters.outcome && filters.outcome !== 'all' && AUDIT_OUTCOMES.includes(filters.outcome)) {
+    path += '&outcome=eq.' + encodeURIComponent(filters.outcome);
+  }
+  if (filters.entity_type && filters.entity_type !== 'all' && AUDIT_ENTITY_TYPES.includes(filters.entity_type)) {
+    path += '&entity_type=eq.' + encodeURIComponent(filters.entity_type);
+  }
+  if (filters.date_from && filters.date_to) {
+    const dateClause = `(created_at.gte.${filters.date_from}T00:00:00.000Z,created_at.lte.${filters.date_to}T23:59:59.999Z)`;
+    path += '&and=' + encodeURIComponent(dateClause);
+  } else if (filters.date_from) {
+    path += '&created_at=gte.' + encodeURIComponent(filters.date_from + 'T00:00:00.000Z');
+  } else if (filters.date_to) {
+    path += '&created_at=lte.' + encodeURIComponent(filters.date_to + 'T23:59:59.999Z');
+  }
+  path = addAuditSearch(path, filters.search || '');
+
+  return path;
+}
+
+async function handleRequestAuditExportJobAction(env, actor, body) {
+  const filters = normalizeAuditExportFiltersFromBody(body);
+  const now = new Date().toISOString();
+
+  let created = null;
+  try {
+    const createResponse = await supabaseFetch(env, '/rest/v1/slide_audit_export_jobs', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        requested_by_user_id: actor.user_id,
+        requested_by_email: actor.email || null,
+        status: 'running',
+        filters,
+        row_count: 0,
+        file_name: null,
+        csv_content: null,
+        error_message: null,
+        requested_at: now,
+        started_at: now,
+        completed_at: null,
+        created_by: actor.user_id,
+        updated_by: actor.user_id,
+        updated_at: now,
+      }),
+    });
+    const createRows = await createResponse.json().catch(() => []);
+    created = createRows[0] || null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create audit export job.';
+    return errorResponse(message, 500);
+  }
+  if (!created || typeof created.id !== 'string') {
+    return errorResponse('Failed to create audit export job.', 500);
+  }
+
+  try {
+    const queryPath = buildAuditQueryPath(actor, filters, MAX_AUDIT_EXPORT_ROWS, 0);
+    const auditResponse = await supabaseFetch(env, queryPath);
+    const rows = await auditResponse.json().catch(() => []);
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const rowCount = safeRows.length;
+    const csv = buildAuditCsv(safeRows);
+    const completedAt = new Date().toISOString();
+    const safeStamp = completedAt.replace(/[:.]/g, '-');
+    const fileName = `slide-audit-export-${safeStamp}.csv`;
+
+    const patchResponse = await supabaseFetch(
+      env,
+      '/rest/v1/slide_audit_export_jobs?id=eq.' + encodeURIComponent(created.id),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          status: 'completed',
+          row_count: rowCount,
+          file_name: fileName,
+          csv_content: csv,
+          error_message: null,
+          completed_at: completedAt,
+          updated_by: actor.user_id,
+          updated_at: completedAt,
+        }),
+      },
+    );
+    const updatedRows = await patchResponse.json().catch(() => []);
+    const job = normalizeAuditExportJobRow(updatedRows[0] || null);
+    if (!job) return errorResponse('Failed to finalize audit export job.', 500);
+    return jsonResponse({ job }, 201);
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    const message = error instanceof Error ? error.message : 'Audit export job failed.';
+    try {
+      await supabaseFetch(
+        env,
+        '/rest/v1/slide_audit_export_jobs?id=eq.' + encodeURIComponent(created.id),
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            status: 'failed',
+            error_message: message.slice(0, 500),
+            completed_at: failedAt,
+            updated_by: actor.user_id,
+            updated_at: failedAt,
+          }),
+        },
+      );
+    } catch (_) {
+      // Preserve original export error.
+    }
+    return errorResponse(message, 500);
+  }
+}
+
+async function handleDownloadAuditExportJobAction(env, actor, body) {
+  const jobId = typeof body.job_id === 'string' ? body.job_id.trim() : '';
+  if (!jobId) return errorResponse('job_id required for download-audit-export-job.', 400);
+
+  let jobRow = null;
+  try {
+    jobRow = await readAuditExportJobById(env, jobId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to read audit export job.';
+    return errorResponse(message, 500);
+  }
+  if (!jobRow) return errorResponse('Audit export job not found.', 404);
+  if (actor.role !== 'admin' && jobRow.requested_by_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. Cannot access this audit export job.', 403);
+  }
+  if (jobRow.status !== 'completed' || typeof jobRow.csv_content !== 'string') {
+    return errorResponse('Audit export job is not ready for download.', 409);
+  }
+
+  return jsonResponse({
+    filename: typeof jobRow.file_name === 'string' && jobRow.file_name.trim() ? jobRow.file_name : 'slide-audit-export.csv',
+    content: jobRow.csv_content,
+  });
+}
+
 function addSearch(path, field, query) {
   const trimmed = (query || '').trim();
   if (!trimmed) return path;
@@ -1892,35 +2152,52 @@ export async function onRequestGet(context) {
     return jsonResponse({ items });
   }
 
+  if (resource === 'audit-export-jobs') {
+    const status = sanitizeAuditExportStatus(url.searchParams.get('status') || 'all');
+    let path =
+      '/rest/v1/slide_audit_export_jobs?select=id,requested_by_user_id,requested_by_email,status,filters,row_count,file_name,error_message,requested_at,started_at,completed_at,updated_at&order=requested_at.desc&limit=' +
+      String(limit) +
+      '&offset=' +
+      String(offset);
+    if (actor.role !== 'admin') {
+      path += '&requested_by_user_id=eq.' + encodeURIComponent(actor.user_id);
+    }
+    if (status !== 'all') {
+      path += '&status=eq.' + encodeURIComponent(status);
+    }
+
+    let items = [];
+    try {
+      const response = await supabaseFetch(env, path);
+      const rows = await response.json().catch(() => []);
+      items = rows.map(normalizeAuditExportJobRow).filter(Boolean);
+    } catch (_) {
+      // Keep Slides activity workspace usable if export-job storage is unavailable.
+      items = [];
+    }
+
+    return jsonResponse({ items });
+  }
+
   if (resource === 'audits') {
-    const action = (url.searchParams.get('action') || '').trim();
-    const outcome = (url.searchParams.get('outcome') || '').trim();
-    const entityType = (url.searchParams.get('entity_type') || '').trim();
+    const action = (url.searchParams.get('action') || '').trim().toLowerCase();
+    const outcome = (url.searchParams.get('outcome') || '').trim().toLowerCase();
+    const entityType = (url.searchParams.get('entity_type') || '').trim().toLowerCase();
     const dateFrom = (url.searchParams.get('date_from') || '').trim();
     const dateTo = (url.searchParams.get('date_to') || '').trim();
-
-    let path = '/rest/v1/slide_audit_events?select=*&order=created_at.desc&limit=' + String(limit + 1) + '&offset=' + String(offset);
-    if (actor.role !== 'admin') {
-      path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
-    }
-    if (action && AUDIT_ACTIONS.includes(action)) {
-      path += '&action=eq.' + encodeURIComponent(action);
-    }
-    if (outcome && AUDIT_OUTCOMES.includes(outcome)) {
-      path += '&outcome=eq.' + encodeURIComponent(outcome);
-    }
-    if (entityType && AUDIT_ENTITY_TYPES.includes(entityType)) {
-      path += '&entity_type=eq.' + encodeURIComponent(entityType);
-    }
-    if (dateFrom && dateTo) {
-      const dateClause = `(created_at.gte.${dateFrom}T00:00:00.000Z,created_at.lte.${dateTo}T23:59:59.999Z)`;
-      path += '&and=' + encodeURIComponent(dateClause);
-    } else if (dateFrom) {
-      path += '&created_at=gte.' + encodeURIComponent(dateFrom + 'T00:00:00.000Z');
-    } else if (dateTo) {
-      path += '&created_at=lte.' + encodeURIComponent(dateTo + 'T23:59:59.999Z');
-    }
-    path = addAuditSearch(path, search);
+    const path = buildAuditQueryPath(
+      actor,
+      {
+        search,
+        action: action || 'all',
+        outcome: outcome || 'all',
+        entity_type: entityType || 'all',
+        date_from: dateFrom,
+        date_to: dateTo,
+      },
+      limit + 1,
+      offset,
+    );
 
     let rows = [];
     try {
@@ -1944,7 +2221,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, template-collaborators, or template-approvals.', 400);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400);
   } catch (error) {
     return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.');
   }
@@ -1986,6 +2263,8 @@ export async function onRequestPost(context) {
   if (action === 'run-approval-escalation-sweep') return handleRunApprovalEscalationSweepAction(env, actor, body);
   if (action === 'upsert-audit-preset') return handleUpsertAuditPresetAction(env, actor, body);
   if (action === 'delete-audit-preset') return handleDeleteAuditPresetAction(env, actor, body);
+  if (action === 'request-audit-export-job') return handleRequestAuditExportJobAction(env, actor, body);
+  if (action === 'download-audit-export-job') return handleDownloadAuditExportJobAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);

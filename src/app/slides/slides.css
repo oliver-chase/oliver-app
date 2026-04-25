@@ -696,6 +696,56 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   gap: var(--spacing-xs);
 }
 
+.slides-audit-export-jobs {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+  padding: var(--spacing-sm);
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.slides-audit-export-jobs-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.slides-audit-export-job-card {
+  border-style: dashed;
+}
+
+.slides-audit-export-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--font-size-2xs);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  padding: 0 var(--spacing-xs);
+}
+
+.slides-audit-export-status-queued,
+.slides-audit-export-status-running {
+  background: var(--color-amber-light);
+  color: var(--color-amber);
+  border-color: var(--color-amber);
+}
+
+.slides-audit-export-status-completed {
+  background: var(--color-status-active-bg);
+  color: var(--color-status-active);
+  border-color: var(--color-status-active);
+}
+
+.slides-audit-export-status-failed {
+  background: var(--color-red-light);
+  color: var(--color-red);
+  border-color: var(--color-danger-border);
+}
+
 .slides-empty {
   margin: 0;
   color: var(--color-text-secondary);

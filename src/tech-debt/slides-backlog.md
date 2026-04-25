@@ -12,13 +12,13 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | SLD-FE-150, SLD-BE-150 |
 | Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), and approval request/resolution workflow for governance changes. | No approval SLA/escalation automation yet for stale requests. | SLD-FE-440, SLD-BE-440 |
 | Export for client delivery | HTML and print-to-PDF flows exist. PPTX export now supports current-slide and multi-slide selection with warnings surfaced in UI. | Async job orchestration and richer backend-native asset fallback pipeline are still missing for long-running enterprise exports. | SLD-FE-500, SLD-BE-500, SLD-BE-510 |
-| Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. Saved activity filter presets are now available (personal + shared/admin). | Long-range/full-history async export job is still missing for compliance spans beyond paged queries. | SLD-FE-430, SLD-BE-430 |
+| Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging, saved filter presets, and queued audit export jobs with downloadable CSV artifacts. | Background worker orchestration and retention controls for very large compliance exports are still open. | SLD-FE-430, SLD-BE-430, SLD-BE-510 |
 
 ## Dead / Incomplete / Debt Findings
 
 1. `src/app/slides/page.tsx` is a 1k+ line orchestrator combining parser UX, persistence, export, conflict handling, and tab UI. This is high coupling debt and slows feature delivery (`SLD-FE-610`).
 2. No confirmed dead code in the slides subtree right now; debt is mostly oversized UI composition and missing operational tooling.
-3. Activity feed now supports operational filtering/export, but it still lacks saved filter presets and org-level canned audit views.
+3. Activity feed now supports filters/presets/export jobs, but it still lacks org-level canned audit views and retention controls for long-lived compliance archives.
 
 ## Epic and Ticket Backlog
 
@@ -59,8 +59,8 @@ KPI: Template reuse rate and admin audit resolution time both improve release-ov
 | SLD-BE-410 | Template ownership + collaborator governance contract | Backend | P1 | Done (2026-04-25) | API enforces owner/admin governance rights, persists template approvals, and applies/rejects pending requests with audit events. |
 | SLD-FE-420 | Audit explorer with filter/search/export | Frontend | P2 | Done (2026-04-25) | Activity tab supports filters by actor/action/outcome/date and exportable views. |
 | SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Done (2026-04-25) | API supports server-side filtering/pagination and returns predictable query latency. |
-| SLD-FE-430 | Activity filter presets + saved views | Frontend | P2 | In Progress (2026-04-25) | Save/apply/delete presets are implemented; expand preset management UX and shared-governance constraints as needed. |
-| SLD-BE-430 | Long-range audit export jobs + presets contract | Backend | P2 | In Progress (2026-04-25) | Preset persistence contract is implemented; async long-range compliance export jobs remain open. |
+| SLD-FE-430 | Activity filter presets + saved views | Frontend | P2 | Done (2026-04-25) | Activity workspace supports save/apply/delete presets and compliance export-job controls without dead-end paths. |
+| SLD-BE-430 | Long-range audit export jobs + presets contract | Backend | P2 | Done (2026-04-25) | API provides preset persistence plus audit export-job request/list/download contract with scoped access and status tracking. |
 | SLD-FE-440 | Approval aging SLA signal + escalation UI | Frontend | P2 | Done (2026-04-25) | Template approval queue now surfaces SLA age states (healthy/at-risk/overdue) and escalation reminders for requesters/admins. |
 | SLD-BE-440 | Template approval SLA + escalation automation | Backend | P2 | In Progress (2026-04-25) | Manual escalation and admin sweep API/audit flows are live; scheduled/idempotent unattended escalation automation remains open. |
 
@@ -86,7 +86,6 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 
 1. SLD-FE-500 + SLD-BE-500 + SLD-BE-510: Add native PPTX export with async orchestration and warnings reporting.
 2. SLD-FE-210 + SLD-BE-210: Expand template preview flow with quick-preview picker and backend thumbnail asset generation.
-3. SLD-FE-430 + SLD-BE-430: Add saved audit presets and long-range export jobs.
-4. SLD-BE-440: Add automated SLA escalation orchestration (manual escalation path already shipped).
-5. SLD-FE-340: Add snapping/guides for precision editing workflows.
-6. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
+3. SLD-BE-440: Add automated SLA escalation orchestration (manual escalation path already shipped).
+4. SLD-FE-340: Add snapping/guides for precision editing workflows.
+5. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
