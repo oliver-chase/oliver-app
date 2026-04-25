@@ -4,6 +4,7 @@ Use this table to map grouped commits to story IDs and QA evidence.
 
 | Date (ET) | Commit | Epic/Group | Story IDs | Modules | QA Gates |
 | --- | --- | --- | --- | --- | --- |
+| 2026-04-25 | PENDING | Slides collaborator governance + template visibility parity slice | SLD-FE-410, SLD-BE-410 | Slides FE/BE, e2e, migrations, tech-debt docs | typecheck=pass; lint=pass; build=pass; slides-regression=pass (24/24); smoke=pass (29/29); slides-visual=pass (3/3); combined=pass (56/56) |
 | 2026-04-25 | PENDING | Slides template ownership transfer + local fallback parity slice | SLD-FE-410, SLD-BE-410 | Slides FE/BE, e2e, tech-debt docs | typecheck=pass; lint=pass; build=pass; slides-regression=pass (22/22); smoke=pass (29/29); slides-visual=pass (3/3); combined=pass (54/54) |
 | 2026-04-25 | PENDING | Slides audit explorer + backend query slice | SLD-FE-420, SLD-BE-420 | Slides FE/BE, e2e, migrations, tech-debt docs | typecheck=pass; lint=pass; build=pass; slides-regression=pass (21/21); smoke=pass (29/29); slides-visual=pass (3/3); combined=pass (53/53) |
 | 2026-04-25 | PENDING | Slides template governance + ACL slice | SLD-FE-400, SLD-BE-400 | Slides FE/BE, e2e, tech-debt docs | typecheck=pass; lint=pass; build=pass; slides-regression=pass (20/20); smoke=pass (29/29); slides-visual=pass (3/3); combined=pass (52/52) |

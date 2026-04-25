@@ -614,6 +614,129 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card h3')).toContainText('transfer-template')
   })
 
+  test('SLD-FE-410 and SLD-BE-410 manage collaborator roles with audit events', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-collab-1',
+            owner_user_id: 'qa-admin-user',
+            name: 'Collaborator Template',
+            description: 'Collaborator management baseline.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'component-1',
+                type: 'text',
+                sourceLabel: '.headline',
+                x: 100,
+                y: 120,
+                width: 700,
+                content: 'Collaborator workflow',
+                style: { fontSize: 42, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        collaborators: [],
+        audits: [],
+        nextAuditId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const templateCard = page.locator('.slides-library-card', { hasText: 'Collaborator Template' }).first()
+    await templateCard.getByRole('button', { name: 'Manage Collaborators' }).click()
+    await templateCard.getByLabel('Collaborator').fill('qa-reviewer@example.com')
+    await templateCard.getByLabel('Role').selectOption('reviewer')
+    await templateCard.getByRole('button', { name: 'Save Collaborator' }).click()
+    await expect(templateCard.getByText(/qa-reviewer@example.com · reviewer/i)).toBeVisible()
+
+    await templateCard.getByRole('button', { name: 'Remove' }).click()
+    await expect(templateCard.getByText(/No collaborators yet\./i)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Activity' }).click()
+    await page.locator('#slides-audit-action').selectOption('upsert-collaborator')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+    await page.locator('#slides-audit-action').selectOption('remove-collaborator')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+  })
+
+  test('SLD-FE-410 collaborator visibility allows members to use private delegated templates', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('qa-app-user', JSON.stringify({
+        user_id: 'qa-member-user',
+        email: 'qa-member@example.com',
+        name: 'QA Member',
+        role: 'member',
+        page_permissions: ['slides'],
+        created_at: '2026-04-24T00:00:00.000Z',
+        updated_at: '2026-04-24T00:00:00.000Z',
+      }))
+
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-collab-2',
+            owner_user_id: 'qa-owner-user',
+            name: 'Delegated Private Template',
+            description: 'Visible through collaborator role.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'component-1',
+                type: 'text',
+                sourceLabel: '.headline',
+                x: 100,
+                y: 120,
+                width: 700,
+                content: 'Delegated access',
+                style: { fontSize: 42, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        collaborators: [
+          {
+            template_id: 'template-collab-2',
+            user_id: 'qa-member-user',
+            user_email: 'qa-member@example.com',
+            role: 'viewer',
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+        ],
+        audits: [],
+        nextAuditId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    const templateCard = page.locator('.slides-library-card', { hasText: 'Delegated Private Template' }).first()
+    await expect(templateCard).toBeVisible()
+    await templateCard.getByRole('button', { name: 'Duplicate to My Slides' }).click()
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await expect(page.getByText('Delegated Private Template (Copy)')).toBeVisible()
+  })
+
   test('SLD-FE-420 and SLD-BE-420 provide activity filtering, pagination, and csv export', async ({ page }) => {
     await page.addInitScript(() => {
       const audits = Array.from({ length: 25 }, (_, index) => ({

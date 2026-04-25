@@ -15,21 +15,30 @@ import {
   validateParsedResult,
   validatePastedHtml,
 } from '@/components/slides/import-validation'
-import type { SlideAuditEvent, SlideRecord, SlideTemplateRecord } from '@/components/slides/persistence-types'
+import type {
+  SlideAuditEvent,
+  SlideRecord,
+  SlideTemplateCollaborator,
+  SlideTemplateCollaboratorRole,
+  SlideTemplateRecord,
+} from '@/components/slides/persistence-types'
 import {
   archiveTemplate,
   deleteSlide,
   duplicateSlide,
   duplicateTemplateAsSlide,
+  listTemplateCollaborators,
   listSlideAudits,
   listSlides,
   listTemplates,
   publishTemplateFromSlide,
   recordExportEvent,
+  removeTemplateCollaborator,
   renameSlide,
   saveSlide,
   SlideConflictError,
   transferTemplateOwnership,
+  upsertTemplateCollaborator,
   updateTemplate,
 } from '@/lib/slides'
 import { useUser } from '@/context/UserContext'
@@ -102,6 +111,12 @@ interface TemplatePublishDraft {
 interface TemplateTransferDraft {
   templateId: string
   target: string
+}
+
+interface TemplateCollaboratorDraft {
+  templateId: string
+  target: string
+  role: SlideTemplateCollaboratorRole
 }
 
 function readHistoryIndex(state: unknown): number | null {
@@ -258,6 +273,9 @@ export default function SlidesPage() {
   const [libraryError, setLibraryError] = useState<string | null>(null)
   const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
   const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
+  const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
+  const [templateCollaboratorPanelId, setTemplateCollaboratorPanelId] = useState<string | null>(null)
+  const [templateCollaboratorsByTemplate, setTemplateCollaboratorsByTemplate] = useState<Record<string, SlideTemplateCollaborator[]>>({})
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
   const [auditActionFilter, setAuditActionFilter] = useState<'all' | SlideAuditEvent['action']>('all')
@@ -1560,6 +1578,78 @@ export default function SlidesPage() {
     setTemplateTransferDraft(null)
   }, [])
 
+  const refreshTemplateCollaboratorRows = useCallback(async (templateId: string) => {
+    const rows = await listTemplateCollaborators(actor, templateId)
+    setTemplateCollaboratorsByTemplate((previous) => ({ ...previous, [templateId]: rows }))
+  }, [actor])
+
+  const toggleTemplateCollaboratorPanel = useCallback(async (template: SlideTemplateRecord) => {
+    if (templateCollaboratorPanelId === template.id) {
+      setTemplateCollaboratorPanelId(null)
+      setTemplateCollaboratorDraft(null)
+      return
+    }
+
+    setTemplateCollaboratorPanelId(template.id)
+    setTemplateCollaboratorDraft({
+      templateId: template.id,
+      target: '',
+      role: 'viewer',
+    })
+    try {
+      await refreshTemplateCollaboratorRows(template.id)
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    }
+  }, [refreshTemplateCollaboratorRows, templateCollaboratorPanelId])
+
+  const handleUpsertTemplateCollaborator = useCallback(async (template: SlideTemplateRecord) => {
+    if (!templateCollaboratorDraft || templateCollaboratorDraft.templateId !== template.id) return
+    const target = templateCollaboratorDraft.target.trim()
+    if (!target) {
+      setLibraryError('Collaborator email or user id is required.')
+      return
+    }
+
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      await upsertTemplateCollaborator(actor, template.id, {
+        userEmail: target.includes('@') ? target : undefined,
+        userId: target.includes('@') ? undefined : target,
+        role: templateCollaboratorDraft.role,
+      })
+      await refreshTemplateCollaboratorRows(template.id)
+      setEditorNotice({ tone: 'info', text: `Updated collaborator access for "${template.name}".` })
+      setTemplateCollaboratorDraft((previous) =>
+        previous && previous.templateId === template.id
+          ? { ...previous, target: '' }
+          : previous,
+      )
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor, refreshTemplateCollaboratorRows, templateCollaboratorDraft])
+
+  const handleRemoveTemplateCollaborator = useCallback(async (template: SlideTemplateRecord, collaborator: SlideTemplateCollaborator) => {
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      await removeTemplateCollaborator(actor, template.id, {
+        userId: collaborator.user_id,
+        userEmail: collaborator.user_email || undefined,
+      })
+      await refreshTemplateCollaboratorRows(template.id)
+      setEditorNotice({ tone: 'info', text: `Removed collaborator access for "${collaborator.user_email || collaborator.user_id}".` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor, refreshTemplateCollaboratorRows])
+
   const handleTransferTemplateOwnership = useCallback(async (template: SlideTemplateRecord) => {
     if (templateActionBusyId) return
     if (!templateTransferDraft || templateTransferDraft.templateId !== template.id) return
@@ -1578,13 +1668,17 @@ export default function SlidesPage() {
       })
       await refreshLibraryData()
       setTemplateTransferDraft(null)
+      if (templateCollaboratorPanelId === template.id) {
+        setTemplateCollaboratorPanelId(null)
+        setTemplateCollaboratorDraft(null)
+      }
       setEditorNotice({ tone: 'info', text: `Transferred template "${template.name}" ownership to ${target}.` })
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
-  }, [actor, refreshLibraryData, templateActionBusyId, templateTransferDraft])
+  }, [actor, refreshLibraryData, templateActionBusyId, templateCollaboratorPanelId, templateTransferDraft])
 
   const handleArchiveTemplate = useCallback(async (template: SlideTemplateRecord) => {
     const approved = window.confirm(`Archive template "${template.name}"?`)
@@ -1595,12 +1689,16 @@ export default function SlidesPage() {
     try {
       await archiveTemplate(actor, template.id)
       await refreshLibraryData()
+      if (templateCollaboratorPanelId === template.id) {
+        setTemplateCollaboratorPanelId(null)
+        setTemplateCollaboratorDraft(null)
+      }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
-  }, [actor, refreshLibraryData])
+  }, [actor, refreshLibraryData, templateCollaboratorPanelId])
 
   const applyStyleToSelection = useCallback((patch: Partial<SlideComponent['style']>) => {
     if (!result || selectedComponentIds.length === 0) {
@@ -2793,6 +2891,14 @@ export default function SlidesPage() {
                           </button>
                           <button
                             type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => void toggleTemplateCollaboratorPanel(template)}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            {templateCollaboratorPanelId === template.id ? 'Hide Collaborators' : 'Manage Collaborators'}
+                          </button>
+                          <button
+                            type="button"
                             className="btn btn-sm btn-danger"
                             onClick={() => void handleArchiveTemplate(template)}
                             disabled={templateActionBusyId === template.id}
@@ -2837,6 +2943,79 @@ export default function SlidesPage() {
                         </div>
                       </div>
                     )}
+                    {templateCollaboratorPanelId === template.id && (
+                      <div className="slides-template-draft">
+                        <p className="slides-card-note">Collaborator Access</p>
+                        {(templateCollaboratorsByTemplate[template.id] || []).length === 0 && (
+                          <p className="slides-card-note">No collaborators yet.</p>
+                        )}
+                        {(templateCollaboratorsByTemplate[template.id] || []).map((collaborator) => (
+                          <div key={`${collaborator.template_id}:${collaborator.user_id}`} className="slides-inline-actions">
+                            <span className="slides-card-note">
+                              {collaborator.user_email || collaborator.user_id} · {collaborator.role}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              onClick={() => void handleRemoveTemplateCollaborator(template, collaborator)}
+                              disabled={templateActionBusyId === template.id}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+
+                        <label className="slides-label" htmlFor={`slides-template-collaborator-${template.id}`}>Collaborator</label>
+                        <input
+                          id={`slides-template-collaborator-${template.id}`}
+                          className="slides-input"
+                          value={templateCollaboratorDraft?.templateId === template.id ? templateCollaboratorDraft.target : ''}
+                          onChange={(event) =>
+                            setTemplateCollaboratorDraft((previous) =>
+                              previous && previous.templateId === template.id
+                                ? { ...previous, target: event.target.value }
+                                : {
+                                    templateId: template.id,
+                                    target: event.target.value,
+                                    role: 'viewer',
+                                  },
+                            )}
+                          placeholder="user@example.com or user_id"
+                        />
+
+                        <label className="slides-label" htmlFor={`slides-template-collaborator-role-${template.id}`}>Role</label>
+                        <select
+                          id={`slides-template-collaborator-role-${template.id}`}
+                          className="slides-select"
+                          value={templateCollaboratorDraft?.templateId === template.id ? templateCollaboratorDraft.role : 'viewer'}
+                          onChange={(event) =>
+                            setTemplateCollaboratorDraft((previous) =>
+                              previous && previous.templateId === template.id
+                                ? { ...previous, role: event.target.value as SlideTemplateCollaboratorRole }
+                                : {
+                                    templateId: template.id,
+                                    target: '',
+                                    role: event.target.value as SlideTemplateCollaboratorRole,
+                                  },
+                            )}
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="reviewer">Reviewer</option>
+                          <option value="editor">Editor</option>
+                        </select>
+
+                        <div className="slides-inline-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => void handleUpsertTemplateCollaborator(template)}
+                            disabled={templateActionBusyId === template.id}
+                          >
+                            Save Collaborator
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>
@@ -2862,6 +3041,8 @@ export default function SlidesPage() {
                       <option value="delete">Delete</option>
                       <option value="publish-template">Publish Template</option>
                       <option value="transfer-template">Transfer Template</option>
+                      <option value="upsert-collaborator">Upsert Collaborator</option>
+                      <option value="remove-collaborator">Remove Collaborator</option>
                       <option value="export-html">Export HTML</option>
                       <option value="export-pdf">Export PDF</option>
                     </select>

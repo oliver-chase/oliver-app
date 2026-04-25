@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits&search=&limit=&offset=
+// GET /api/slides?resource=slides|templates|audits|template-collaborators&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
@@ -8,6 +8,7 @@ import { jsonResponse, errorResponse } from './_shared/ai.js';
 const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
+const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -187,6 +188,13 @@ function sanitizeTemplateDescription(value, fallback = '') {
   return trimmed || fallback;
 }
 
+function sanitizeCollaboratorRole(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!TEMPLATE_COLLABORATOR_ROLES.includes(trimmed)) return null;
+  return trimmed;
+}
+
 function normalizeMetadata(rawMetadata) {
   if (!isObject(rawMetadata)) return {};
   return rawMetadata;
@@ -221,6 +229,18 @@ function normalizeTemplateRow(row) {
     canvas: row.canvas || { width: 1920, height: 1080 },
     components: Array.isArray(row.components_json) ? row.components_json : [],
     metadata: row.metadata || {},
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeTemplateCollaboratorRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    template_id: row.template_id,
+    user_id: row.user_id,
+    user_email: row.user_email || null,
+    role: row.role,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -262,6 +282,51 @@ async function readTemplateById(env, templateId) {
   return rows[0] || null;
 }
 
+async function readTemplateCollaborators(env, templateId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' + encodeURIComponent(templateId) + '&select=template_id,user_id,role,created_at,updated_at',
+  );
+  const rows = await response.json().catch(() => []);
+  return rows.map(normalizeTemplateCollaboratorRow).filter(Boolean);
+}
+
+async function readActorTemplateRole(env, templateId, actorUserId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' +
+      encodeURIComponent(templateId) +
+      '&user_id=eq.' +
+      encodeURIComponent(actorUserId) +
+      '&select=role&limit=1',
+  );
+  const rows = await response.json().catch(() => []);
+  const row = rows[0] || null;
+  return row?.role || null;
+}
+
+async function readTemplateIdsByCollaborator(env, actorUserId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?user_id=eq.' + encodeURIComponent(actorUserId) + '&select=template_id',
+  );
+  const rows = await response.json().catch(() => []);
+  return Array.from(new Set(rows.map((row) => row?.template_id).filter((value) => typeof value === 'string' && value)));
+}
+
+async function readAppUsersByIds(env, userIds) {
+  const unique = Array.from(new Set(userIds.filter((value) => typeof value === 'string' && value.trim())));
+  if (unique.length === 0) return new Map();
+  const map = new Map();
+  const rows = await Promise.all(unique.map(async (userId) => readAppUserByIdentifier(env, userId, '')));
+  for (const row of rows) {
+    if (row && typeof row.user_id === 'string' && !map.has(row.user_id)) {
+      map.set(row.user_id, row.email || null);
+    }
+  }
+  return map;
+}
+
 async function insertAudit(env, payload) {
   try {
     await supabaseFetch(env, '/rest/v1/slide_audit_events', {
@@ -272,6 +337,15 @@ async function insertAudit(env, payload) {
   } catch (_) {
     // Do not block product flows if audit logging write fails.
   }
+}
+
+async function isTemplateVisibleToActor(env, template, actor) {
+  if (!template) return false;
+  if (actor.role === 'admin') return true;
+  if (template.is_shared) return true;
+  if (template.owner_user_id === actor.user_id) return true;
+  const role = await readActorTemplateRole(env, template.id, actor.user_id);
+  return typeof role === 'string' && TEMPLATE_COLLABORATOR_ROLES.includes(role);
 }
 
 async function handleSaveAction(env, actor, body) {
@@ -451,7 +525,8 @@ async function handleDuplicateTemplateAction(env, actor, body) {
   const template = await readTemplateById(env, templateId);
   if (!template) return errorResponse('Template not found for duplicate.', 404);
 
-  if (!template.is_shared && template.owner_user_id !== actor.user_id && actor.role !== 'admin') {
+  const visibleToActor = await isTemplateVisibleToActor(env, template, actor);
+  if (!visibleToActor) {
     return errorResponse('Forbidden. Template is not visible to this user.', 403);
   }
 
@@ -647,7 +722,10 @@ async function handleUpdateTemplateAction(env, actor, body) {
   if (!template) return errorResponse('Template not found for update.', 404);
 
   const actorIsAdmin = actor.role === 'admin';
-  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
+  const actorIsOwner = template.owner_user_id === actor.user_id;
+  const actorRole = actorIsAdmin || actorIsOwner ? null : await readActorTemplateRole(env, template.id, actor.user_id);
+  const canEditContent = actorIsAdmin || actorIsOwner || actorRole === 'editor';
+  if (!canEditContent) {
     return errorResponse('Forbidden. You do not own this template.', 403);
   }
 
@@ -661,6 +739,9 @@ async function handleUpdateTemplateAction(env, actor, body) {
 
   const hasSharedInput = Object.prototype.hasOwnProperty.call(body, 'is_shared');
   const requestedShared = hasSharedInput ? body.is_shared === true : undefined;
+  if (typeof requestedShared === 'boolean' && !actorIsAdmin && !actorIsOwner) {
+    return errorResponse('Forbidden. Only owners/admins can change template visibility.', 403);
+  }
   if (requestedShared === true && !actorIsAdmin) {
     return errorResponse('Forbidden. Only admins can set template visibility to shared.', 403);
   }
@@ -728,6 +809,15 @@ async function handleArchiveTemplateAction(env, actor, body) {
     },
   );
 
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    },
+  );
+
   await insertAudit(env, {
     actor_user_id: actor.user_id,
     actor_email: actor.email || null,
@@ -777,6 +867,18 @@ async function handleTransferTemplateOwnershipAction(env, actor, body) {
     return jsonResponse({ template: normalizeTemplateRow(template) });
   }
 
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' +
+      encodeURIComponent(template.id) +
+      '&user_id=eq.' +
+      encodeURIComponent(targetUser.user_id),
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    },
+  );
+
   const response = await supabaseFetch(
     env,
     '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
@@ -809,6 +911,137 @@ async function handleTransferTemplateOwnershipAction(env, actor, body) {
   });
 
   return jsonResponse({ template: updated });
+}
+
+async function handleUpsertTemplateCollaboratorAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for upsert-template-collaborator.', 400);
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for collaborator update.', 404);
+  const actorIsAdmin = actor.role === 'admin';
+  const actorIsOwner = template.owner_user_id === actor.user_id;
+  if (!actorIsAdmin && !actorIsOwner) {
+    return errorResponse('Forbidden. Only owners/admins can manage collaborators.', 403);
+  }
+
+  const role = sanitizeCollaboratorRole(body.role);
+  if (!role) {
+    return errorResponse('role is required and must be one of editor, reviewer, viewer.', 400);
+  }
+
+  const targetUserId = typeof body.target_user_id === 'string' ? body.target_user_id.trim() : '';
+  const targetUserEmail = normalizeEmail(body.target_user_email || '');
+  if (!targetUserId && !targetUserEmail) {
+    return errorResponse('target_user_id or target_user_email is required for collaborator upsert.', 400);
+  }
+
+  let targetUser;
+  try {
+    targetUser = await readAppUserByIdentifier(env, targetUserId, targetUserEmail);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Target user lookup failed';
+    return errorResponse(message, 502);
+  }
+  if (!targetUser) return errorResponse('Target user not found for collaborator upsert.', 404);
+  if (!isAuthorizedSlidesActor(targetUser)) return errorResponse('Target user does not have slides access.', 403);
+  if (targetUser.user_id === template.owner_user_id) {
+    return errorResponse('Template owner already has full access; collaborator role is not needed.', 400);
+  }
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators',
+    {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        template_id: template.id,
+        user_id: targetUser.user_id,
+        role,
+        created_by: actor.user_id,
+        updated_by: actor.user_id,
+      }),
+    },
+  );
+  const rows = await response.json().catch(() => []);
+  const collaborator = normalizeTemplateCollaboratorRow(rows[0] || null);
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'upsert-collaborator',
+    outcome: 'success',
+    details: {
+      collaborator_user_id: targetUser.user_id,
+      collaborator_email: targetUser.email || null,
+      role,
+    },
+  });
+
+  const usersById = await readAppUsersByIds(env, [targetUser.user_id]);
+  return jsonResponse({
+    collaborator: collaborator
+      ? { ...collaborator, user_email: usersById.get(collaborator.user_id) || null }
+      : null,
+  });
+}
+
+async function handleRemoveTemplateCollaboratorAction(env, actor, body) {
+  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
+  if (!templateId) return errorResponse('template_id required for remove-template-collaborator.', 400);
+
+  const template = await readTemplateById(env, templateId);
+  if (!template) return errorResponse('Template not found for collaborator removal.', 404);
+  const actorIsAdmin = actor.role === 'admin';
+  const actorIsOwner = template.owner_user_id === actor.user_id;
+  if (!actorIsAdmin && !actorIsOwner) {
+    return errorResponse('Forbidden. Only owners/admins can manage collaborators.', 403);
+  }
+
+  const targetUserId = typeof body.target_user_id === 'string' ? body.target_user_id.trim() : '';
+  const targetUserEmail = normalizeEmail(body.target_user_email || '');
+  if (!targetUserId && !targetUserEmail) {
+    return errorResponse('target_user_id or target_user_email is required for collaborator removal.', 400);
+  }
+
+  let targetUser;
+  try {
+    targetUser = await readAppUserByIdentifier(env, targetUserId, targetUserEmail);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Target user lookup failed';
+    return errorResponse(message, 502);
+  }
+  if (!targetUser) return errorResponse('Target user not found for collaborator removal.', 404);
+
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' +
+      encodeURIComponent(template.id) +
+      '&user_id=eq.' +
+      encodeURIComponent(targetUser.user_id),
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    },
+  );
+
+  await insertAudit(env, {
+    actor_user_id: actor.user_id,
+    actor_email: actor.email || null,
+    entity_type: 'template',
+    entity_id: template.id,
+    action: 'remove-collaborator',
+    outcome: 'success',
+    details: {
+      collaborator_user_id: targetUser.user_id,
+      collaborator_email: targetUser.email || null,
+    },
+  });
+
+  return jsonResponse({ ok: true });
 }
 
 async function handleRecordExportAction(env, actor, body) {
@@ -877,22 +1110,59 @@ export async function onRequestGet(context) {
   }
 
   if (resource === 'templates') {
-    let path = '/rest/v1/slide_templates?is_archived=eq.false&select=*&order=updated_at.desc&limit=' + String(limit);
+    let path = '/rest/v1/slide_templates?is_archived=eq.false&select=*&order=updated_at.desc';
     if (actor.role !== 'admin') {
       path += '&or=' + encodeURIComponent(`(is_shared.eq.true,owner_user_id.eq.${actor.user_id})`);
     }
     path = addSearch(path, 'name', search);
+    path += '&limit=' + String(limit);
 
     const response = await supabaseFetch(env, path);
-    const rows = await response.json().catch(() => []);
+    const baseRows = await response.json().catch(() => []);
 
-    const visible = rows.filter((row) => {
-      if (actor.role === 'admin') return true;
-      if (row.is_shared) return true;
-      return row.owner_user_id === actor.user_id;
-    });
+    let combined = Array.isArray(baseRows) ? baseRows.slice() : [];
+    if (actor.role !== 'admin') {
+      const collaboratorTemplateIds = await readTemplateIdsByCollaborator(env, actor.user_id);
+      if (collaboratorTemplateIds.length > 0) {
+        const inClause = '(' + collaboratorTemplateIds.map((value) => `"${encodeURIComponent(value)}"`).join(',') + ')';
+        let collabPath = '/rest/v1/slide_templates?is_archived=eq.false&id=in.' + inClause + '&select=*&order=updated_at.desc';
+        collabPath = addSearch(collabPath, 'name', search);
+        const collabResponse = await supabaseFetch(env, collabPath);
+        const collabRows = await collabResponse.json().catch(() => []);
+        combined = combined.concat(Array.isArray(collabRows) ? collabRows : []);
+      }
+    }
 
-    const items = visible.map(normalizeTemplateRow).filter(Boolean);
+    const dedupedById = new Map();
+    for (const row of combined) {
+      if (row && typeof row.id === 'string') dedupedById.set(row.id, row);
+    }
+
+    const visible = Array.from(dedupedById.values());
+
+    visible.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+    const items = visible.slice(0, limit).map(normalizeTemplateRow).filter(Boolean);
+    return jsonResponse({ items });
+  }
+
+  if (resource === 'template-collaborators') {
+    const templateId = (url.searchParams.get('template_id') || '').trim();
+    if (!templateId) {
+      return errorResponse('template_id is required for template-collaborators resource.', 400);
+    }
+
+    const template = await readTemplateById(env, templateId);
+    if (!template) return errorResponse('Template not found for collaborator read.', 404);
+    const visibleToActor = await isTemplateVisibleToActor(env, template, actor);
+    if (!visibleToActor) return errorResponse('Forbidden. Template is not visible to this user.', 403);
+
+    const collaborators = await readTemplateCollaborators(env, templateId);
+    const usersById = await readAppUsersByIds(env, collaborators.map((entry) => entry.user_id));
+    const items = collaborators.map((entry) => ({
+      ...entry,
+      user_email: usersById.get(entry.user_id) || null,
+    }));
+
     return jsonResponse({ items });
   }
 
@@ -907,7 +1177,7 @@ export async function onRequestGet(context) {
     if (actor.role !== 'admin') {
       path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
     }
-    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'transfer-template', 'export-html', 'export-pdf'].includes(action)) {
+    if (action && ['save', 'autosave', 'delete', 'duplicate', 'rename', 'publish-template', 'transfer-template', 'upsert-collaborator', 'remove-collaborator', 'export-html', 'export-pdf'].includes(action)) {
       path += '&action=eq.' + encodeURIComponent(action);
     }
     if (outcome && ['success', 'failure'].includes(outcome)) {
@@ -941,7 +1211,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, or audits.', 400);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, or template-collaborators.', 400);
 }
 
 export async function onRequestPost(context) {
@@ -971,6 +1241,8 @@ export async function onRequestPost(context) {
   if (action === 'update-template') return handleUpdateTemplateAction(env, actor, body);
   if (action === 'archive-template') return handleArchiveTemplateAction(env, actor, body);
   if (action === 'transfer-template-owner') return handleTransferTemplateOwnershipAction(env, actor, body);
+  if (action === 'upsert-template-collaborator') return handleUpsertTemplateCollaboratorAction(env, actor, body);
+  if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);

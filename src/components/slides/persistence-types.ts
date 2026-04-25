@@ -33,6 +33,17 @@ export interface SlideTemplateRecord {
   updated_at: string
 }
 
+export type SlideTemplateCollaboratorRole = 'editor' | 'reviewer' | 'viewer'
+
+export interface SlideTemplateCollaborator {
+  template_id: string
+  user_id: string
+  user_email: string | null
+  role: SlideTemplateCollaboratorRole
+  created_at: string
+  updated_at: string
+}
+
 export type SlideAuditAction =
   | 'save'
   | 'autosave'
@@ -41,6 +52,8 @@ export type SlideAuditAction =
   | 'rename'
   | 'publish-template'
   | 'transfer-template'
+  | 'upsert-collaborator'
+  | 'remove-collaborator'
   | 'export-html'
   | 'export-pdf'
 

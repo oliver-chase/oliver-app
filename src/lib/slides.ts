@@ -5,6 +5,8 @@ import type {
   SlideRecord,
   SlideSaveInput,
   SlideSaveResponse,
+  SlideTemplateCollaborator,
+  SlideTemplateCollaboratorRole,
   SlideTemplateRecord,
 } from '@/components/slides/persistence-types'
 
@@ -14,6 +16,7 @@ const LOCAL_STORAGE_KEY = 'oliver-slides-store-v1'
 interface LocalSlidesStore {
   slides: SlideRecord[]
   templates: SlideTemplateRecord[]
+  collaborators: SlideTemplateCollaborator[]
   audits: SlideAuditEvent[]
   nextAuditId: number
 }
@@ -33,6 +36,12 @@ interface UpdateTemplateOptions {
 interface TransferTemplateOwnershipOptions {
   userId?: string
   userEmail?: string
+}
+
+interface UpsertTemplateCollaboratorOptions {
+  userId?: string
+  userEmail?: string
+  role: SlideTemplateCollaboratorRole
 }
 
 export interface SlideAuditQueryOptions {
@@ -181,6 +190,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     return {
       slides: [],
       templates: initialTemplates(actor),
+      collaborators: [],
       audits: [],
       nextAuditId: 1,
     }
@@ -191,6 +201,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     const store: LocalSlidesStore = {
       slides: [],
       templates: initialTemplates(actor),
+      collaborators: [],
       audits: [],
       nextAuditId: 1,
     }
@@ -204,6 +215,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       parsed.templates = initialTemplates(actor)
     }
     if (!Array.isArray(parsed.slides)) parsed.slides = []
+    if (!Array.isArray(parsed.collaborators)) parsed.collaborators = []
     if (!Array.isArray(parsed.audits)) parsed.audits = []
     if (!Number.isFinite(parsed.nextAuditId) || parsed.nextAuditId < 1) parsed.nextAuditId = 1
     return parsed
@@ -211,6 +223,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     const store: LocalSlidesStore = {
       slides: [],
       templates: initialTemplates(actor),
+      collaborators: [],
       audits: [],
       nextAuditId: 1,
     }
@@ -259,6 +272,26 @@ function applySearch<T extends { title?: string; name?: string }>(rows: T[], sea
     const text = (row.title || row.name || '').toLowerCase()
     return text.includes(query)
   })
+}
+
+function getLocalCollaboratorRole(
+  store: LocalSlidesStore,
+  templateId: string,
+  actorUserId: string,
+): SlideTemplateCollaboratorRole | null {
+  const collaborator = store.collaborators.find((entry) => entry.template_id === templateId && entry.user_id === actorUserId)
+  return collaborator?.role || null
+}
+
+function isLocalTemplateVisibleToActor(
+  store: LocalSlidesStore,
+  template: SlideTemplateRecord,
+  actor: SlideActor,
+): boolean {
+  if (actor.role === 'admin') return true
+  if (template.is_shared) return true
+  if (template.owner_user_id === actor.user_id) return true
+  return getLocalCollaboratorRole(store, template.id, actor.user_id) !== null
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -363,9 +396,7 @@ export async function listTemplates(actorInput: SlideActor, search = ''): Promis
     },
     () => {
       const store = readLocalStore(actor)
-      const rows = actor.role === 'admin'
-        ? store.templates
-        : store.templates.filter((template) => template.is_shared || template.owner_user_id === actor.user_id)
+      const rows = store.templates.filter((template) => isLocalTemplateVisibleToActor(store, template, actor))
       return applySearch(rows, search).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     },
   )
@@ -579,7 +610,7 @@ export async function duplicateTemplateAsSlide(actorInput: SlideActor, templateI
       const store = readLocalStore(actor)
       const template = store.templates.find((row) => row.id === templateId)
       if (!template) throw new SlideApiError('Template not found for duplicate', 404)
-      if (!template.is_shared && template.owner_user_id !== actor.user_id && actor.role !== 'admin') {
+      if (!isLocalTemplateVisibleToActor(store, template, actor)) {
         throw new SlideApiError('Forbidden. Template is not visible to this user.', 403)
       }
       const slide = toSlideRecordFromTemplate(template, actor)
@@ -730,8 +761,13 @@ export async function updateTemplate(
       const existing = store.templates[index]
       const isOwner = existing.owner_user_id === actor.user_id
       const isAdmin = actor.role === 'admin'
-      if (!isOwner && !isAdmin) {
+      const collaboratorRole = isOwner || isAdmin ? null : getLocalCollaboratorRole(store, templateId, actor.user_id)
+      const canEditContent = isOwner || isAdmin || collaboratorRole === 'editor'
+      if (!canEditContent) {
         throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+      if (typeof isShared === 'boolean' && !isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only owners/admins can change template visibility.', 403)
       }
       if (isShared === true && !isAdmin) {
         throw new SlideApiError('Forbidden. Only admins can set template visibility to shared.', 403)
@@ -781,6 +817,7 @@ export async function archiveTemplate(actorInput: SlideActor, templateId: string
       }
 
       store.templates = store.templates.filter((template) => template.id !== templateId)
+      store.collaborators = store.collaborators.filter((entry) => entry.template_id !== templateId)
       makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'archive-template' })
       writeLocalStore(store)
     },
@@ -832,12 +869,158 @@ export async function transferTemplateOwnership(
       }
 
       store.templates[index] = updated
+      store.collaborators = store.collaborators.filter(
+        (entry) => !(entry.template_id === templateId && entry.user_id === nextOwner),
+      )
       makeAuditEvent(store, actor, 'transfer-template', 'success', 'template', templateId, {
         previous_owner_user_id: existing.owner_user_id,
         next_owner_user_id: updated.owner_user_id,
       })
       writeLocalStore(store)
       return updated
+    },
+  )
+}
+
+export async function listTemplateCollaborators(
+  actorInput: SlideActor,
+  templateId: string,
+): Promise<SlideTemplateCollaborator[]> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'template-collaborators',
+        template_id: templateId,
+        user_id: actor.user_id,
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      const response = await requestJson<{ items: SlideTemplateCollaborator[] }>(`/api/slides?${params.toString()}`)
+      return response.items || []
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const template = store.templates.find((entry) => entry.id === templateId)
+      if (!template) throw new SlideApiError('Template not found for collaborator read', 404)
+      if (!isLocalTemplateVisibleToActor(store, template, actor)) {
+        throw new SlideApiError('Forbidden. Template is not visible to this user.', 403)
+      }
+      return store.collaborators
+        .filter((entry) => entry.template_id === templateId)
+        .sort((a, b) => a.user_id.localeCompare(b.user_id))
+    },
+  )
+}
+
+export async function upsertTemplateCollaborator(
+  actorInput: SlideActor,
+  templateId: string,
+  options: UpsertTemplateCollaboratorOptions,
+): Promise<SlideTemplateCollaborator> {
+  const actor = normalizeActor(actorInput)
+  const targetUserId = options.userId?.trim() || ''
+  const targetUserEmail = options.userEmail?.trim().toLowerCase() || ''
+  if (!targetUserId && !targetUserEmail) {
+    throw new SlideApiError('Target collaborator email or user id is required.', 400)
+  }
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ collaborator: SlideTemplateCollaborator }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'upsert-template-collaborator',
+          actor,
+          template_id: templateId,
+          target_user_id: targetUserId || undefined,
+          target_user_email: targetUserEmail || undefined,
+          role: options.role,
+        }),
+      })
+      if (!response.collaborator) throw new SlideApiError('Collaborator upsert failed.', 500)
+      return response.collaborator
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const template = store.templates.find((entry) => entry.id === templateId)
+      if (!template) throw new SlideApiError('Template not found for collaborator update', 404)
+      const isOwner = template.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only owners/admins can manage collaborators.', 403)
+      }
+      const target = targetUserId || targetUserEmail
+      if (target === template.owner_user_id) {
+        throw new SlideApiError('Template owner already has full access; collaborator role is not needed.', 400)
+      }
+      const now = nowIso()
+      const index = store.collaborators.findIndex((entry) => entry.template_id === templateId && entry.user_id === target)
+      const next: SlideTemplateCollaborator = {
+        template_id: templateId,
+        user_id: target,
+        user_email: target.includes('@') ? target : null,
+        role: options.role,
+        created_at: index >= 0 ? store.collaborators[index].created_at : now,
+        updated_at: now,
+      }
+      if (index >= 0) store.collaborators[index] = next
+      else store.collaborators.push(next)
+
+      makeAuditEvent(store, actor, 'upsert-collaborator', 'success', 'template', templateId, {
+        collaborator_user_id: next.user_id,
+        collaborator_email: next.user_email,
+        role: next.role,
+      })
+      writeLocalStore(store)
+      return next
+    },
+  )
+}
+
+export async function removeTemplateCollaborator(
+  actorInput: SlideActor,
+  templateId: string,
+  options: { userId?: string; userEmail?: string },
+): Promise<void> {
+  const actor = normalizeActor(actorInput)
+  const targetUserId = options.userId?.trim() || ''
+  const targetUserEmail = options.userEmail?.trim().toLowerCase() || ''
+  if (!targetUserId && !targetUserEmail) {
+    throw new SlideApiError('Target collaborator email or user id is required.', 400)
+  }
+
+  return withLocalFallback(
+    async () => {
+      await requestJson<{ ok: true }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'remove-template-collaborator',
+          actor,
+          template_id: templateId,
+          target_user_id: targetUserId || undefined,
+          target_user_email: targetUserEmail || undefined,
+        }),
+      })
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const template = store.templates.find((entry) => entry.id === templateId)
+      if (!template) throw new SlideApiError('Template not found for collaborator removal', 404)
+      const isOwner = template.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. Only owners/admins can manage collaborators.', 403)
+      }
+
+      const target = targetUserId || targetUserEmail
+      store.collaborators = store.collaborators.filter(
+        (entry) => !(entry.template_id === templateId && entry.user_id === target),
+      )
+      makeAuditEvent(store, actor, 'remove-collaborator', 'success', 'template', templateId, {
+        collaborator_user_id: target,
+      })
+      writeLocalStore(store)
     },
   )
 }
