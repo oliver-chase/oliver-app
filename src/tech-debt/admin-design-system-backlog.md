@@ -43,3 +43,36 @@ KPI: Zero P0/P1 token/style regressions across Admin + Design System pages in re
 2. ADDS-BE-210 + ADDS-FE-210 (make token usage data trustworthy).
 3. ADDS-FE-220 (Tesknota dynamic structure parity).
 4. ADDS-FE-310 + ADDS-QA-310 (lock style and E2E quality gates).
+
+## Prioritization Framework
+
+Use this rubric for every backlog grooming pass:
+
+| Dimension | Weight | Scoring Rule (1-5) |
+| --- | --- | --- |
+| User impact | 35% | 1 = minor inconvenience, 5 = blocks critical workflow |
+| Business risk | 25% | 1 = low consequence, 5 = compliance/revenue/trust risk |
+| Frequency | 15% | 1 = rare edge case, 5 = daily/high-volume path |
+| Dependency unlock | 15% | 1 = isolated, 5 = unblocks multiple roadmap items |
+| Delivery effort (inverse) | 10% | 1 = very large, 5 = small/contained |
+
+Priority bands:
+
+| Band | Rule | Delivery expectation |
+| --- | --- | --- |
+| P0 | weighted score >= 4.2 OR production workflow blocker | next sprint / hot-path queue |
+| P1 | weighted score 3.5-4.19 | next 1-2 sprints |
+| P2 | weighted score 2.7-3.49 | planned after P0/P1 completion |
+| P3 | weighted score < 2.7 | scheduled when capacity allows |
+
+## Ranked Queue (Current)
+
+| Rank | Ticket | Current Band | Why now |
+| --- | --- | --- | --- |
+| 1 | ADDS-BE-110 | P0 | Admin owner save path intermittently hard-fails with unauthorized identity state. |
+| 2 | ADDS-FE-110 | P1 | Converts backend auth outcomes into recoverable, actionable admin UX. |
+| 3 | ADDS-BE-210 | P1 | Token usage signal must be trustworthy before cleanup/deletion decisions. |
+| 4 | ADDS-FE-210 | P1 | Removes ambiguity in "unused token" UI and reduces false cleanup risk. |
+| 5 | ADDS-FE-220 | P2 | Delivers structure/dynamic parity with Tesknota workflows. |
+| 6 | ADDS-FE-310 | P1 | Enforces shared component mapping and no hardcoded style drift. |
+| 7 | ADDS-QA-310 | P1 | Makes quality gate repeatable across Admin/DS/chatbot journeys. |

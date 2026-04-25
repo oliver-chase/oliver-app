@@ -91,3 +91,26 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 3. SLD-BE-440: Add automated SLA escalation orchestration (manual escalation path already shipped).
 4. SLD-FE-340: Add snapping/guides for precision editing workflows.
 5. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
+
+## Journey Risk Addendum (User Feedback 2026-04-25)
+
+| Journey Step | Observed friction | Root-cause hypothesis | Tracking ticket(s) |
+| --- | --- | --- | --- |
+| Upload HTML -> autosave | Autosave can surface worker-level 1101 failures, then retries loop without clear recovery. | API exception envelope gaps and insufficient actor/path diagnostics for save calls. | SLD-BE-120, SLD-FE-120 |
+| Manage templates | Remove/restore controls are not discoverable and not standardized with other modules. | Missing archive/undo UX pattern and cross-module action architecture mismatch. | SLD-FE-415, SLD-BE-415, SLD-FE-416 |
+| Visual parity after import | Imported canvas can diverge from source HTML appearance in complex layouts. | Parser fidelity gaps and missing render-normalization passes. | SLD-FE-350, SLD-BE-350 |
+| Component editing expectations | Users expect text-box autosize, richer inline editing, and full presentation toolbar parity. | Current editor supports core transforms but lacks text-first autosize and advanced formatting parity set. | SLD-FE-360, SLD-FE-370 |
+| Theme consistency | Theme colors should be centrally governed, not ad hoc in feature code. | Incomplete mapping of slide editor style controls to canonical tokenized theme sets. | SLD-FE-380, ADDS-FE-310 |
+
+## Additional Tickets (Functional + Usability Coverage)
+
+| Ticket | Title | Layer | Priority | Status | Acceptance Criteria |
+| --- | --- | --- | --- | --- | --- |
+| SLD-BE-120 | Slides API exception envelope and correlation IDs | Backend | P0 | Backlog | Every `/api/slides` failure returns structured JSON (no worker HTML), includes request correlation ID, and records server-side error class for triage. |
+| SLD-FE-120 | Autosave resilience UX for transport/worker failures | Frontend | P1 | Backlog | Autosave retry UI distinguishes transient transport failure vs validation failure, surfaces correlation ID when present, and stops infinite retry loops after bounded attempts. |
+| SLD-FE-416 | Template archive undo pattern | Frontend | P1 | Backlog | Template removal shows inline undo toast within a time window; undo restores card state without full-page refresh; behavior mirrors established account-planning deletion interaction pattern. |
+| SLD-FE-350 | HTML-to-canvas visual fidelity pass | Frontend | P1 | Backlog | For representative fixture set, imported canvas visually matches source HTML within approved tolerance; text, boxes, and spacing preserve relative layout. |
+| SLD-BE-350 | Import normalization + deterministic style extraction | Backend | P2 | Backlog | Parser output schema captures normalized typography, container dimensions, and spacing metadata needed for high-fidelity re-rendering across sessions. |
+| SLD-FE-360 | Text-driven container autosize behavior | Frontend | P1 | Backlog | Editable text components can auto-resize parent/container dimensions with guardrails; user can toggle autosize/manual size mode. |
+| SLD-FE-370 | Advanced presentation toolbar parity | Frontend | P1 | Backlog | Multi-select, align/distribute, font size/family, color, and spacing controls provide consistent outcomes across selected components and persist through save/load cycles. |
+| SLD-FE-380 | Tokenized slide theme palette binding | Frontend | P1 | Backlog | Slide editor color controls map to canonical token palette sets first; custom colors require explicit override flow and are recorded distinctly from tokenized selections. |
