@@ -24,6 +24,7 @@ index table yet.
 | Bundle | Scope | Story IDs |
 | --- | --- | --- |
 | oliver-requirements-2026-04-24 | Validated net-new requirements and directional changes | US-O8..US-O17 |
+| admin-design-system-parity-2026-04-25 | Admin hub/navigation restructuring, design-system parity, editing, and QA hardening | US-O18..US-O24 |
 | oliver-ux-audit-2026-04-24 | UX audit findings and cross-repo clarifications | US-O1..US-O7 |
 | slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-039 |
 
