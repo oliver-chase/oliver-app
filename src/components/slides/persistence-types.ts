@@ -94,6 +94,23 @@ export interface SlideAuditEvent {
   created_at: string
 }
 
+export type SlideAuditPresetScope = 'personal' | 'shared'
+
+export interface SlideAuditFilterPreset {
+  id: string
+  owner_user_id: string
+  name: string
+  scope: SlideAuditPresetScope
+  search: string
+  action: SlideAuditAction | 'all'
+  outcome: SlideAuditOutcome | 'all'
+  entity_type: SlideAuditEvent['entity_type'] | 'all'
+  date_from: string
+  date_to: string
+  created_at: string
+  updated_at: string
+}
+
 export interface SlideActor {
   user_id: string
   user_email?: string

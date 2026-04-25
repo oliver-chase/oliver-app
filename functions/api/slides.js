@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits|template-collaborators|template-approvals&search=&limit=&offset=
+// GET /api/slides?resource=slides|templates|audits|audit-presets|template-collaborators|template-approvals&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
@@ -11,6 +11,25 @@ const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
+const AUDIT_PRESET_SCOPES = ['personal', 'shared'];
+const AUDIT_ACTIONS = [
+  'save',
+  'autosave',
+  'delete',
+  'duplicate',
+  'rename',
+  'publish-template',
+  'transfer-template',
+  'upsert-collaborator',
+  'remove-collaborator',
+  'submit-approval',
+  'approve-approval',
+  'reject-approval',
+  'export-html',
+  'export-pdf',
+];
+const AUDIT_OUTCOMES = ['success', 'failure'];
+const AUDIT_ENTITY_TYPES = ['slide', 'template'];
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -233,6 +252,21 @@ function sanitizeApprovalStatus(value) {
   return trimmed;
 }
 
+function sanitizeAuditPresetScope(value, fallback = 'personal') {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim().toLowerCase();
+  if (!AUDIT_PRESET_SCOPES.includes(trimmed)) return fallback;
+  return trimmed;
+}
+
+function sanitizeAuditPresetName(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 120) return null;
+  return trimmed;
+}
+
 function normalizeMetadata(rawMetadata) {
   if (!isObject(rawMetadata)) return {};
   return rawMetadata;
@@ -297,6 +331,24 @@ function normalizeTemplateApprovalRow(row) {
     review_note: row.review_note || null,
     reviewed_by_user_id: row.reviewed_by_user_id || null,
     reviewed_at: row.reviewed_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeAuditPresetRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    id: row.id,
+    owner_user_id: row.owner_user_id,
+    name: row.name,
+    scope: sanitizeAuditPresetScope(row.scope || 'personal'),
+    search: typeof row.search === 'string' ? row.search : '',
+    action: typeof row.action_filter === 'string' ? row.action_filter : 'all',
+    outcome: typeof row.outcome_filter === 'string' ? row.outcome_filter : 'all',
+    entity_type: typeof row.entity_type_filter === 'string' ? row.entity_type_filter : 'all',
+    date_from: typeof row.date_from === 'string' ? row.date_from : '',
+    date_to: typeof row.date_to === 'string' ? row.date_to : '',
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -387,6 +439,15 @@ async function readTemplateApprovalById(env, approvalId) {
   const response = await supabaseFetch(
     env,
     '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approvalId) + '&select=*&limit=1',
+  );
+  const rows = await response.json().catch(() => []);
+  return rows[0] || null;
+}
+
+async function readAuditPresetById(env, presetId) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_audit_filter_presets?id=eq.' + encodeURIComponent(presetId) + '&is_archived=eq.false&select=*&limit=1',
   );
   const rows = await response.json().catch(() => []);
   return rows[0] || null;
@@ -1301,6 +1362,135 @@ async function handleResolveTemplateApprovalAction(env, actor, body) {
   return jsonResponse({ approval: approved });
 }
 
+async function handleUpsertAuditPresetAction(env, actor, body) {
+  const name = sanitizeAuditPresetName(body.name);
+  if (!name) return errorResponse('Valid preset name is required for upsert-audit-preset.', 400);
+
+  const scope = sanitizeAuditPresetScope(body.scope || 'personal');
+  if (scope === 'shared' && actor.role !== 'admin') {
+    return errorResponse('Forbidden. Only admins can save shared audit presets.', 403);
+  }
+
+  const search = typeof body.search === 'string' ? body.search.trim() : '';
+  const actionFilter = typeof body.action_filter === 'string' && (body.action_filter === 'all' || AUDIT_ACTIONS.includes(body.action_filter))
+    ? body.action_filter
+    : 'all';
+  const outcomeFilter = typeof body.outcome === 'string' && (body.outcome === 'all' || AUDIT_OUTCOMES.includes(body.outcome))
+    ? body.outcome
+    : 'all';
+  const entityTypeFilter = typeof body.entity_type === 'string' && (body.entity_type === 'all' || AUDIT_ENTITY_TYPES.includes(body.entity_type))
+    ? body.entity_type
+    : 'all';
+  const dateFrom = typeof body.date_from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_from.trim())
+    ? body.date_from.trim()
+    : null;
+  const dateTo = typeof body.date_to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_to.trim())
+    ? body.date_to.trim()
+    : null;
+
+  let existing = null;
+  const explicitPresetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : '';
+  if (explicitPresetId) {
+    existing = await readAuditPresetById(env, explicitPresetId);
+    if (!existing) return errorResponse('Audit preset not found for update.', 404);
+    if (actor.role !== 'admin' && existing.owner_user_id !== actor.user_id) {
+      return errorResponse('Forbidden. You can only update your own audit presets.', 403);
+    }
+    if (existing.scope === 'shared' && actor.role !== 'admin') {
+      return errorResponse('Forbidden. Only admins can update shared audit presets.', 403);
+    }
+  } else {
+    const dedupePath = '/rest/v1/slide_audit_filter_presets?is_archived=eq.false&owner_user_id=eq.' +
+      encodeURIComponent(actor.user_id) +
+      '&scope=eq.' +
+      encodeURIComponent(scope) +
+      '&name=eq.' +
+      encodeURIComponent(name) +
+      '&select=*&limit=1';
+    const dedupeResponse = await supabaseFetch(env, dedupePath);
+    const dedupeRows = await dedupeResponse.json().catch(() => []);
+    existing = dedupeRows[0] || null;
+  }
+
+  const timestamp = new Date().toISOString();
+  if (existing) {
+    const response = await supabaseFetch(
+      env,
+      '/rest/v1/slide_audit_filter_presets?id=eq.' + encodeURIComponent(existing.id),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          name,
+          scope,
+          search,
+          action_filter: actionFilter,
+          outcome_filter: outcomeFilter,
+          entity_type_filter: entityTypeFilter,
+          date_from: dateFrom,
+          date_to: dateTo,
+          updated_by: actor.user_id,
+          updated_at: timestamp,
+        }),
+      },
+    );
+    const rows = await response.json().catch(() => []);
+    const preset = normalizeAuditPresetRow(rows[0] || null);
+    return jsonResponse({ preset });
+  }
+
+  const response = await supabaseFetch(env, '/rest/v1/slide_audit_filter_presets', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      owner_user_id: actor.user_id,
+      name,
+      scope,
+      search,
+      action_filter: actionFilter,
+      outcome_filter: outcomeFilter,
+      entity_type_filter: entityTypeFilter,
+      date_from: dateFrom,
+      date_to: dateTo,
+      created_by: actor.user_id,
+      updated_by: actor.user_id,
+    }),
+  });
+  const rows = await response.json().catch(() => []);
+  const preset = normalizeAuditPresetRow(rows[0] || null);
+  return jsonResponse({ preset }, 201);
+}
+
+async function handleDeleteAuditPresetAction(env, actor, body) {
+  const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : '';
+  if (!presetId) return errorResponse('preset_id required for delete-audit-preset.', 400);
+
+  const preset = await readAuditPresetById(env, presetId);
+  if (!preset) return errorResponse('Audit preset not found for delete.', 404);
+  if (actor.role !== 'admin' && preset.owner_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. You can only delete your own audit presets.', 403);
+  }
+  if (preset.scope === 'shared' && actor.role !== 'admin') {
+    return errorResponse('Forbidden. Only admins can delete shared audit presets.', 403);
+  }
+
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_audit_filter_presets?id=eq.' + encodeURIComponent(preset.id),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        is_archived: true,
+        updated_by: actor.user_id,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+
+  return jsonResponse({ ok: true });
+}
+
 async function handleRecordExportAction(env, actor, body) {
   const slideId = typeof body.slide_id === 'string' ? body.slide_id.trim() : '';
   const format = body.format === 'pdf' ? 'pdf' : 'html';
@@ -1445,6 +1635,16 @@ export async function onRequestGet(context) {
     return jsonResponse({ items });
   }
 
+  if (resource === 'audit-presets') {
+    let path = '/rest/v1/slide_audit_filter_presets?is_archived=eq.false&select=*&order=updated_at.desc&limit=100';
+    path += '&or=' + encodeURIComponent(`(scope.eq.shared,owner_user_id.eq.${actor.user_id})`);
+
+    const response = await supabaseFetch(env, path);
+    const rows = await response.json().catch(() => []);
+    const items = rows.map(normalizeAuditPresetRow).filter(Boolean);
+    return jsonResponse({ items });
+  }
+
   if (resource === 'audits') {
     const action = (url.searchParams.get('action') || '').trim();
     const outcome = (url.searchParams.get('outcome') || '').trim();
@@ -1456,31 +1656,13 @@ export async function onRequestGet(context) {
     if (actor.role !== 'admin') {
       path += '&actor_user_id=eq.' + encodeURIComponent(actor.user_id);
     }
-    if (
-      action &&
-      [
-        'save',
-        'autosave',
-        'delete',
-        'duplicate',
-        'rename',
-        'publish-template',
-        'transfer-template',
-        'upsert-collaborator',
-        'remove-collaborator',
-        'submit-approval',
-        'approve-approval',
-        'reject-approval',
-        'export-html',
-        'export-pdf',
-      ].includes(action)
-    ) {
+    if (action && AUDIT_ACTIONS.includes(action)) {
       path += '&action=eq.' + encodeURIComponent(action);
     }
-    if (outcome && ['success', 'failure'].includes(outcome)) {
+    if (outcome && AUDIT_OUTCOMES.includes(outcome)) {
       path += '&outcome=eq.' + encodeURIComponent(outcome);
     }
-    if (entityType && ['slide', 'template'].includes(entityType)) {
+    if (entityType && AUDIT_ENTITY_TYPES.includes(entityType)) {
       path += '&entity_type=eq.' + encodeURIComponent(entityType);
     }
     if (dateFrom && dateTo) {
@@ -1508,7 +1690,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, template-collaborators, or template-approvals.', 400);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, template-collaborators, or template-approvals.', 400);
 }
 
 export async function onRequestPost(context) {
@@ -1542,6 +1724,8 @@ export async function onRequestPost(context) {
   if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);
   if (action === 'submit-template-approval') return handleSubmitTemplateApprovalAction(env, actor, body);
   if (action === 'resolve-template-approval') return handleResolveTemplateApprovalAction(env, actor, body);
+  if (action === 'upsert-audit-preset') return handleUpsertAuditPresetAction(env, actor, body);
+  if (action === 'delete-audit-preset') return handleDeleteAuditPresetAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);

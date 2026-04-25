@@ -2,6 +2,8 @@ import type {
   SlideActor,
   SlideAuditAction,
   SlideAuditEvent,
+  SlideAuditFilterPreset,
+  SlideAuditPresetScope,
   SlideRecord,
   SlideSaveInput,
   SlideSaveResponse,
@@ -22,6 +24,7 @@ interface LocalSlidesStore {
   collaborators: SlideTemplateCollaborator[]
   approvals: SlideTemplateApproval[]
   audits: SlideAuditEvent[]
+  auditPresets: SlideAuditFilterPreset[]
   nextAuditId: number
   nextApprovalId: number
 }
@@ -55,6 +58,17 @@ interface SubmitTemplateApprovalOptions {
   userId?: string
   userEmail?: string
   role?: SlideTemplateCollaboratorRole
+}
+
+export interface SlideAuditPresetInput {
+  name: string
+  scope: SlideAuditPresetScope
+  search?: string
+  action?: SlideAuditAction | 'all'
+  outcome?: 'success' | 'failure' | 'all'
+  entityType?: 'slide' | 'template' | 'all'
+  dateFrom?: string
+  dateTo?: string
 }
 
 export interface SlideAuditQueryOptions {
@@ -206,6 +220,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       collaborators: [],
       approvals: [],
       audits: [],
+      auditPresets: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -219,6 +234,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       collaborators: [],
       approvals: [],
       audits: [],
+      auditPresets: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -235,6 +251,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     if (!Array.isArray(parsed.collaborators)) parsed.collaborators = []
     if (!Array.isArray(parsed.approvals)) parsed.approvals = []
     if (!Array.isArray(parsed.audits)) parsed.audits = []
+    if (!Array.isArray(parsed.auditPresets)) parsed.auditPresets = []
     if (!Number.isFinite(parsed.nextAuditId) || parsed.nextAuditId < 1) parsed.nextAuditId = 1
     if (!Number.isFinite(parsed.nextApprovalId) || parsed.nextApprovalId < 1) parsed.nextApprovalId = 1
     return parsed
@@ -245,6 +262,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       collaborators: [],
       approvals: [],
       audits: [],
+      auditPresets: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -293,6 +311,48 @@ function applySearch<T extends { title?: string; name?: string }>(rows: T[], sea
     const text = (row.title || row.name || '').toLowerCase()
     return text.includes(query)
   })
+}
+
+function normalizeAuditActionFilter(value: string | undefined): SlideAuditAction | 'all' {
+  if (!value) return 'all'
+  const allowed: Array<SlideAuditAction | 'all'> = [
+    'all',
+    'save',
+    'autosave',
+    'delete',
+    'duplicate',
+    'rename',
+    'publish-template',
+    'transfer-template',
+    'upsert-collaborator',
+    'remove-collaborator',
+    'submit-approval',
+    'approve-approval',
+    'reject-approval',
+    'export-html',
+    'export-pdf',
+  ]
+  return allowed.includes(value as SlideAuditAction | 'all') ? (value as SlideAuditAction | 'all') : 'all'
+}
+
+function normalizeAuditOutcomeFilter(value: string | undefined): 'success' | 'failure' | 'all' {
+  if (value === 'success' || value === 'failure') return value
+  return 'all'
+}
+
+function normalizeAuditEntityFilter(value: string | undefined): 'slide' | 'template' | 'all' {
+  if (value === 'slide' || value === 'template') return value
+  return 'all'
+}
+
+function normalizeAuditPresetScope(value: string | undefined): SlideAuditPresetScope {
+  return value === 'shared' ? 'shared' : 'personal'
+}
+
+function normalizePresetDateValue(value: string | undefined): string {
+  if (!value) return ''
+  const trimmed = value.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : ''
 }
 
 function getLocalCollaboratorRole(
@@ -526,6 +586,142 @@ export async function listSlideAudits(
           next_offset: offset + items.length,
         },
       }
+    },
+  )
+}
+
+export async function listAuditPresets(actorInput: SlideActor): Promise<SlideAuditFilterPreset[]> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'audit-presets',
+        user_id: actor.user_id,
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      try {
+        const response = await requestJson<{ items: SlideAuditFilterPreset[] }>(`/api/slides?${params.toString()}`)
+        return response.items || []
+      } catch (error) {
+        if (error instanceof SlideApiError && (error.status === 400 || error.status === 404)) {
+          return []
+        }
+        throw error
+      }
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const rows = store.auditPresets.filter((preset) => {
+        if (preset.scope === 'shared') return true
+        if (actor.role === 'admin') return true
+        return preset.owner_user_id === actor.user_id
+      })
+      return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    },
+  )
+}
+
+export async function upsertAuditPreset(
+  actorInput: SlideActor,
+  input: SlideAuditPresetInput,
+): Promise<SlideAuditFilterPreset> {
+  const actor = normalizeActor(actorInput)
+  const name = input.name.trim()
+  const scope = normalizeAuditPresetScope(input.scope)
+  if (!name) throw new SlideApiError('Preset name is required.', 400)
+  if (scope === 'shared' && actor.role !== 'admin') {
+    throw new SlideApiError('Forbidden. Only admins can save shared audit presets.', 403)
+  }
+
+  const normalizedInput = {
+    name,
+    scope,
+    search: (input.search || '').trim(),
+    actionFilter: normalizeAuditActionFilter(input.action),
+    outcomeFilter: normalizeAuditOutcomeFilter(input.outcome),
+    entityTypeFilter: normalizeAuditEntityFilter(input.entityType),
+    date_from: normalizePresetDateValue(input.dateFrom),
+    date_to: normalizePresetDateValue(input.dateTo),
+  }
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ preset: SlideAuditFilterPreset }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'upsert-audit-preset',
+          actor,
+          name: normalizedInput.name,
+          scope: normalizedInput.scope,
+          search: normalizedInput.search,
+          action_filter: normalizedInput.actionFilter,
+          outcome: normalizedInput.outcomeFilter,
+          entity_type: normalizedInput.entityTypeFilter,
+          date_from: normalizedInput.date_from,
+          date_to: normalizedInput.date_to,
+        }),
+      })
+      if (!response.preset) throw new SlideApiError('Audit preset save failed.', 500)
+      return response.preset
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const stamp = nowIso()
+      const existingIndex = store.auditPresets.findIndex((preset) =>
+        preset.owner_user_id === actor.user_id &&
+        preset.scope === normalizedInput.scope &&
+        preset.name.toLowerCase() === normalizedInput.name.toLowerCase(),
+      )
+
+      const nextPreset: SlideAuditFilterPreset = {
+        id: existingIndex >= 0 ? store.auditPresets[existingIndex].id : safeRandomId('audit-preset'),
+        owner_user_id: actor.user_id,
+        name: normalizedInput.name,
+        scope: normalizedInput.scope,
+        search: normalizedInput.search,
+        action: normalizedInput.actionFilter,
+        outcome: normalizedInput.outcomeFilter,
+        entity_type: normalizedInput.entityTypeFilter,
+        date_from: normalizedInput.date_from,
+        date_to: normalizedInput.date_to,
+        created_at: existingIndex >= 0 ? store.auditPresets[existingIndex].created_at : stamp,
+        updated_at: stamp,
+      }
+
+      if (existingIndex >= 0) store.auditPresets[existingIndex] = nextPreset
+      else store.auditPresets.unshift(nextPreset)
+      writeLocalStore(store)
+      return nextPreset
+    },
+  )
+}
+
+export async function deleteAuditPreset(actorInput: SlideActor, presetId: string): Promise<void> {
+  const actor = normalizeActor(actorInput)
+  const trimmedPresetId = presetId.trim()
+  if (!trimmedPresetId) throw new SlideApiError('Preset id is required.', 400)
+
+  return withLocalFallback(
+    async () => {
+      await requestJson<{ ok: true }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'delete-audit-preset',
+          actor,
+          preset_id: trimmedPresetId,
+        }),
+      })
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const existing = store.auditPresets.find((preset) => preset.id === trimmedPresetId)
+      if (!existing) throw new SlideApiError('Audit preset not found.', 404)
+      if (actor.role !== 'admin' && existing.owner_user_id !== actor.user_id) {
+        throw new SlideApiError('Forbidden. You can only delete your own audit presets.', 403)
+      }
+      store.auditPresets = store.auditPresets.filter((preset) => preset.id !== trimmedPresetId)
+      writeLocalStore(store)
     },
   )
 }

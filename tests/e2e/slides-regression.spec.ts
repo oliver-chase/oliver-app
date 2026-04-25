@@ -1056,6 +1056,63 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card')).toHaveCount(20)
   })
 
+  test('SLD-FE-430 and SLD-BE-430 save, apply, and delete activity filter presets', async ({ page }) => {
+    await page.addInitScript(() => {
+      const audits = Array.from({ length: 25 }, (_, index) => ({
+        id: index + 1,
+        actor_user_id: 'qa-admin-user',
+        actor_email: 'qa-admin@example.com',
+        entity_type: index % 2 === 0 ? 'template' : 'slide',
+        entity_id: `entity-${index + 1}`,
+        action: index % 3 === 0 ? 'export-html' : index % 3 === 1 ? 'save' : 'publish-template',
+        outcome: index % 4 === 0 ? 'failure' : 'success',
+        error_class: index % 4 === 0 ? 'simulated_failure' : null,
+        details: { index: index + 1 },
+        created_at: `2026-04-${String(index + 1).padStart(2, '0')}T10:00:00.000Z`,
+      }))
+
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [],
+        audits,
+        nextAuditId: 26,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Activity' }).click()
+
+    await page.locator('#slides-search').fill('entity-25')
+    await page.locator('#slides-audit-action').selectOption('export-html')
+    await page.locator('#slides-audit-outcome').selectOption('failure')
+    await page.locator('#slides-audit-entity').selectOption('template')
+    await page.locator('#slides-audit-date-from').fill('2026-04-20')
+    await page.locator('#slides-audit-date-to').fill('2026-04-25')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+
+    await page.locator('#slides-audit-preset-name').fill('Failure Exports')
+    await page.getByRole('button', { name: 'Save Preset' }).click()
+    await expect(page.locator('#slides-audit-preset-select')).toContainText('Failure Exports')
+
+    await page.locator('#slides-search').fill('')
+    await page.getByRole('button', { name: 'Reset Audit Filters' }).click()
+    await expect(page.locator('.slides-library-card')).toHaveCount(20)
+
+    await page.locator('#slides-audit-preset-select').selectOption({ label: 'Failure Exports' })
+    await page.getByRole('button', { name: 'Apply Preset' }).click()
+    await expect(page.locator('#slides-search')).toHaveValue('entity-25')
+    await expect(page.locator('#slides-audit-action')).toHaveValue('export-html')
+    await expect(page.locator('#slides-audit-outcome')).toHaveValue('failure')
+    await expect(page.locator('#slides-audit-entity')).toHaveValue('template')
+    await expect(page.locator('#slides-audit-date-from')).toHaveValue('2026-04-20')
+    await expect(page.locator('#slides-audit-date-to')).toHaveValue('2026-04-25')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: 'Delete Preset' }).click()
+    await expect(page.locator('#slides-audit-preset-select')).not.toContainText('Failure Exports')
+  })
+
   test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

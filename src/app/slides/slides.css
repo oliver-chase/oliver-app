@@ -616,6 +616,22 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
 
+.slides-audit-presets {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+  padding: var(--spacing-sm);
+  display: grid;
+  gap: var(--spacing-xs);
+}
+
+.slides-audit-presets-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
 .slides-empty {
   margin: 0;
   color: var(--color-text-secondary);

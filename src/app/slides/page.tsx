@@ -17,6 +17,7 @@ import {
 } from '@/components/slides/import-validation'
 import type {
   SlideAuditEvent,
+  SlideAuditFilterPreset,
   SlideRecord,
   SlideTemplateApproval,
   SlideTemplateCollaborator,
@@ -28,6 +29,8 @@ import {
   deleteSlide,
   duplicateSlide,
   duplicateTemplateAsSlide,
+  deleteAuditPreset,
+  listAuditPresets,
   listTemplateCollaborators,
   listTemplateApprovals,
   listSlideAudits,
@@ -42,6 +45,7 @@ import {
   SlideConflictError,
   submitTemplateApproval,
   transferTemplateOwnership,
+  upsertAuditPreset,
   upsertTemplateCollaborator,
   updateTemplate,
 } from '@/lib/slides'
@@ -308,6 +312,11 @@ export default function SlidesPage() {
   const [auditDateTo, setAuditDateTo] = useState('')
   const [auditOffset, setAuditOffset] = useState(0)
   const [auditHasMore, setAuditHasMore] = useState(false)
+  const [auditPresets, setAuditPresets] = useState<SlideAuditFilterPreset[]>([])
+  const [selectedAuditPresetId, setSelectedAuditPresetId] = useState('')
+  const [auditPresetName, setAuditPresetName] = useState('')
+  const [auditPresetScope, setAuditPresetScope] = useState<'personal' | 'shared'>('personal')
+  const [auditPresetBusy, setAuditPresetBusy] = useState(false)
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
@@ -342,6 +351,10 @@ export default function SlidesPage() {
     auditEntityTypeFilter !== 'all' ||
     auditDateFrom.length > 0 ||
     auditDateTo.length > 0
+  const selectedAuditPreset = useMemo(
+    () => auditPresets.find((preset) => preset.id === selectedAuditPresetId) || null,
+    [auditPresets, selectedAuditPresetId],
+  )
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
   const canvasDimensions = useMemo(() => {
@@ -1040,7 +1053,7 @@ export default function SlidesPage() {
     setLibraryLoading(true)
     setLibraryError(null)
     try {
-      const [slideRows, templateRows, approvalRows, auditRows] = await Promise.all([
+      const [slideRows, templateRows, approvalRows, auditRows, auditPresetRows] = await Promise.all([
         listSlides(actor, searchValue),
         listTemplates(actor, searchValue),
         listTemplateApprovals(actor, { status: 'pending' }),
@@ -1054,12 +1067,14 @@ export default function SlidesPage() {
           dateFrom: auditDateFrom,
           dateTo: auditDateTo,
         }),
+        listAuditPresets(actor),
       ])
       setSlides(slideRows)
       setTemplates(templateRows)
       setTemplateApprovals(approvalRows)
       setAudits(auditRows.items)
       setAuditHasMore(auditRows.pagination.has_more)
+      setAuditPresets(auditPresetRows)
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -1075,6 +1090,17 @@ export default function SlidesPage() {
     void refreshLibraryData()
   }, [refreshLibraryData])
 
+  useEffect(() => {
+    if (isSlidesAdmin) return
+    setAuditPresetScope('personal')
+  }, [isSlidesAdmin])
+
+  useEffect(() => {
+    if (!selectedAuditPresetId) return
+    if (auditPresets.some((preset) => preset.id === selectedAuditPresetId)) return
+    setSelectedAuditPresetId('')
+  }, [auditPresets, selectedAuditPresetId])
+
   const resetAuditFilters = useCallback(() => {
     setAuditActionFilter('all')
     setAuditOutcomeFilter('all')
@@ -1083,6 +1109,88 @@ export default function SlidesPage() {
     setAuditDateTo('')
     setAuditOffset(0)
   }, [])
+
+  const applyAuditPreset = useCallback((preset: SlideAuditFilterPreset) => {
+    setSearchValue(preset.search || '')
+    setAuditActionFilter(preset.action)
+    setAuditOutcomeFilter(preset.outcome)
+    setAuditEntityTypeFilter(preset.entity_type)
+    setAuditDateFrom(preset.date_from || '')
+    setAuditDateTo(preset.date_to || '')
+    setAuditOffset(0)
+    setEditorNotice({ tone: 'info', text: `Applied activity preset "${preset.name}".` })
+  }, [])
+
+  const handleApplySelectedAuditPreset = useCallback(() => {
+    if (!selectedAuditPreset) return
+    applyAuditPreset(selectedAuditPreset)
+  }, [applyAuditPreset, selectedAuditPreset])
+
+  const handleSaveAuditPreset = useCallback(async () => {
+    const name = auditPresetName.trim()
+    if (!name) {
+      setLibraryError('Preset name is required.')
+      return
+    }
+    if (!isSlidesAdmin && auditPresetScope === 'shared') {
+      setLibraryError('Only admins can save shared presets.')
+      return
+    }
+
+    setAuditPresetBusy(true)
+    setLibraryError(null)
+    try {
+      const preset = await upsertAuditPreset(actor, {
+        name,
+        scope: auditPresetScope,
+        search: searchValue,
+        action: auditActionFilter,
+        outcome: auditOutcomeFilter,
+        entityType: auditEntityTypeFilter,
+        dateFrom: auditDateFrom,
+        dateTo: auditDateTo,
+      })
+      await refreshLibraryData()
+      setSelectedAuditPresetId(preset.id)
+      setAuditPresetName('')
+      setEditorNotice({ tone: 'info', text: `Saved activity preset "${preset.name}".` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAuditPresetBusy(false)
+    }
+  }, [
+    actor,
+    auditActionFilter,
+    auditDateFrom,
+    auditDateTo,
+    auditEntityTypeFilter,
+    auditOutcomeFilter,
+    auditPresetName,
+    auditPresetScope,
+    isSlidesAdmin,
+    refreshLibraryData,
+    searchValue,
+  ])
+
+  const handleDeleteSelectedAuditPreset = useCallback(async () => {
+    if (!selectedAuditPreset) return
+    const approved = window.confirm(`Delete activity preset "${selectedAuditPreset.name}"?`)
+    if (!approved) return
+
+    setAuditPresetBusy(true)
+    setLibraryError(null)
+    try {
+      await deleteAuditPreset(actor, selectedAuditPreset.id)
+      await refreshLibraryData()
+      setSelectedAuditPresetId('')
+      setEditorNotice({ tone: 'info', text: `Deleted activity preset "${selectedAuditPreset.name}".` })
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAuditPresetBusy(false)
+    }
+  }, [actor, refreshLibraryData, selectedAuditPreset])
 
   const handleAuditNextPage = useCallback(() => {
     if (!auditHasMore || libraryLoading) return
@@ -2196,7 +2304,7 @@ export default function SlidesPage() {
     })
 
     return buildModuleOliverConfig('slides', {
-      greeting: "Hi, I'm Oliver. Import HTML slides, validate parser output, then save to My Slides with autosave and export controls.",
+      greeting: "Hi, I'm Oliver. Import HTML slides, validate parser output, then save to My Slides with autosave, export controls, and activity presets.",
       actions,
       flows,
       quickConvos: [
@@ -2280,7 +2388,7 @@ export default function SlidesPage() {
           <section className="slides-card">
             <h1 className="slides-title">HTML to Editable Components</h1>
             <p className="slides-subtitle">
-              Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas with keyboard-first controls, alignment tools, autosave, and export.
+              Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas with keyboard-first controls, alignment tools, autosave, export, and saved activity presets.
             </p>
 
             {recoveryDraft && (
@@ -3196,6 +3304,83 @@ export default function SlidesPage() {
             {workspaceTab === 'activity' && (
               <div className="slides-library-section">
                 <h2>Slide Operations</h2>
+                <div className="slides-audit-presets">
+                  <div className="slides-audit-presets-row">
+                    <label className="slides-editor-field" htmlFor="slides-audit-preset-select">
+                      <span>Saved Presets</span>
+                      <select
+                        id="slides-audit-preset-select"
+                        className="slides-select"
+                        value={selectedAuditPresetId}
+                        onChange={(event) => setSelectedAuditPresetId(event.target.value)}
+                      >
+                        <option value="">Select preset</option>
+                        {auditPresets.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.scope === 'shared' ? '[Shared] ' : ''}{preset.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={handleApplySelectedAuditPreset}
+                      disabled={!selectedAuditPreset || auditPresetBusy}
+                    >
+                      Apply Preset
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => setAuditPresetName(selectedAuditPreset?.name || '')}
+                      disabled={!selectedAuditPreset || auditPresetBusy}
+                    >
+                      Use Name
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => void handleDeleteSelectedAuditPreset()}
+                      disabled={!selectedAuditPreset || auditPresetBusy}
+                    >
+                      Delete Preset
+                    </button>
+                  </div>
+                  <div className="slides-audit-presets-row">
+                    <label className="slides-editor-field" htmlFor="slides-audit-preset-name">
+                      <span>Preset Name</span>
+                      <input
+                        id="slides-audit-preset-name"
+                        className="slides-input"
+                        value={auditPresetName}
+                        onChange={(event) => setAuditPresetName(event.target.value)}
+                        placeholder="Failure exports last 7 days"
+                      />
+                    </label>
+                    <label className="slides-editor-field" htmlFor="slides-audit-preset-scope">
+                      <span>Preset Scope</span>
+                      <select
+                        id="slides-audit-preset-scope"
+                        className="slides-select"
+                        value={auditPresetScope}
+                        onChange={(event) => setAuditPresetScope(event.target.value as typeof auditPresetScope)}
+                        disabled={!isSlidesAdmin}
+                      >
+                        <option value="personal">Personal</option>
+                        {isSlidesAdmin && <option value="shared">Shared</option>}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={() => void handleSaveAuditPreset()}
+                      disabled={auditPresetBusy}
+                    >
+                      Save Preset
+                    </button>
+                  </div>
+                </div>
                 <div className="slides-audit-filters">
                   <label className="slides-editor-field" htmlFor="slides-audit-action">
                     <span>Action</span>

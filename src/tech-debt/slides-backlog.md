@@ -12,7 +12,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | SLD-FE-150, SLD-BE-150 |
 | Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), and approval request/resolution workflow for governance changes. | No approval SLA/escalation automation yet for stale requests. | SLD-FE-440, SLD-BE-440 |
 | Export for client delivery | HTML and print-to-PDF flows exist. | No native PPTX export path, warnings report, or multi-slide export controls. | SLD-FE-500, SLD-BE-500 |
-| Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. | No saved filter presets or full-range export job for long audit histories. | SLD-FE-430, SLD-BE-430 |
+| Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging plus CSV export of current view. Saved activity filter presets are now available (personal + shared/admin). | Long-range/full-history async export job is still missing for compliance spans beyond paged queries. | SLD-FE-430, SLD-BE-430 |
 
 ## Dead / Incomplete / Debt Findings
 
@@ -59,8 +59,8 @@ KPI: Template reuse rate and admin audit resolution time both improve release-ov
 | SLD-BE-410 | Template ownership + collaborator governance contract | Backend | P1 | Done (2026-04-25) | API enforces owner/admin governance rights, persists template approvals, and applies/rejects pending requests with audit events. |
 | SLD-FE-420 | Audit explorer with filter/search/export | Frontend | P2 | Done (2026-04-25) | Activity tab supports filters by actor/action/outcome/date and exportable views. |
 | SLD-BE-420 | Audit query endpoints with indexed filtering | Backend | P2 | Done (2026-04-25) | API supports server-side filtering/pagination and returns predictable query latency. |
-| SLD-FE-430 | Activity filter presets + saved views | Frontend | P2 | Backlog | Admins can save/apply shared or personal audit filter presets and export from preset context. |
-| SLD-BE-430 | Long-range audit export jobs + presets contract | Backend | P2 | Backlog | Backend supports preset persistence and async long-range compliance exports. |
+| SLD-FE-430 | Activity filter presets + saved views | Frontend | P2 | In Progress (2026-04-25) | Save/apply/delete presets are implemented; expand preset management UX and shared-governance constraints as needed. |
+| SLD-BE-430 | Long-range audit export jobs + presets contract | Backend | P2 | In Progress (2026-04-25) | Preset persistence contract is implemented; async long-range compliance export jobs remain open. |
 | SLD-FE-440 | Approval aging SLA signal + escalation UI | Frontend | P2 | Backlog | Approval queue surfaces SLA age states and escalation actions without dead-end requester UX. |
 | SLD-BE-440 | Template approval SLA + escalation automation | Backend | P2 | Backlog | Overdue approvals escalate through deterministic, idempotent automation and audit tracking. |
 
