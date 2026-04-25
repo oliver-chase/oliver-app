@@ -8,6 +8,8 @@ import SyncDot from '@/components/shared/SyncDot'
 import CustomPicker from '@/components/shared/CustomPicker'
 import ConfirmModal from '@/components/shared/ConfirmModal'
 import { AdminShell } from '@/components/admin/AdminShell'
+import { TokenEditor } from '@/components/admin/TokenEditor'
+import { ComponentLibrary } from '@/components/admin/ComponentLibrary'
 import { useAppModal } from '@/components/shared/AppModal'
 import { copyToClipboard } from '@/lib/clipboard'
 import { useUser } from '@/context/UserContext'
@@ -490,6 +492,7 @@ const DESIGN_SECTIONS = [
   { id: 'sec-spacing',    label: 'Spacing' },
   { id: 'sec-effects',    label: 'Radius / Shadows / Z / Transitions' },
   { id: 'sec-components', label: 'Components' },
+  { id: 'sec-admin-edit', label: 'Admin Edit Workspace' },
   { id: 'sec-layout',     label: 'Layout Tokens' },
   { id: 'sec-dynamic',    label: 'Dynamic Inventories' },
 ]
@@ -516,6 +519,9 @@ export default function DesignSystemPage() {
   const [expandedColor, setExpandedColor] = useState<string | null>(null)
   const [expandedSpacing, setExpandedSpacing] = useState<string | null>(null)
   const [componentFilter, setComponentFilter] = useState<ComponentFilter>('all')
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   function showComponentGroup(...groups: ComponentFilter[]) {
     return componentFilter === 'all' || groups.includes(componentFilter)
@@ -551,6 +557,9 @@ export default function DesignSystemPage() {
         {DESIGN_SECTIONS.map(s => (
           <a key={s.id} href={'#' + s.id} className="anchorLink">{s.label}</a>
         ))}
+        <button type="button" className="anchorTopBtn" onClick={scrollToTop}>
+          Back to top
+        </button>
       </nav>
 
       <DeadTokenAudit />
@@ -1077,9 +1086,23 @@ export default function DesignSystemPage() {
         )}
       </div>
 
-      {/* ── SECTION 6 — LAYOUT TOKENS ── */}
+      {/* ── SECTION 6 — ADMIN EDIT WORKSPACE ── */}
+      <div className="section" id="sec-admin-edit">
+        <div className="sectionTitle">6 — Admin Edit Workspace</div>
+        <p className="sectionNote">
+          Design-system-specific edit controls live here so Admin dashboard surfaces stay focused on user and permission operations.
+        </p>
+
+        <div className="groupTitle">Token Overrides</div>
+        <TokenEditor />
+
+        <div className="groupTitle">Component Library</div>
+        <ComponentLibrary />
+      </div>
+
+      {/* ── SECTION 7 — LAYOUT TOKENS ── */}
       <div className="section" id="sec-layout">
-        <div className="sectionTitle">6 — Layout Tokens</div>
+        <div className="sectionTitle">7 — Layout Tokens</div>
         <p className="sectionNote">Dimension diagrams use actual token values. Horizontal bars = widths, vertical bars = heights, squares = square dimensions.</p>
 
         <div className="groupTitle">Dimension Tokens</div>
@@ -1129,9 +1152,9 @@ export default function DesignSystemPage() {
         </table>
       </div>
 
-      {/* ── SECTION 7 — DYNAMIC INVENTORIES ── */}
+      {/* ── SECTION 8 — DYNAMIC INVENTORIES ── */}
       <div className="section" id="sec-dynamic">
-        <div className="sectionTitle">7 — Dynamic Inventories</div>
+        <div className="sectionTitle">8 — Dynamic Inventories</div>
         <p className="sectionNote">
           These tables are driven by shared app registries. Module/shell updates should appear here automatically.
         </p>

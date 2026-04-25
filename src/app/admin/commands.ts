@@ -46,17 +46,10 @@ export const ADMIN_COMMANDS: CommandMeta[] = [
     aliases: ['user manager', 'manage users', 'open user access'],
   },
   {
-    id: 'tab-tokens',
-    label: 'Open Design Tokens',
+    id: 'open-design-system',
+    label: 'Open Design System',
     group: 'Quick',
-    hint: 'Review and edit design token values',
-    aliases: ['design tokens', 'token editor', 'open tokens'],
-  },
-  {
-    id: 'tab-components',
-    label: 'Open Components',
-    group: 'Quick',
-    hint: 'Browse shared component docs',
-    aliases: ['component library', 'shared components', 'open components'],
+    hint: 'Open the admin design system workspace',
+    aliases: ['design system', 'open design system', 'design tokens', 'component library'],
   },
 ]

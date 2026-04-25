@@ -68,7 +68,10 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Admin', exact: true }).click()
     await expect(page).toHaveURL(/\/admin\/?$/)
-    await page.getByRole('link', { name: 'Open Design System' }).click()
+    await page
+      .locator('nav[aria-label="Admin navigation"]')
+      .getByRole('link', { name: 'Design System', exact: true })
+      .click()
     await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
@@ -407,18 +410,21 @@ test.describe('frontend smoke', () => {
     await expect(page.locator('#main-content').locator('input, textarea, [role="combobox"]')).toHaveCount(0)
   })
 
-  test('admin tabs switch and design system link works', async ({ page }) => {
+  test('admin workspace keeps design-system navigation in the admin sidebar', async ({ page }) => {
     await gotoAndSettle(page, '/admin')
 
     await expect(page.getByText('Admin').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'User Access' })).toBeVisible()
     await expect(page.locator('nav[aria-label="Admin navigation"]')).toBeVisible()
     await expect(page.locator('nav[aria-label="Admin navigation"]').getByRole('link', { name: 'Admin Dashboard', exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Design System' }).first()).toBeVisible()
-    await page.getByRole('button', { name: 'Design Tokens', exact: true }).click()
-    await expect(page.locator('input').first()).toBeVisible()
-    await page.getByRole('button', { name: 'Components', exact: true }).click()
-    await expect(page.getByText('Badges')).toBeVisible()
-    await page.getByRole('link', { name: 'Open Design System' }).click()
+    await expect(page.locator('nav[aria-label="Admin navigation"]').getByRole('link', { name: 'Design System', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Design Tokens', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Components', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Open Design System' })).toHaveCount(0)
+    await page
+      .locator('nav[aria-label="Admin navigation"]')
+      .getByRole('link', { name: 'Design System', exact: true })
+      .click()
     await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
@@ -475,6 +481,12 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/design-system')
 
     await expect(page.getByRole('heading', { name: 'Design System' })).toBeVisible()
+    const backToTop = page.getByRole('button', { name: 'Back to top' })
+    await expect(backToTop).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await backToTop.click()
+    await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeLessThan(40)
+
     await page.locator('button.deadAuditToggle').click()
     await expect(page.getByText(/Colors \(|Spacing \(|Layout \(/).first()).toBeVisible()
 

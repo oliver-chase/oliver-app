@@ -16,11 +16,12 @@
 
 .anchorNav {
   position: sticky;
-  top: 0;
+  top: var(--topbar-h);
   z-index: 20;
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-xs);
+  align-items: center;
   padding: var(--spacing-sm) 0;
   margin-bottom: var(--spacing-xl);
   background: var(--color-bg-page);
@@ -44,8 +45,25 @@
   border-color: var(--color-brand-pink);
 }
 
+.anchorTopBtn {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  cursor: pointer;
+}
+
+.anchorTopBtn:hover {
+  color: var(--color-brand-pink);
+  border-color: var(--color-brand-pink);
+}
+
 .section {
-  scroll-margin-top: var(--spacing-2xl);
+  scroll-margin-top: calc(var(--topbar-h) + var(--spacing-xl));
 }
 
 .typeRowExpandable {
@@ -575,4 +593,10 @@
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   cursor: default;
+}
+
+@media (max-width: 700px) {
+  .anchorTopBtn {
+    margin-left: 0;
+  }
 }
