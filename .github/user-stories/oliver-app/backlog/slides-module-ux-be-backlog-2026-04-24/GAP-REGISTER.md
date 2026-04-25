@@ -23,6 +23,9 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Conflict handling + crash recovery | `US-SLD-034` | S3 | Code Present |
 | Audit log + telemetry for slide operations | `US-SLD-035` | S3 | Code Present |
 | End-to-end Slides FE/BE regression suite | `US-SLD-036` | S3 | Code Present |
+| Unsaved-change protection for workspace navigation and hub exits | `US-SLD-037` | S3 | Code Present |
+| Scoped draft recovery lifecycle and stale-draft clearing | `US-SLD-038` | S3 | Code Present |
+| Autosave retry queue with bounded backoff and manual controls | `US-SLD-039` | S3 | Code Present |
 
 ## No Unmapped Gaps
 

@@ -35,10 +35,14 @@ import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
 
 const AUTOSAVE_DELAY_MS = 5000
-const DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
+const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
+const AUTOSAVE_RETRY_MAX_DELAY_MS = 60000
+const LEGACY_DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
+const DRAFT_RECOVERY_KEY_PREFIX = 'oliver-slide-draft-v2'
+const UNSAVED_CHANGES_CONFIRM_TEXT = 'You have unsaved slide changes. Discard them and continue?'
 
 type ParseStatus = 'idle' | 'parsing' | 'completed' | 'canceled' | 'failed'
-type SaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
+type SaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'queued' | 'error' | 'conflict'
 type WorkspaceTab = 'import' | 'my-slides' | 'templates' | 'activity'
 
 interface DraftSnapshot {
@@ -48,6 +52,13 @@ interface DraftSnapshot {
   revision: number
   result: SlideImportResult | null
   createdAt: string
+}
+
+interface AutosaveRetryState {
+  attempt: number
+  delayMs: number
+  nextAttemptAt: number
+  lastError: string
 }
 
 function delay(ms: number) {
@@ -112,6 +123,7 @@ export default function SlidesPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [autosaveEnabled, setAutosaveEnabled] = useState(true)
+  const [autosaveRetryState, setAutosaveRetryState] = useState<AutosaveRetryState | null>(null)
   const [conflictServerSlide, setConflictServerSlide] = useState<SlideRecord | null>(null)
 
   const [slides, setSlides] = useState<SlideRecord[]>([])
@@ -132,15 +144,72 @@ export default function SlidesPage() {
     user_id: appUser?.user_id || 'qa-admin-user',
     user_email: appUser?.email || 'qa-admin@example.com',
   }), [appUser])
+  const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
+  const hasUnsavedChanges = useMemo(() => {
+    const hasDraftContent = rawHtml.trim().length > 0 || !!result
+    if (!hasDraftContent) return false
+    if (saveStatus === 'clean' || saveStatus === 'saved') return false
+    return true
+  }, [rawHtml, result, saveStatus])
+
+  const confirmDiscardUnsaved = useCallback(() => {
+    if (!hasUnsavedChanges) return true
+    return window.confirm(UNSAVED_CHANGES_CONFIRM_TEXT)
+  }, [hasUnsavedChanges])
+
+  const handleWorkspaceTabChange = useCallback((nextTab: WorkspaceTab) => {
+    if (nextTab === workspaceTab) return
+    if (!confirmDiscardUnsaved()) return
+    setWorkspaceTab(nextTab)
+  }, [confirmDiscardUnsaved, workspaceTab])
+
+  const handleBackToHubClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (confirmDiscardUnsaved()) return
+    event.preventDefault()
+  }, [confirmDiscardUnsaved])
 
   const setDirty = useCallback(() => {
+    setAutosaveRetryState(null)
     setSaveStatus((previous) => {
       if (previous === 'saving') return previous
       return 'dirty'
     })
   }, [])
+
+  const queueAutosaveRetry = useCallback((errorMessage: string) => {
+    const attempt = (autosaveRetryState?.attempt || 0) + 1
+    const delayMs = Math.min(
+      AUTOSAVE_RETRY_MAX_DELAY_MS,
+      AUTOSAVE_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)),
+    )
+    const retryInSeconds = Math.max(1, Math.ceil(delayMs / 1000))
+    setAutosaveRetryState({
+      attempt,
+      delayMs,
+      nextAttemptAt: Date.now() + delayMs,
+      lastError: errorMessage,
+    })
+    setSaveStatus('queued')
+    setSaveError(`Autosave failed (${errorMessage}). Retrying in ${retryInSeconds}s.`)
+  }, [autosaveRetryState])
+
+  const scheduleAutosaveRetryNow = useCallback(() => {
+    setAutosaveRetryState((previous) => {
+      if (!previous) return null
+      return {
+        ...previous,
+        nextAttemptAt: Date.now(),
+      }
+    })
+  }, [])
+
+  const dismissAutosaveRetry = useCallback(() => {
+    setAutosaveRetryState(null)
+    setSaveError(null)
+    setSaveStatus(result ? 'dirty' : 'clean')
+  }, [result])
 
   const parseHtmlSync = useCallback((html: string): SlideImportResult => {
     const preflight = validatePastedHtml(html)
@@ -256,6 +325,10 @@ export default function SlidesPage() {
       return null
     }
 
+    if (!options?.autosave) {
+      setAutosaveRetryState(null)
+    }
+
     setSaveStatus('saving')
     setSaveError(null)
 
@@ -280,6 +353,7 @@ export default function SlidesPage() {
       setSlideTitle(response.slide.title)
       setLastSavedAt(response.slide.updated_at)
       setSaveStatus('saved')
+      setAutosaveRetryState(null)
       setConflictServerSlide(null)
       setSaveError(null)
 
@@ -288,8 +362,14 @@ export default function SlidesPage() {
     } catch (error) {
       if (error instanceof SlideConflictError) {
         setSaveStatus('conflict')
+        setAutosaveRetryState(null)
         setConflictServerSlide(error.serverSlide)
         setSaveError('Save conflict: newer revision exists. Reload, overwrite, or save as copy.')
+        return null
+      }
+
+      if (options?.autosave) {
+        queueAutosaveRetry(error instanceof Error ? error.message : String(error))
         return null
       }
 
@@ -297,7 +377,7 @@ export default function SlidesPage() {
       setSaveError(error instanceof Error ? error.message : String(error))
       return null
     }
-  }, [activeRevision, activeSlideId, actor, rawHtml.length, refreshLibraryData, result, slideTitle])
+  }, [activeRevision, activeSlideId, actor, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
 
   useEffect(() => {
     if (!autosaveEnabled || saveStatus !== 'dirty' || !result) return
@@ -310,25 +390,64 @@ export default function SlidesPage() {
   }, [autosaveEnabled, handleSave, result, saveStatus])
 
   useEffect(() => {
+    if (!autosaveEnabled || !autosaveRetryState || !result) return
+
+    const waitMs = Math.max(0, autosaveRetryState.nextAttemptAt - Date.now())
+    const timer = window.setTimeout(() => {
+      void handleSave({ autosave: true })
+    }, waitMs)
+
+    return () => window.clearTimeout(timer)
+  }, [autosaveEnabled, autosaveRetryState, handleSave, result])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const raw = window.localStorage.getItem(DRAFT_RECOVERY_KEY)
+    const handleOnline = () => {
+      if (!autosaveRetryState) return
+      setAutosaveRetryState((previous) => {
+        if (!previous) return null
+        return {
+          ...previous,
+          nextAttemptAt: Date.now() + 250,
+        }
+      })
+    }
+
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [autosaveRetryState])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const scopedRaw = window.localStorage.getItem(draftRecoveryKey)
+    const legacyRaw = scopedRaw ? null : window.localStorage.getItem(LEGACY_DRAFT_RECOVERY_KEY)
+    const raw = scopedRaw || legacyRaw
     if (!raw) return
 
     try {
       const parsed = JSON.parse(raw) as DraftSnapshot
       if (!parsed || typeof parsed !== 'object') return
       setRecoveryDraft(parsed)
+
+      if (legacyRaw) {
+        window.localStorage.setItem(draftRecoveryKey, legacyRaw)
+        window.localStorage.removeItem(LEGACY_DRAFT_RECOVERY_KEY)
+      }
     } catch {
-      window.localStorage.removeItem(DRAFT_RECOVERY_KEY)
+      window.localStorage.removeItem(draftRecoveryKey)
+      window.localStorage.removeItem(LEGACY_DRAFT_RECOVERY_KEY)
     }
-  }, [])
+  }, [draftRecoveryKey])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const hasDraft = rawHtml.trim().length > 0 || !!result
-    if (!hasDraft) return
+    if (!hasUnsavedChanges) {
+      window.localStorage.removeItem(draftRecoveryKey)
+      return
+    }
 
     const snapshot: DraftSnapshot = {
       rawHtml,
@@ -338,8 +457,20 @@ export default function SlidesPage() {
       result,
       createdAt: new Date().toISOString(),
     }
-    window.localStorage.setItem(DRAFT_RECOVERY_KEY, JSON.stringify(snapshot))
-  }, [activeRevision, activeSlideId, rawHtml, result, slideTitle])
+    window.localStorage.setItem(draftRecoveryKey, JSON.stringify(snapshot))
+  }, [activeRevision, activeSlideId, draftRecoveryKey, hasUnsavedChanges, rawHtml, result, slideTitle])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasUnsavedChanges) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges])
 
   const restoreDraft = useCallback(() => {
     if (!recoveryDraft) return
@@ -348,16 +479,19 @@ export default function SlidesPage() {
     setActiveSlideId(recoveryDraft.activeSlideId)
     setActiveRevision(recoveryDraft.revision || 0)
     setResult(recoveryDraft.result)
+    setAutosaveRetryState(null)
+    setSaveError(null)
     setSaveStatus('dirty')
     setRecoveryDraft(null)
   }, [recoveryDraft])
 
   const discardDraft = useCallback(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(DRAFT_RECOVERY_KEY)
+      window.localStorage.removeItem(draftRecoveryKey)
+      window.localStorage.removeItem(LEGACY_DRAFT_RECOVERY_KEY)
     }
     setRecoveryDraft(null)
-  }, [])
+  }, [draftRecoveryKey])
 
   const onFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -381,7 +515,8 @@ export default function SlidesPage() {
 
   const openFilePicker = useCallback(() => fileInputRef.current?.click(), [])
 
-  const loadSlide = useCallback((slide: SlideRecord) => {
+  const loadSlide = useCallback((slide: SlideRecord, options?: { skipUnsavedConfirm?: boolean }) => {
+    if (!options?.skipUnsavedConfirm && !confirmDiscardUnsaved()) return
     setWorkspaceTab('import')
     setResult({
       canvas: slide.canvas,
@@ -392,21 +527,23 @@ export default function SlidesPage() {
     setSlideTitle(slide.title)
     setActiveSlideId(slide.id)
     setActiveRevision(slide.revision)
+    setAutosaveRetryState(null)
     setSaveStatus('clean')
     setSaveError(null)
     setLastSavedAt(slide.updated_at)
     setExportHtml('')
-  }, [])
+  }, [confirmDiscardUnsaved])
 
   const handleDuplicateSlide = useCallback(async (slideId: string) => {
+    if (!confirmDiscardUnsaved()) return
     try {
       const copy = await duplicateSlide(actor, slideId)
       await refreshLibraryData()
-      loadSlide(copy)
+      loadSlide(copy, { skipUnsavedConfirm: true })
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     }
-  }, [actor, loadSlide, refreshLibraryData])
+  }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
   const handleRenameSlide = useCallback(async (slide: SlideRecord) => {
     const name = window.prompt('Rename slide', slide.title)
@@ -442,14 +579,15 @@ export default function SlidesPage() {
   }, [activeSlideId, actor, refreshLibraryData])
 
   const handleDuplicateTemplate = useCallback(async (templateId: string) => {
+    if (!confirmDiscardUnsaved()) return
     try {
       const slide = await duplicateTemplateAsSlide(actor, templateId)
       await refreshLibraryData()
-      loadSlide(slide)
+      loadSlide(slide, { skipUnsavedConfirm: true })
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     }
-  }, [actor, loadSlide, refreshLibraryData])
+  }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
   const handlePublishTemplate = useCallback(async (slide: SlideRecord) => {
     const name = window.prompt('Template name', `${slide.title} Template`)
@@ -554,7 +692,7 @@ export default function SlidesPage() {
 
   const handleConflictReload = useCallback(() => {
     if (!conflictServerSlide) return
-    loadSlide(conflictServerSlide)
+    loadSlide(conflictServerSlide, { skipUnsavedConfirm: true })
     setConflictServerSlide(null)
   }, [conflictServerSlide, loadSlide])
 
@@ -657,34 +795,34 @@ export default function SlidesPage() {
 
       <nav className="app-sidebar" id="sidebar" aria-label="Slide editor navigation">
         <div className="app-sidebar-logo">Slide Editor</div>
-        <Link href="/" className="sidebar-back">← Back to Hub</Link>
+        <Link href="/" className="sidebar-back" onClick={handleBackToHubClick}>← Back to Hub</Link>
 
         <div className="app-sidebar-section">
           <button
             type="button"
             className={'app-sidebar-item' + (workspaceTab === 'import' ? ' active' : '')}
-            onClick={() => setWorkspaceTab('import')}
+            onClick={() => handleWorkspaceTabChange('import')}
           >
             Import Workspace
           </button>
           <button
             type="button"
             className={'app-sidebar-item' + (workspaceTab === 'my-slides' ? ' active' : '')}
-            onClick={() => setWorkspaceTab('my-slides')}
+            onClick={() => handleWorkspaceTabChange('my-slides')}
           >
             My Slides
           </button>
           <button
             type="button"
             className={'app-sidebar-item' + (workspaceTab === 'templates' ? ' active' : '')}
-            onClick={() => setWorkspaceTab('templates')}
+            onClick={() => handleWorkspaceTabChange('templates')}
           >
             Template Library
           </button>
           <button
             type="button"
             className={'app-sidebar-item' + (workspaceTab === 'activity' ? ' active' : '')}
-            onClick={() => setWorkspaceTab('activity')}
+            onClick={() => handleWorkspaceTabChange('activity')}
           >
             Activity
           </button>
@@ -837,7 +975,15 @@ export default function SlidesPage() {
                       <input
                         type="checkbox"
                         checked={autosaveEnabled}
-                        onChange={(event) => setAutosaveEnabled(event.target.checked)}
+                        onChange={(event) => {
+                          const enabled = event.target.checked
+                          setAutosaveEnabled(enabled)
+                          if (!enabled && autosaveRetryState) {
+                            setAutosaveRetryState(null)
+                            setSaveStatus(result ? 'dirty' : 'clean')
+                            setSaveError(null)
+                          }
+                        }}
                       />
                       Autosave every 5s when dirty
                     </label>
@@ -852,6 +998,25 @@ export default function SlidesPage() {
                     <p className="slides-error" role="alert">
                       {saveError}
                     </p>
+                  )}
+
+                  {autosaveRetryState && (
+                    <div className="slides-retry" role="status">
+                      <p>
+                        Autosave retry queued. Attempt {autosaveRetryState.attempt} with {Math.ceil(autosaveRetryState.delayMs / 1000)}s backoff.
+                      </p>
+                      <div className="slides-inline-actions">
+                        <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleSave({ autosave: true })}>
+                          Retry Autosave Now
+                        </button>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={scheduleAutosaveRetryNow}>
+                          Requeue Immediate Retry
+                        </button>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={dismissAutosaveRetry}>
+                          Dismiss Retry Queue
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   {saveStatus === 'conflict' && conflictServerSlide && (

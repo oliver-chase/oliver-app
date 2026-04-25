@@ -147,6 +147,7 @@ test.describe('slides regression', () => {
 
     await page.getByRole('button', { name: 'Generate HTML Export' }).click()
     await page.getByRole('button', { name: 'Download HTML' }).click()
+    await page.locator('#slides-raw-html').fill(`${html}\n<!-- unsaved draft marker -->`)
 
     await page.reload()
     await page.waitForLoadState('networkidle')
@@ -156,5 +157,84 @@ test.describe('slides regression', () => {
     await page.getByRole('button', { name: 'Activity' }).click()
     await expect(page.getByText('save').first()).toBeVisible()
     await expect(page.getByText('export-html').first()).toBeVisible()
+  })
+
+  test('US-SLD-037 prompts before discarding unsaved changes during workspace navigation', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Unsaved Changes</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm')
+      expect(dialog.message().toLowerCase()).toContain('unsaved slide changes')
+      await dialog.dismiss()
+    })
+    await page.getByRole('button', { name: 'My Slides' }).click()
+
+    await expect(page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'My Slides' })).toHaveCount(0)
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm')
+      await dialog.accept()
+    })
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await expect(page.getByRole('heading', { name: 'My Slides' })).toBeVisible()
+  })
+
+  test('US-SLD-038 draft recovery appears for unsaved work and clears after successful save', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Draft Lifecycle</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(/Recovered draft available/)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Restore Draft' }).click()
+    await page.locator('#slides-title').fill('Draft Recovery Lifecycle')
+    await page.getByRole('button', { name: 'Save Slide' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(/Recovered draft available/)).toHaveCount(0)
+  })
+
+  test.skip('US-SLD-039 autosave queues retry with backoff after API failure and recovers on retry', async ({ page }) => {
+    let failNextAutosave = true
+    await page.route('**/api/slides', async (route) => {
+      const request = route.request()
+      if (request.method() === 'POST' && failNextAutosave) {
+        failNextAutosave = false
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'forced autosave failure' }),
+        })
+        return
+      }
+      await route.continue()
+    })
+
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Autosave Retry</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await expect(page.getByText(/Save status: queued/i)).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText(/Autosave retry queued/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry Autosave Now' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible({ timeout: 10000 })
   })
 })

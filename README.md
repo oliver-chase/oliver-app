@@ -153,6 +153,7 @@ public/                 Static assets
 - `migration-audit.md` — full record of the vanilla → Next.js migration, commit by commit
 - `margin-scale.md` — canonical top-margin scale (source of truth)
 - `token-violations.md` — outstanding off-token values
+- `slides-backlog.md` — slides/module epic-ticket backlog with journey gap mapping
 - `deep-qa-workflow.md` — repeatable full-repo QA sequence
 - `qa-*.md` — per-page visual QA checklists run against staging
 

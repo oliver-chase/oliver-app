@@ -12,8 +12,8 @@ historical backfill label; use these groups for current planning and audit.
 | Accounts Workspace | Accounts route, portfolio/detail shell, section CRUD, imports/exports, sync, guards | US-OLV-018..055 |
 | OliverDock and AI Workflows | Cross-page chat behavior, command flows, chat persistence wiring, module refresh hooks | US-OLV-056..067, US-OLV-109..112, US-OLV-119 |
 | HR Workspace | HR navigation and workflows for hiring, onboarding/offboarding, devices, settings, reports | US-OLV-068..088, US-OLV-120 |
-| SDR and CRM Workspace | SDR workspace/detail/approval paths plus CRM placeholder/config | US-OLV-089..098 |
-| UI Consistency and QA Hardening | Responsive shell consistency, modals/popovers/pills, browser smoke and deep-QA process | US-OLV-113..116, US-OLV-122..125 |
+| SDR and CRM Workspace | SDR workspace/detail/approval paths plus CRM placeholder/config | US-OLV-089..098, US-OLV-127 |
+| UI Consistency and QA Hardening | Responsive shell consistency, modals/popovers/pills, browser smoke and deep-QA process | US-OLV-113..116, US-OLV-122..125, US-OLV-128 |
 
 ## Backlog Bundles (Active)
 
@@ -25,7 +25,7 @@ index table yet.
 | --- | --- | --- |
 | oliver-requirements-2026-04-24 | Validated net-new requirements and directional changes | US-O8..US-O17 |
 | oliver-ux-audit-2026-04-24 | UX audit findings and cross-repo clarifications | US-O1..US-O7 |
-| slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-036 |
+| slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-039 |
 
 ## Story Index
 
@@ -157,3 +157,5 @@ index table yet.
 | US-OLV-124 | Preserve primary navigation and action targets | Code Present | true | Build HR workflows and harden QA | 2026-04-23 |
 | US-OLV-125 | Standardize interactive controls and placeholder states | Code Present | true | Normalize design tokens and responsive behavior | 2026-04-23 |
 | US-OLV-126 | Document repeatable deep QA workflow | Code Present | true | Operationalize design system, CI, and security | 2026-04-23 |
+| US-OLV-127 | Retroactively map SDR approval hardening and slides alignment | Code Present | false | SDR and CRM Workspace | 2026-04-25 |
+| US-OLV-128 | Retroactively map slides ops, account export, and chatbot QA closure | Code Present | false | UI Consistency and QA Hardening | 2026-04-25 |

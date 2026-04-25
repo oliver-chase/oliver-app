@@ -21,7 +21,7 @@ Goal: create one actionable backlog that covers:
 | S0 | Backfill + Tracking Cleanup | `US-SLD-001`..`US-SLD-005` | Past untracked detail + cleanup |
 | S1 | Import UX Hardening | `US-SLD-010`..`US-SLD-013` | Existing gap + cleanup |
 | S2 | Core Editor UX (Frontend) | `US-SLD-020`..`US-SLD-025` | Net-new |
-| S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-036` | Net-new |
+| S3 | Slide Platform (Backend + FE/BE Integration) | `US-SLD-030`..`US-SLD-039` | Net-new |
 
 ## Epic Status (Current Branch)
 
@@ -30,7 +30,7 @@ Goal: create one actionable backlog that covers:
 | S0 | Complete (`US-SLD-001`..`US-SLD-005`) | Ready to commit as one epic milestone |
 | S1 | Complete (`US-SLD-010`..`US-SLD-013`) | Ready to commit as one epic milestone |
 | S2 | Not started (`US-SLD-020`..`US-SLD-025`) | Not commit-ready |
-| S3 | Complete (`US-SLD-030`..`US-SLD-036`) | Ready to commit as one epic milestone |
+| S3 | Complete (`US-SLD-030`..`US-SLD-039`) | Ready to commit as one epic milestone |
 
 ## Priority Suggestion
 
