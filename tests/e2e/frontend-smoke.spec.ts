@@ -186,6 +186,28 @@ test.describe('frontend smoke', () => {
     await expect(page.getByRole('dialog', { name: 'Export Account Plan' })).toHaveCount(0)
   })
 
+  test('non-admin chatbot prompts for admin scope are blocked without route changes', async ({ browser }) => {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await seedQaAuth(page, {
+      user_id: 'qa-member-user',
+      email: 'qa-member@example.com',
+      name: 'QA Member',
+      role: 'user',
+      page_permissions: ['accounts', 'hr'],
+    })
+
+    await gotoAndSettle(page, '/accounts')
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+    await input.fill('open admin design token editor')
+    await input.press('Enter')
+
+    await expect(page.getByText(/For Admin, open that module first\./)).toBeVisible()
+    await expect(page).toHaveURL(/\/accounts\/?$/)
+    await context.close()
+  })
+
   test('accounts chatbot transcript upload can be reviewed and written through confirm-write', async ({ page }) => {
     const confirmWriteBodies: Array<Record<string, unknown>> = []
     await page.route('**/api/confirm-write', async route => {
