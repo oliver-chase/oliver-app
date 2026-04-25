@@ -597,6 +597,66 @@ test.describe('frontend smoke', () => {
       .toBe('#123456')
   })
 
+  test('design system token save failures surface errors and cancel restores original value', async ({ page }) => {
+    const tokenStore: Record<string, { token_name: string; token_value: string; category: string; updated_at: string }> = {
+      '--color-brand-purple': {
+        token_name: '--color-brand-purple',
+        token_value: '#171433',
+        category: 'brand',
+        updated_at: '2026-04-25T00:00:00.000Z',
+      },
+    }
+
+    await page.route('**/rest/v1/design_tokens**', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(Object.values(tokenStore)),
+        })
+        return
+      }
+
+      if (method === 'POST') {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'simulated write failure' }),
+        })
+        return
+      }
+
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+
+    await gotoAndSettle(page, '/design-system')
+    await page.getByRole('link', { name: 'Admin Edit Workspace' }).click()
+    const editWorkspace = page.locator('#sec-admin-edit')
+
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-brand-purple').trim()))
+      .toBe('#171433')
+
+    const purpleTokenName = editWorkspace.getByText('--color-brand-purple').first()
+    await expect(purpleTokenName).toBeVisible()
+    const purpleRow = purpleTokenName.locator('xpath=ancestor::div[1]')
+    await purpleRow.getByRole('button', { name: 'Edit' }).click()
+    await purpleRow.getByRole('textbox').fill('#654321')
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-brand-purple').trim()))
+      .toBe('#654321')
+
+    await purpleRow.getByRole('button', { name: 'Save' }).click()
+    await expect(editWorkspace.getByRole('alert')).toContainText('Token save failed:')
+    await purpleRow.getByRole('button', { name: 'Cancel' }).click()
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-brand-purple').trim()))
+      .toBe('#171433')
+  })
+
   test('design system renders dynamic inventories from registries', async ({ page }) => {
     await gotoAndSettle(page, '/design-system')
 
