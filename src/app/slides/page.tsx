@@ -1140,7 +1140,7 @@ export default function SlidesPage() {
     setLibraryLoading(true)
     setLibraryError(null)
     try {
-      const [slideRows, templateRows, approvalRows, auditRows, auditPresetRows] = await Promise.all([
+      const [slideRowsResult, templateRowsResult, approvalRowsResult, auditRowsResult, auditPresetRowsResult] = await Promise.allSettled([
         listSlides(actor, searchValue),
         listTemplates(actor, searchValue),
         listTemplateApprovals(actor, { status: 'pending' }),
@@ -1156,12 +1156,44 @@ export default function SlidesPage() {
         }),
         listAuditPresets(actor),
       ])
-      setSlides(slideRows)
-      setTemplates(templateRows)
-      setTemplateApprovals(approvalRows)
-      setAudits(auditRows.items)
-      setAuditHasMore(auditRows.pagination.has_more)
-      setAuditPresets(auditPresetRows)
+
+      const blockingErrors: string[] = []
+
+      if (slideRowsResult.status === 'fulfilled') {
+        setSlides(slideRowsResult.value)
+      } else {
+        blockingErrors.push(slideRowsResult.reason instanceof Error ? slideRowsResult.reason.message : String(slideRowsResult.reason))
+      }
+
+      if (templateRowsResult.status === 'fulfilled') {
+        setTemplates(templateRowsResult.value)
+      } else {
+        blockingErrors.push(templateRowsResult.reason instanceof Error ? templateRowsResult.reason.message : String(templateRowsResult.reason))
+      }
+
+      if (approvalRowsResult.status === 'fulfilled') {
+        setTemplateApprovals(approvalRowsResult.value)
+      } else {
+        setTemplateApprovals([])
+      }
+
+      if (auditRowsResult.status === 'fulfilled') {
+        setAudits(auditRowsResult.value.items)
+        setAuditHasMore(auditRowsResult.value.pagination.has_more)
+      } else {
+        setAudits([])
+        setAuditHasMore(false)
+      }
+
+      if (auditPresetRowsResult.status === 'fulfilled') {
+        setAuditPresets(auditPresetRowsResult.value)
+      } else {
+        setAuditPresets([])
+      }
+
+      if (blockingErrors.length > 0) {
+        setLibraryError(blockingErrors[0])
+      }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {

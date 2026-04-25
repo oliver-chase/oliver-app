@@ -1871,9 +1871,15 @@ export async function onRequestGet(context) {
     let path = '/rest/v1/slide_audit_filter_presets?is_archived=eq.false&select=*&order=updated_at.desc&limit=100';
     path += '&or=' + encodeURIComponent(`(scope.eq.shared,owner_user_id.eq.${actor.user_id})`);
 
-    const response = await supabaseFetch(env, path);
-    const rows = await response.json().catch(() => []);
-    const items = rows.map(normalizeAuditPresetRow).filter(Boolean);
+    let items = [];
+    try {
+      const response = await supabaseFetch(env, path);
+      const rows = await response.json().catch(() => []);
+      items = rows.map(normalizeAuditPresetRow).filter(Boolean);
+    } catch (_) {
+      // Keep Slides library usable even if audit preset infrastructure is unavailable.
+      items = [];
+    }
     return jsonResponse({ items });
   }
 
@@ -1907,10 +1913,17 @@ export async function onRequestGet(context) {
     }
     path = addAuditSearch(path, search);
 
-    const response = await supabaseFetch(env, path);
-    const rows = await response.json().catch(() => []);
-    const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
+    let rows = [];
+    try {
+      const response = await supabaseFetch(env, path);
+      rows = await response.json().catch(() => []);
+    } catch (_) {
+      // Keep Slides workspace usable even if audit event infrastructure is unavailable.
+      rows = [];
+    }
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const hasMore = safeRows.length > limit;
+    const items = hasMore ? safeRows.slice(0, limit) : safeRows;
     return jsonResponse({
       items,
       pagination: {
