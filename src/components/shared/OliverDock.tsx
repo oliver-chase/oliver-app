@@ -684,6 +684,7 @@ export default function OliverDock() {
             )}
             {flowState && (() => {
               const step = flowState.flow.steps[flowState.stepIdx]
+              if (!step) return null
               if (step.kind === 'choice') {
                 return (
                   <div className="oliver-fab-row" role="toolbar" aria-label={step.id}>

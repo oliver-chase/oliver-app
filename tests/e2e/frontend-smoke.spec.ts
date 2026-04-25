@@ -581,6 +581,48 @@ test.describe('frontend smoke', () => {
     expect(parsedComponents[0]?.width).toBe(960)
   })
 
+  test('US-SLD-029 slides chatbot commands cover parse, save, export, and workspace navigation intents', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:120px;top:120px;width:900px;">Chatbot Coverage</h1>
+    </div>`
+    await page.locator('#slides-raw-html').fill(rawHtml)
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+
+    await input.fill('parse slide html')
+    await input.press('Enter')
+    await expect(page.getByText(/Parse current editor HTML or paste new HTML in chat\?/)).toBeVisible()
+    await page.getByRole('button', { name: 'Use current editor HTML' }).click()
+    await expect(page.getByText(/Parsed 1 components on a 1920x1080 canvas\./)).toBeVisible()
+
+    await input.fill('save slide')
+    await input.press('Enter')
+    await expect(page.getByText(/Save with the current title or set a custom title first\?/)).toBeVisible()
+    await page.getByRole('button', { name: 'Use current title' }).click()
+    await expect(page.getByText(/Saved "Untitled Slide" \(revision 1\)\./)).toBeVisible()
+    await expect(page.getByText(/Save status: saved/i)).toBeVisible()
+
+    await input.fill('generate html export')
+    await input.press('Enter')
+    await expect(page.getByText(/Generated export HTML/)).toBeVisible()
+    await expect(page.locator('#slides-export-html')).toHaveValue(/slide-canvas/)
+
+    await input.fill('show templates')
+    await input.press('Enter')
+    await expect(page.getByRole('heading', { name: 'Template Library' })).toBeVisible()
+
+    await input.fill('show activity')
+    await input.press('Enter')
+    await expect(page.getByRole('heading', { name: 'Slide Operations' })).toBeVisible()
+
+    await input.fill('show saved slides')
+    await input.press('Enter')
+    await expect(page.getByRole('heading', { name: 'My Slides' })).toBeVisible()
+  })
+
   test('non-admin user cannot access admin and does not see admin links', async ({ browser }) => {
     const context = await browser.newContext()
     const page = await context.newPage()

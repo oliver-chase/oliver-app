@@ -1,16 +1,21 @@
 import type { OliverFlow } from '@/components/shared/OliverContext'
 import type { SlideImportResult } from '@/components/slides/types'
 
+type WorkspaceTab = 'import' | 'my-slides' | 'templates' | 'activity'
+
 type Ctx = {
   rawHtml: string
   openFilePicker: () => void
   parseHtml: (html: string) => SlideImportResult
+  saveSlide: (titleOverride?: string) => Promise<string>
+  generateExport: () => string
+  openWorkspaceTab: (tab: WorkspaceTab) => boolean
 }
 
 const asString = (v: unknown) => (v == null ? '' : String(v))
 
 export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
-  const { rawHtml, openFilePicker, parseHtml } = ctx
+  const { rawHtml, openFilePicker, parseHtml, saveSlide, generateExport, openWorkspaceTab } = ctx
 
   return [
     {
@@ -58,6 +63,81 @@ export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
         } catch (err) {
           return 'Parse failed: ' + (err instanceof Error ? err.message : String(err))
         }
+      },
+    },
+    {
+      id: 'slides-save-slide',
+      label: 'Save Slide',
+      hint: 'Persist the currently parsed canvas',
+      aliases: ['save slide', 'save to my slides', 'store slide'],
+      steps: [
+        {
+          id: 'titleMode',
+          prompt: 'Save with the current title or set a custom title first?',
+          kind: 'choice',
+          choices: [
+            { label: 'Use current title', value: 'current' },
+            { label: 'Set custom title', value: 'custom' },
+          ],
+        },
+        {
+          id: 'title',
+          prompt: 'Enter the custom slide title.',
+          kind: 'text',
+          placeholder: 'Q2 Narrative',
+          skipIf: answers => asString(answers.titleMode) !== 'custom',
+        },
+      ],
+      run: async (answers) => {
+        const titleMode = asString(answers.titleMode)
+        const customTitle = asString(answers.title).trim()
+        const titleOverride = titleMode === 'custom' && customTitle ? customTitle : undefined
+        return saveSlide(titleOverride)
+      },
+    },
+    {
+      id: 'slides-generate-export',
+      label: 'Generate HTML Export',
+      hint: 'Build deterministic export HTML from parsed components',
+      aliases: ['generate html export', 'build export html', 'prepare html export'],
+      steps: [],
+      run: async () => {
+        const html = generateExport()
+        if (!html) return 'No parsed slide is available. Parse HTML first, then generate export.'
+        return `Generated export HTML (${html.length} characters). Use Download HTML to save the file.`
+      },
+    },
+    {
+      id: 'slides-open-my-slides',
+      label: 'Open My Slides',
+      aliases: ['open my slides', 'show saved slides', 'my slides library'],
+      steps: [],
+      run: async () => {
+        const changed = openWorkspaceTab('my-slides')
+        if (!changed) return 'Stayed in the current workspace. Unsaved slide changes were kept.'
+        return 'Opened My Slides.'
+      },
+    },
+    {
+      id: 'slides-open-template-library',
+      label: 'Open Template Library',
+      aliases: ['open templates', 'show templates', 'template library'],
+      steps: [],
+      run: async () => {
+        const changed = openWorkspaceTab('templates')
+        if (!changed) return 'Stayed in the current workspace. Unsaved slide changes were kept.'
+        return 'Opened Template Library.'
+      },
+    },
+    {
+      id: 'slides-open-activity',
+      label: 'Open Activity',
+      aliases: ['open activity', 'show activity', 'slide operations'],
+      steps: [],
+      run: async () => {
+        const changed = openWorkspaceTab('activity')
+        if (!changed) return 'Stayed in the current workspace. Unsaved slide changes were kept.'
+        return 'Opened Slide Operations activity.'
       },
     },
   ]

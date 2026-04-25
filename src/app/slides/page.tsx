@@ -389,9 +389,10 @@ export default function SlidesPage() {
   }, [hasUnsavedChanges])
 
   const handleWorkspaceTabChange = useCallback((nextTab: WorkspaceTab) => {
-    if (nextTab === workspaceTab) return
-    if (!confirmDiscardUnsaved()) return
+    if (nextTab === workspaceTab) return true
+    if (!confirmDiscardUnsaved()) return false
     setWorkspaceTab(nextTab)
+    return true
   }, [confirmDiscardUnsaved, workspaceTab])
 
   const handleBackToHubClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
@@ -988,7 +989,7 @@ export default function SlidesPage() {
     }))
   }, [])
 
-  const handleSave = useCallback(async (options?: { autosave?: boolean; overwrite?: boolean }) => {
+  const handleSave = useCallback(async (options?: { autosave?: boolean; overwrite?: boolean; titleOverride?: string }) => {
     if (!result) {
       setSaveStatus('error')
       setSaveError('Parse HTML before saving a slide.')
@@ -1003,9 +1004,10 @@ export default function SlidesPage() {
     setSaveError(null)
 
     try {
+      const titleToPersist = options?.titleOverride?.trim() || slideTitle.trim() || 'Untitled Slide'
       const response = await saveSlide(actor, {
         id: activeSlideId || undefined,
-        title: slideTitle.trim() || 'Untitled Slide',
+        title: titleToPersist,
         canvas: result.canvas,
         components: normalizeComponentsForPersistence(result.components),
         metadata: {
@@ -1706,13 +1708,22 @@ export default function SlidesPage() {
           run = () => openFilePicker()
           break
         case 'slides-parse-pasted':
-          run = () => {
-            try {
-              parseHtmlSync(rawHtml)
-            } catch {
-              // parser state already updated by parseHtmlSync
-            }
-          }
+          run = () => { void runParseWithProgress(rawHtml) }
+          break
+        case 'slides-save-slide':
+          run = () => { void handleSave() }
+          break
+        case 'slides-generate-export':
+          run = () => { generateExport() }
+          break
+        case 'slides-open-my-slides':
+          run = () => { handleWorkspaceTabChange('my-slides') }
+          break
+        case 'slides-open-template-library':
+          run = () => { handleWorkspaceTabChange('templates') }
+          break
+        case 'slides-open-activity':
+          run = () => { handleWorkspaceTabChange('activity') }
           break
         default:
           run = () => {}
@@ -1725,6 +1736,13 @@ export default function SlidesPage() {
       rawHtml,
       openFilePicker,
       parseHtml: parseHtmlSync,
+      saveSlide: async (titleOverride) => {
+        const saved = await handleSave(titleOverride ? { titleOverride } : undefined)
+        if (!saved) return 'Save failed. Parse HTML before saving a slide, then retry.'
+        return `Saved "${saved.title}" (revision ${saved.revision}).`
+      },
+      generateExport,
+      openWorkspaceTab: handleWorkspaceTabChange,
     })
 
     return buildModuleOliverConfig('slides', {
@@ -1744,7 +1762,7 @@ export default function SlidesPage() {
         active_slide_id: activeSlideId,
       }),
     })
-  }, [activeSlideId, openFilePicker, parseHtmlSync, rawHtml, result, saveStatus])
+  }, [activeSlideId, generateExport, handleSave, handleWorkspaceTabChange, openFilePicker, parseHtmlSync, rawHtml, result, runParseWithProgress, saveStatus])
 
   useRegisterOliver(oliverConfig)
 
