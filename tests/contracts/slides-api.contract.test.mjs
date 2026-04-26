@@ -332,6 +332,134 @@ test('slides API contract: permanent-delete-template enforces archived prerequis
   })
 })
 
+test('slides API contract: approval escalation includes configured routing channels and targets', { concurrency: false }, async () => {
+  let patchedApprovalPayload = null
+  let escalationAuditDetails = null
+
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['slides'],
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_template_approvals' && method === 'GET') {
+      return jsonResponse([{
+        id: 'approval-1',
+        template_id: 'template-1',
+        requested_by_user_id: 'member-1',
+        requested_by_email: 'member@example.com',
+        approval_type: 'transfer-template',
+        payload: {
+          target_user_id: 'admin-1',
+          target_user_email: 'admin@example.com',
+        },
+        status: 'pending',
+        review_note: null,
+        reviewed_by_user_id: null,
+        reviewed_at: null,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z',
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_templates' && method === 'GET') {
+      return jsonResponse([{
+        id: 'template-1',
+        owner_user_id: 'member-1',
+        name: 'Escalation Template',
+        description: '',
+        is_shared: false,
+        is_archived: false,
+        canvas: { width: 1920, height: 1080 },
+        components_json: [],
+        metadata: {},
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z',
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_template_approvals' && method === 'PATCH') {
+      const body = init.body ? JSON.parse(String(init.body)) : {}
+      patchedApprovalPayload = body
+      return jsonResponse([{
+        id: 'approval-1',
+        template_id: 'template-1',
+        requested_by_user_id: 'member-1',
+        requested_by_email: 'member@example.com',
+        approval_type: 'transfer-template',
+        payload: body.payload || {},
+        status: 'pending',
+        review_note: null,
+        reviewed_by_user_id: null,
+        reviewed_at: null,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: body.updated_at || '2026-04-26T00:00:00.000Z',
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_audit_events' && method === 'POST') {
+      const body = init.body ? JSON.parse(String(init.body)) : {}
+      escalationAuditDetails = body.details || null
+      return jsonResponse([], 201)
+    }
+
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/slides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'escalate-template-approval',
+        actor: { user_id: 'admin-1', user_email: 'admin@example.com' },
+        approval_id: 'approval-1',
+        reason: 'Escalate with configured channels.',
+      }),
+    })
+
+    const response = await onRequestPost({
+      request,
+      env: {
+        ...BASE_ENV,
+        SLIDES_TRUST_CLIENT_IDENTITY: '1',
+        SLIDES_APPROVAL_ESCALATION_CHANNELS: 'email,slack,in-app',
+        SLIDES_APPROVAL_ESCALATION_TARGET_USER_IDS: 'admin-1,admin-2',
+        SLIDES_APPROVAL_ESCALATION_TARGET_EMAILS: 'ops@example.com',
+        SLIDES_APPROVAL_ESCALATION_EMAIL_FROM: 'slides-alerts@example.com',
+        SLIDES_APPROVAL_ESCALATION_SLACK_WEBHOOK_URL: 'https://hooks.slack.com/services/test/path',
+      },
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(Array.isArray(body.approval?.payload?.escalations), true)
+    assert.equal(Array.isArray(patchedApprovalPayload?.payload?.escalations), true)
+
+    const escalation = body.approval.payload.escalations[0] || {}
+    assert.deepEqual(escalation.routing?.channels, ['email', 'slack', 'in-app'])
+    assert.equal(Array.isArray(escalation.routing?.targets), true)
+    assert.equal(escalation.routing?.targets.length, 3)
+    assert.equal(escalation.routing?.adapters?.email_enabled, true)
+    assert.equal(escalation.routing?.adapters?.slack_enabled, true)
+    assert.equal(escalation.routing?.adapters?.slack_webhook_configured, true)
+    assert.equal(escalation.routing?.adapters?.email_from, 'slides-alerts@example.com')
+
+    assert.equal(Array.isArray(escalationAuditDetails?.routing_channels), true)
+    assert.equal(Array.isArray(escalationAuditDetails?.routing_targets), true)
+    assert.equal(escalationAuditDetails?.routing_channels?.includes('slack'), true)
+    assert.equal(escalationAuditDetails?.routing_targets?.length, 3)
+  })
+})
+
 test('slides API contract: audits read supports high-volume pagination envelope', { concurrency: false }, async () => {
   await withMockedFetch(async (input, init = {}) => {
     const url = new URL(String(input))

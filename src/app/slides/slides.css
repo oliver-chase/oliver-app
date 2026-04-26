@@ -553,10 +553,10 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 .slides-canvas-component {
   position: absolute;
   z-index: 2;
-  border: 1px dashed var(--color-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-card);
-  box-shadow: var(--shadow-xs);
+  background: transparent;
+  box-shadow: none;
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: var(--spacing-20);
@@ -577,7 +577,6 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 }
 
 .slides-canvas-component.is-selected {
-  border-style: solid;
   border-color: var(--color-brand-pink);
   box-shadow: 0 0 0 var(--spacing-2xs) var(--color-pink-overlay-sm);
 }
