@@ -124,10 +124,12 @@ export function isCampaignsSchemaMissing(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
   return (
     message.includes('pgrst205')
-    || (message.includes('could not find the table') && message.includes('public.campaign_'))
-    || (message.includes('public.campaign_') && message.includes('schema cache'))
+    || (message.includes('could not find the table') && (message.includes('public.campaign_') || message.includes('public.campaigns')))
+    || ((message.includes('public.campaign_') || message.includes('public.campaigns')) && message.includes('schema cache'))
     || message.includes('could not find the function public.campaign_')
     || (message.includes('function public.campaign_') && message.includes('does not exist'))
+    || (message.includes('relation "public.campaigns"') && message.includes('does not exist'))
+    || (message.includes('relation "public.campaign_') && message.includes('does not exist'))
   )
 }
 
