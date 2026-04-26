@@ -7,7 +7,7 @@ Scope: Campaign Content Posting module (`/campaigns`)
 
 - US-CMP-QA-1114 (`CMP-QA-1114`)
 - Rollout gate file: `src/tech-debt/campaign-rollout-and-dod-gates.md`
-- Primary QA backlog: `.github/user-stories/oliver-app/backlog/campaign-content-posting-module-2026-04-25/US-CMP-QA-1114-staging-signoff-evidence-package.md`
+- Primary QA backlog: `/.github/oliver-app/modules/campaigns-module/US-CMP-QA-1114-staging-signoff-evidence-package.md`
 
 ## Environment
 
@@ -30,10 +30,10 @@ Scope: Campaign Content Posting module (`/campaigns`)
 
 | Suite | Command | Status | Result summary | Evidence artifact |
 | --- | --- | --- | --- | --- |
-| Campaign e2e | `npm run test:smoke:campaigns` | `TODO` | `Staging only; command pins Playwright port to 3002` | `TBD` |
-| Campaign smoke slice | `npm run test:smoke:campaigns:frontend` with staging API endpoint config | `TODO` | `Staging only; command pins Playwright port to 3002` | `TBD` |
-| Frontend smoke (campaign cases) | `npm run test:smoke:campaigns:frontend` | `TODO` | `Staging only; command pins Playwright port to 3002` | `TBD` |
-| Mobile clickpaths | `npm run test:smoke:campaigns:mobile` | `TODO` | `Staging only; command pins Playwright port to 3002` | `TBD` |
+| Campaign e2e | `npm run test:smoke:campaigns` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Campaign smoke slice | `npm run test:smoke:campaigns:frontend` with staging API endpoint config | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Frontend smoke (campaign cases) | `npm run test:smoke:campaigns:frontend` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Mobile clickpaths | `npm run test:smoke:campaigns:mobile` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
 
 ## Local execution log
 
@@ -41,16 +41,18 @@ Scope: Campaign Content Posting module (`/campaigns`)
 - 2026-04-26T02:54:27Z: `npm run test:smoke -- tests/e2e/frontend-smoke.spec.ts` -> blocked by local webServer bind to `0.0.0.0:3001`.
 - 2026-04-26T02:54:35Z: `npm run test:smoke:mobile -- tests/e2e/mobile-clickpaths.spec.ts` -> blocked by local webServer bind to `0.0.0.0:3001`.
 - 2026-04-26: Added staging execution matrix for pinned Playwright port (`:3002`) and staged all pending manual checks in this evidence file.
+- 2026-04-26T10:48:12Z: `npm run test:smoke:campaigns` -> blocked by local sandbox; Playwright webServer failed with `EPERM listen 0.0.0.0:3002`.
+- 2026-04-26T10:54:22Z: `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs` -> passed (`13 passed, 0 failed`) and captured as local contract evidence.
 
 ## Campaign API / Job Execution Checklist
 
 | Workflow | Command/Test | Status | Notes |
 | --- | --- | --- | --- |
-| `/api/campaigns` export idempotency dry-run/live | Manual staging capture using signed-in admin | `TODO` | `TBD` |
-| `campaign_jobs` dry-run and live modes | Manual staging capture using signed-in admin | `TODO` | `TBD` |
-| Permission/gating matrix | Admin/editor/reviewer role smoke checks | `TODO` | `TBD` |
-| Module visibility flag parity | `NEXT_PUBLIC_DISABLED_MODULES=campaigns`, `NEXT_PUBLIC_ENABLED_MODULES=campaigns`, `NEXT_PUBLIC_HUB_VISIBLE_MODULES=campaigns` | `TODO` | `TBD` |
-| ICS import check | macOS Calendar import (`.ics`) and Windows Outlook import (`.ics`) | `TODO` | `Requires manual QA environment with desktop clients` |
+| `/api/campaigns` export idempotency dry-run/live | Manual staging capture using signed-in admin | `BLOCKED` | `Seeded staging + admin actor required` |
+| `campaign_jobs` dry-run and live modes | Manual staging capture using signed-in admin | `BLOCKED` | `Seeded staging + admin actor required` |
+| Permission/gating matrix | Admin/editor/reviewer role smoke checks | `BLOCKED` | `Seeded staging + role coverage required` |
+| Module visibility flag parity | `NEXT_PUBLIC_DISABLED_MODULES=campaigns`, `NEXT_PUBLIC_ENABLED_MODULES=campaigns`, `NEXT_PUBLIC_HUB_VISIBLE_MODULES=campaigns` | `BLOCKED` | `Requires environment parity window` |
+| ICS import check | macOS Calendar import (`.ics`) and Windows Outlook import (`.ics`) | `BLOCKED` | `Requires desktop QA environments and screenshots` |
 
 ## Staging Rollout Checkboxes (Signed Off)
 
@@ -68,3 +70,17 @@ Scope: Campaign Content Posting module (`/campaigns`)
 - Release Owner: `TBD`
 - Verified at: `TBD`
 - Artifact location(s): `TBD`
+
+## Local-only verification evidence
+
+- `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs`
+  - status: passed
+  - artifacts: command output only (`13 passed, 0 failed`)
+  - timestamp: `2026-04-26T10:54:22Z`
+  - relevance: supports `US-CMP-QA-1113` contract assertions and `US-CMP-QA-1114` readiness evidence (non-staging scope).
+
+## Current Blocker Log
+
+- Active release blocker: `US-CMP-QA-1111` is waiting for complete `US-CMP-QA-1114` signoff completion.
+- Active release blocker: `US-CMP-QA-1112` is waiting on `US-CMP-QA-1113` ICS external client evidence.
+- Active release blocker: `US-CMP-QA-1115` is waiting on signed campaign suite artifacts (mobile/shell assertions).

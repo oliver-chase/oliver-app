@@ -29,5 +29,5 @@ Module: Campaign Content Posting (`/campaigns`)
 ## Signoff linkage
 
 - Reference this note from:
-  - [US-CMP-QA-1113-ics-import-platform-verification.md](/.github/user-stories/oliver-app/backlog/campaign-content-posting-module-2026-04-25/US-CMP-QA-1113-ics-import-platform-verification.md)
-  - [US-CMP-QA-1114-staging-signoff-evidence-package.md](/.github/user-stories/oliver-app/backlog/campaign-content-posting-module-2026-04-25/US-CMP-QA-1114-staging-signoff-evidence-package.md)
+  - [US-CMP-QA-1113-ics-import-platform-verification.md](/.github/oliver-app/modules/campaigns-module/US-CMP-QA-1113-ics-import-platform-verification.md)
+  - [US-CMP-QA-1114-staging-signoff-evidence-package.md](/.github/oliver-app/modules/campaigns-module/US-CMP-QA-1114-staging-signoff-evidence-package.md)

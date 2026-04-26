@@ -30,6 +30,15 @@ Evidence target:
 Notes:
 - Core DoD and contract evidence are already recorded in:
   - `src/tech-debt/campaign-rollout-and-dod-gates.md`
-  - `.github/user-stories/.../US-CMP-QA-1112-mvp-dod-verification-checklist.md`
-  - `.github/user-stories/.../US-CMP-QA-1113-ics-import-platform-verification.md`
+  - `/.github/oliver-app/modules/campaigns-module/US-CMP-QA-1112-mvp-dod-verification-checklist.md`
+  - `/.github/oliver-app/modules/campaigns-module/US-CMP-QA-1113-ics-import-platform-verification.md`
 - Current blocker: manual staging and external-client validations are still pending and tracked directly in the package evidence file.
+
+Blocker:
+- Missing staging execution artifacts for campaigns suites, API/job behavior, permission matrix, and environment flag checks.
+
+Unblock action:
+- Complete one full staging run with seeded campaign dataset and update:
+  - this file (`Status`, `Result summary`, `Evidence artifact`),
+  - `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` (signature + run actor),
+  - `src/tech-debt/campaign-rollout-and-dod-gates.md` (rollout blocker lift after checklist complete).

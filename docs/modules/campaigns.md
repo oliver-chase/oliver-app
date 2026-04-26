@@ -36,7 +36,8 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
 
 ## Current-state gap analysis
 - Full requirement audit and E2E gap matrix: `docs/modules/campaigns-gap-analysis-2026-04-25.md`
-- Prioritized parity story pack (themes + epics + user stories): `.github/user-stories/oliver-app/backlog/campaigns-spec-parity-prioritization-2026-04-25/README.md`
+- Campaign backlog (themes, epics, and user stories): `/.github/oliver-app/modules/campaigns-module/README.md`
+- PRD user-story source map: `campaign-content-posting-module-prd.md` (stories relocated to campaign backlog map file)
 
 ## Update checklist
 - Keep review queue, claim flow, calendar flow, and report flow docs synchronized.

@@ -19,6 +19,12 @@ Acceptance Criteria:
 - [ ] ICS reminder generation verified on both Mac and Windows calendar imports.
 - [x] Reporting/export outputs validated against known fixtures.
 
+Blocker:
+- ICS validation requires external desktop clients and staging artifacts; this is tracked by `US-CMP-QA-1113`.
+
+Unblock action:
+- Import evidence (macOS Calendar + Windows Outlook screenshots + event metadata validation logs) must be uploaded to `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` and linked from here.
+
 Evidence:
 - PRD DoD mapping is captured in `src/tech-debt/campaign-rollout-and-dod-gates.md`.
 - Contributor/reviewer/admin flows are exercised in `tests/e2e/campaigns-module.spec.ts` and `tests/e2e/frontend-smoke.spec.ts`.
