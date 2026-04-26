@@ -771,6 +771,7 @@ export default function SlidesPage() {
     pptxSelectedSlideIds.filter((slideId) => visibleSlideIds.includes(slideId)).length
   ), [pptxSelectedSlideIds, visibleSlideIds])
   const selectedHiddenSlideCount = Math.max(0, pptxSelectedSlideIds.length - selectedVisibleSlideCount)
+  const hasHiddenSelections = selectedHiddenSlideCount > 0
   const areAllVisibleSlidesSelected = slides.length > 0 && selectedVisibleSlideCount === slides.length
   const workspaceLabel = workspaceTab === 'import'
     ? 'Import Workspace'
@@ -3475,6 +3476,10 @@ export default function SlidesPage() {
     })
   }, [slides])
 
+  const keepVisibleSelection = useCallback(() => {
+    setPptxSelectedSlideIds((previous) => previous.filter((slideId) => visibleSlideIds.includes(slideId)))
+  }, [visibleSlideIds])
+
   const handleConflictReload = useCallback(() => {
     if (!conflictServerSlide) return
     loadSlide(conflictServerSlide, { skipUnsavedConfirm: true })
@@ -4500,6 +4505,14 @@ export default function SlidesPage() {
                     disabled={pptxExportBusy || slides.length === 0 || areAllVisibleSlidesSelected}
                   >
                     Select Visible ({slides.length})
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost btn--compact"
+                    onClick={() => keepVisibleSelection()}
+                    disabled={!hasHiddenSelections || pptxExportBusy}
+                  >
+                    Keep Visible Only
                   </button>
                   <button
                     type="button"
