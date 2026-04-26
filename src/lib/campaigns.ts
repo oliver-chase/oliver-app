@@ -9,6 +9,11 @@ import type {
   CampaignContentType,
   CampaignJobsAction,
   CampaignJobsRunResult,
+  CampaignJourneyBranchOutcome,
+  CampaignJourneyGraph,
+  CampaignJourneyNode,
+  CampaignJourneyNodeType,
+  CampaignJourneyTimelineEntry,
   CampaignReportExportJob,
   CampaignReportGroupings,
   CampaignRecord,
@@ -181,6 +186,134 @@ async function runContentTransitionRpc(
   return normalizeRpcResult<CampaignContentItem>(label, (data ?? null) as CampaignContentItem | CampaignContentItem[] | null)
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map(item => asString(item))
+    .filter(Boolean)
+}
+
+function normalizeJourneyNodeType(value: unknown): CampaignJourneyNodeType | null {
+  const raw = asString(value)
+  if (raw === 'action' || raw === 'decision' || raw === 'condition') return raw
+  return null
+}
+
+function normalizeJourneyBranchOutcome(value: unknown): CampaignJourneyBranchOutcome {
+  const raw = asString(value)
+  if (raw === 'positive' || raw === 'negative') return raw
+  return 'n/a'
+}
+
+function normalizeJourneyNode(value: unknown): CampaignJourneyNode | null {
+  const source = asRecord(value)
+  const id = asString(source.id)
+  const type = normalizeJourneyNodeType(source.type)
+  const title = asString(source.title)
+  if (!id || !type || !title) return null
+
+  return {
+    id,
+    type,
+    title,
+    config: asRecord(source.config),
+    next_node_ids: asStringArray(source.next_node_ids),
+    branch_positive_node_id: asString(source.branch_positive_node_id) || null,
+    branch_negative_node_id: asString(source.branch_negative_node_id) || null,
+  }
+}
+
+function buildJourneyNodeLinks(node: CampaignJourneyNode): string[] {
+  const links = [...node.next_node_ids]
+  if (node.branch_positive_node_id) links.push(node.branch_positive_node_id)
+  if (node.branch_negative_node_id) links.push(node.branch_negative_node_id)
+  return [...new Set(links)]
+}
+
+function validateJourneyGraph(graph: CampaignJourneyGraph): { ok: true } {
+  if (!Array.isArray(graph.nodes) || graph.nodes.length === 0) {
+    throw new Error('Journey graph requires at least one node.')
+  }
+
+  const nodeById = new Map<string, CampaignJourneyNode>()
+  for (const node of graph.nodes) {
+    if (nodeById.has(node.id)) {
+      throw new Error(`Journey graph has duplicate node id: ${node.id}`)
+    }
+    nodeById.set(node.id, node)
+    if (node.type === 'action' && !asString(node.config.action_key)) {
+      throw new Error(`Journey action node ${node.id} is missing required config.action_key`)
+    }
+    if (node.type === 'condition' && !asString(node.config.condition_key)) {
+      throw new Error(`Journey condition node ${node.id} is missing required config.condition_key`)
+    }
+    if (node.type === 'decision' && (!asString(node.config.field) || !asString(node.config.operator))) {
+      throw new Error(`Journey decision node ${node.id} is missing required config.field/config.operator`)
+    }
+  }
+
+  for (const node of graph.nodes) {
+    for (const linkedNodeId of buildJourneyNodeLinks(node)) {
+      if (!nodeById.has(linkedNodeId)) {
+        throw new Error(`Journey graph has dangling node reference from ${node.id} to ${linkedNodeId}`)
+      }
+    }
+  }
+
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+  const visit = (id: string) => {
+    if (visiting.has(id)) {
+      throw new Error('Journey graph has prohibited cycle references.')
+    }
+    if (visited.has(id)) return
+    visiting.add(id)
+    const node = nodeById.get(id)
+    if (node) {
+      for (const linkedNodeId of buildJourneyNodeLinks(node)) {
+        visit(linkedNodeId)
+      }
+    }
+    visiting.delete(id)
+    visited.add(id)
+  }
+
+  for (const node of graph.nodes) {
+    visit(node.id)
+  }
+  return { ok: true }
+}
+
+function parseCampaignJourneyGraph(campaign: CampaignRecord | null): CampaignJourneyGraph | null {
+  if (!campaign?.cadence_rule || typeof campaign.cadence_rule !== 'object') return null
+  const cadenceRule = campaign.cadence_rule as Record<string, unknown>
+  const journey = asRecord(cadenceRule.journey_graph)
+  const version = Number(journey.version)
+  const publishedAt = asString(journey.published_at)
+  const publishedBy = asString(journey.published_by)
+  const nodes = Array.isArray(journey.nodes)
+    ? journey.nodes.map(normalizeJourneyNode).filter((node): node is CampaignJourneyNode => !!node)
+    : []
+
+  if (!Number.isFinite(version) || version <= 0 || !publishedAt || !publishedBy || nodes.length === 0) return null
+
+  return {
+    version,
+    published_at: publishedAt,
+    published_by: publishedBy,
+    nodes,
+  }
+}
+
 export async function listCampaigns(): Promise<CampaignRecord[]> {
   const { data, error } = await supabase
     .from('campaigns')
@@ -263,6 +396,147 @@ export async function updateCampaign(
     },
   })
   return updated
+}
+
+export async function getCampaignJourneyGraph(campaignId: string): Promise<CampaignJourneyGraph | null> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('id', campaignId)
+    .limit(1)
+    .single()
+  throwDbError('getCampaignJourneyGraph', error)
+  return parseCampaignJourneyGraph(data as CampaignRecord)
+}
+
+export async function publishCampaignJourneyGraph(input: {
+  campaignId: string
+  actorUserId: string
+  nodes: CampaignJourneyNode[]
+}): Promise<{ campaign: CampaignRecord; graph: CampaignJourneyGraph; previousVersion: number }> {
+  const { data: currentData, error: currentError } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('id', input.campaignId)
+    .limit(1)
+    .single()
+  throwDbError('publishCampaignJourneyGraph.loadCampaign', currentError)
+
+  const currentCampaign = currentData as CampaignRecord
+  const previousGraph = parseCampaignJourneyGraph(currentCampaign)
+  const previousVersion = previousGraph?.version || 0
+
+  const nextGraph: CampaignJourneyGraph = {
+    version: previousVersion + 1,
+    published_at: new Date().toISOString(),
+    published_by: input.actorUserId,
+    nodes: input.nodes,
+  }
+  validateJourneyGraph(nextGraph)
+
+  const currentCadenceRule = asRecord(currentCampaign.cadence_rule)
+  const nextCadenceRule: Record<string, unknown> = {
+    ...currentCadenceRule,
+    journey_graph: nextGraph,
+  }
+
+  const { data: updatedData, error: updatedError } = await supabase
+    .from('campaigns')
+    .update({ cadence_rule: nextCadenceRule })
+    .eq('id', input.campaignId)
+    .select('*')
+    .single()
+  throwDbError('publishCampaignJourneyGraph.updateCampaign', updatedError)
+
+  const updatedCampaign = updatedData as CampaignRecord
+  await logCampaignActivity({
+    entity_type: 'campaign',
+    entity_id: updatedCampaign.id,
+    action_type: 'campaign-journey-published',
+    performed_by: input.actorUserId,
+    metadata: {
+      before_graph_version: previousVersion,
+      after_graph_version: nextGraph.version,
+      node_count: nextGraph.nodes.length,
+    },
+  })
+
+  return {
+    campaign: updatedCampaign,
+    graph: nextGraph,
+    previousVersion,
+  }
+}
+
+export async function listCampaignJourneyTimelineEntries(input: {
+  campaignId: string
+  limit?: number
+  offset?: number
+  startDate?: string
+  endDate?: string
+  branchOutcome?: CampaignJourneyBranchOutcome | ''
+  nodeType?: CampaignJourneyNodeType | ''
+}): Promise<{ rows: CampaignJourneyTimelineEntry[]; hasMore: boolean }> {
+  const safeLimit = Math.max(1, Math.min(input.limit || 50, 200))
+  const safeOffset = Math.max(0, input.offset || 0)
+  const pageSize = safeLimit + 1
+
+  let query = supabase
+    .from('campaign_activity_log')
+    .select('*')
+    .eq('entity_id', input.campaignId)
+    .in('action_type', ['campaign-journey-node-executed', 'campaign-journey-published'])
+    .order('timestamp', { ascending: false })
+    .range(safeOffset, safeOffset + pageSize - 1)
+
+  if (input.startDate) {
+    query = query.gte('timestamp', input.startDate)
+  }
+  if (input.endDate) {
+    query = query.lte('timestamp', input.endDate)
+  }
+  if (input.branchOutcome && input.branchOutcome !== 'n/a') {
+    query = query.eq('metadata->>branch_outcome', input.branchOutcome)
+  }
+  if (input.nodeType) {
+    query = query.eq('metadata->>journey_node_type', input.nodeType)
+  }
+
+  const { data, error } = await query
+  throwDbError('listCampaignJourneyTimelineEntries', error)
+  const rows = (data ?? []) as CampaignActivityLog[]
+  const hasMore = rows.length > safeLimit
+  const slicedRows = rows.slice(0, safeLimit)
+
+  const normalized = slicedRows.map((row) => {
+    const metadata = asRecord(row.metadata)
+    const nodeType = normalizeJourneyNodeType(metadata.journey_node_type)
+    const branchOutcome = normalizeJourneyBranchOutcome(metadata.branch_outcome)
+    const actorType = asString(metadata.actor_type) === 'system' ? 'system' : 'user'
+    const message = asString(metadata.message)
+      || (row.action_type === 'campaign-journey-published'
+        ? `Journey published as version ${metadata.after_graph_version || 'unknown'}`
+        : `${nodeType || 'node'} execution recorded`)
+
+    return {
+      id: row.id,
+      campaign_id: row.entity_id,
+      node_id: asString(metadata.journey_node_id) || null,
+      node_type: nodeType,
+      branch_outcome: row.action_type === 'campaign-journey-published' ? 'n/a' : branchOutcome,
+      actor_type: actorType,
+      actor_user_id: row.performed_by || null,
+      action_type: row.action_type,
+      message,
+      timestamp: row.timestamp,
+      metadata,
+    } satisfies CampaignJourneyTimelineEntry
+  })
+
+  return {
+    rows: normalized,
+    hasMore,
+  }
 }
 
 export async function listCampaignContentItems(): Promise<CampaignContentItem[]> {
@@ -724,6 +998,44 @@ export async function getCampaignReportSummary(input: {
   }
 }
 
+export async function getCampaignJourneyTimeline(input: {
+  actor: CampaignApiActor
+  campaignId: string
+  startDate?: string
+  endDate?: string
+  nodeType?: CampaignJourneyNodeType | ''
+  branchOutcome?: CampaignJourneyBranchOutcome | ''
+  limit?: number
+  offset?: number
+}): Promise<{ items: CampaignJourneyTimelineEntry[]; hasMore: boolean; generatedAt: string }> {
+  const data = await requestCampaignApi<{
+    items: CampaignJourneyTimelineEntry[]
+    hasMore?: boolean
+    generatedAt?: string
+  }>({
+    method: 'POST',
+    body: {
+      action: 'get-journey-timeline',
+      actor: input.actor,
+      campaign_id: input.campaignId,
+      filters: {
+        startDate: input.startDate || '',
+        endDate: input.endDate || '',
+        nodeType: input.nodeType || '',
+        branchOutcome: input.branchOutcome || '',
+        limit: input.limit || 50,
+        offset: input.offset || 0,
+      },
+    },
+  })
+
+  return {
+    items: data.items || [],
+    hasMore: !!data.hasMore,
+    generatedAt: data.generatedAt || new Date().toISOString(),
+  }
+}
+
 export async function requestCampaignReportExport(input: {
   actor: CampaignApiActor
   format?: 'markdown' | 'html'
@@ -803,4 +1115,28 @@ export async function runCampaignJobs(input: {
   }
 
   return payload as CampaignJobsRunResult
+}
+
+export async function requestCampaignJourneyTimelineExport(input: {
+  actor: CampaignApiActor
+  campaignId: string
+  format: 'csv' | 'json'
+  filters?: {
+    startDate?: string
+    endDate?: string
+    nodeType?: CampaignJourneyNodeType | ''
+    branchOutcome?: CampaignJourneyBranchOutcome | ''
+  }
+}): Promise<CampaignReportExportJob> {
+  const data = await requestCampaignApi<{ job: CampaignReportExportJob }>({
+    method: 'POST',
+    body: {
+      action: 'request-journey-timeline-export',
+      actor: input.actor,
+      campaign_id: input.campaignId,
+      format: input.format,
+      filters: input.filters || {},
+    },
+  })
+  return data.job
 }

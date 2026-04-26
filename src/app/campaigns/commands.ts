@@ -157,4 +157,11 @@ export const CAMPAIGNS_COMMANDS: CommandMeta[] = [
     hint: 'Jump to campaign reporting and export section',
     aliases: ['campaign reports', 'report dashboard', 'reporting section'],
   },
+  {
+    id: 'open-automation',
+    label: 'Open Automation',
+    group: 'Quick',
+    hint: 'Jump to journey canvas and execution timeline workspace',
+    aliases: ['journey canvas', 'automation timeline', 'campaign automation'],
+  },
 ]

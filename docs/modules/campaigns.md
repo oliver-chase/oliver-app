@@ -12,6 +12,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
   - `src/app/campaigns/calendar/page.tsx`
   - `src/app/campaigns/reminders/page.tsx`
   - `src/app/campaigns/reports/page.tsx`
+  - `src/app/campaigns/automation/page.tsx`
 - Landing component: `src/components/campaigns/CampaignsLanding.tsx`
 - Module chatbot: `src/app/campaigns/commands.ts`, `src/app/campaigns/flows.ts`
 - Data/service layer: `src/lib/campaigns.ts`
@@ -25,6 +26,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
   - `/campaigns/calendar`
   - `/campaigns/reminders`
   - `/campaigns/reports`
+  - `/campaigns/automation`
 - Sidebar navigation now uses route links (not in-page anchor scroll).
 
 ## Access model
@@ -35,6 +37,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
 ## Data and integrations
 - Campaign CRUD/reporting operations are centralized in `src/lib/campaigns.ts`.
 - Backend endpoints are implemented in `functions/api/campaigns.js` and `functions/api/campaign-jobs.js`.
+- Automation surfaces include journey canvas publish/version tracking and execution timeline/export through existing campaign APIs.
 
 ## Current-state gap analysis
 - Full requirement audit and E2E gap matrix: `docs/modules/campaigns-gap-analysis-2026-04-25.md`

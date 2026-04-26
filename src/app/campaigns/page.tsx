@@ -34,11 +34,14 @@ import {
   listCampaigns,
   isCampaignAssetsTableAvailable,
   markCampaignContentPosted,
+  publishCampaignJourneyGraph,
   removeCampaignAsset,
   rejectCampaignContent,
+  requestCampaignJourneyTimelineExport,
   requestCampaignReportExport,
   downloadCampaignReportExport,
   getCampaignReportSummary,
+  getCampaignJourneyTimeline,
   listCampaignReportExports,
   runCampaignJobs,
   parseCampaignTransitionError,
@@ -57,6 +60,11 @@ import type {
   CampaignAsset,
   CampaignContentItem,
   CampaignContentMetrics,
+  CampaignJourneyBranchOutcome,
+  CampaignJourneyGraph,
+  CampaignJourneyNode,
+  CampaignJourneyNodeType,
+  CampaignJourneyTimelineEntry,
   CampaignReportGroupings,
   CampaignJobsAction,
   CampaignJobsRunResult,
@@ -66,7 +74,7 @@ import type {
   CampaignReportSummary,
 } from '@/types/campaigns'
 
-type CampaignSection = 'list' | 'content' | 'review' | 'calendar' | 'reminders' | 'reports'
+type CampaignSection = 'list' | 'content' | 'review' | 'calendar' | 'reminders' | 'reports' | 'automation'
 
 const SECTION_TO_ANCHOR: Record<CampaignSection, string> = {
   list: 'campaigns-list',
@@ -75,6 +83,7 @@ const SECTION_TO_ANCHOR: Record<CampaignSection, string> = {
   calendar: 'campaigns-calendar',
   reminders: 'campaigns-reminders',
   reports: 'campaigns-reports',
+  automation: 'campaigns-automation',
 }
 
 const SECTION_TO_ROUTE: Record<CampaignSection, string> = {
@@ -84,6 +93,7 @@ const SECTION_TO_ROUTE: Record<CampaignSection, string> = {
   calendar: '/campaigns/calendar',
   reminders: '/campaigns/reminders',
   reports: '/campaigns/reports',
+  automation: '/campaigns/automation',
 }
 
 function sectionFromPathname(pathname: string): CampaignSection | null {
@@ -101,6 +111,8 @@ function sectionFromPathname(pathname: string): CampaignSection | null {
       return 'reminders'
     case '/campaigns/reports':
       return 'reports'
+    case '/campaigns/automation':
+      return 'automation'
     default:
       return null
   }
@@ -214,6 +226,23 @@ type CampaignDensityDay = {
   missedCount: number
   postedCount: number
   status: 'off' | 'open' | 'filled' | 'missed'
+}
+
+type CampaignJourneyNodeDraft = {
+  id: string
+  type: CampaignJourneyNodeType
+  title: string
+  configJson: string
+  nextNodeIdsCsv: string
+  branchPositiveNodeId: string
+  branchNegativeNodeId: string
+}
+
+type CampaignJourneyTimelineFilters = {
+  startDate: string
+  endDate: string
+  nodeType: CampaignJourneyNodeType | ''
+  branchOutcome: CampaignJourneyBranchOutcome | ''
 }
 
 const CAMPAIGN_CADENCE_OPTIONS: Array<{ value: CampaignCadencePreset; label: string }> = [
@@ -567,6 +596,82 @@ function countReportGroupings(rows: CampaignContentItem[], groupBy: (item: Campa
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
 }
 
+function parseJourneyGraphFromCampaign(campaign: CampaignRecord | null): CampaignJourneyGraph | null {
+  if (!campaign?.cadence_rule || typeof campaign.cadence_rule !== 'object') return null
+  const cadenceRule = campaign.cadence_rule as Record<string, unknown>
+  const raw = cadenceRule.journey_graph
+  if (!raw || typeof raw !== 'object') return null
+
+  const graph = raw as Record<string, unknown>
+  const version = Number(graph.version || 0)
+  const publishedAt = typeof graph.published_at === 'string' ? graph.published_at : ''
+  const publishedBy = typeof graph.published_by === 'string' ? graph.published_by : ''
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : []
+  if (!Number.isFinite(version) || version <= 0 || !publishedAt || !publishedBy) return null
+
+  const normalizedNodes = nodes
+    .map((row): CampaignJourneyNode | null => {
+      if (!row || typeof row !== 'object') return null
+      const source = row as Record<string, unknown>
+      const id = typeof source.id === 'string' ? source.id.trim() : ''
+      const type = source.type
+      const title = typeof source.title === 'string' ? source.title.trim() : ''
+      if (!id || !title || (type !== 'action' && type !== 'decision' && type !== 'condition')) return null
+      const nextNodeIds = Array.isArray(source.next_node_ids)
+        ? source.next_node_ids.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        : []
+      return {
+        id,
+        type,
+        title,
+        config: source.config && typeof source.config === 'object' && !Array.isArray(source.config)
+          ? source.config as Record<string, unknown>
+          : {},
+        next_node_ids: nextNodeIds,
+        branch_positive_node_id: typeof source.branch_positive_node_id === 'string' ? source.branch_positive_node_id.trim() : null,
+        branch_negative_node_id: typeof source.branch_negative_node_id === 'string' ? source.branch_negative_node_id.trim() : null,
+      }
+    })
+    .filter((node): node is CampaignJourneyNode => !!node)
+
+  if (normalizedNodes.length === 0) return null
+  return {
+    version,
+    published_at: publishedAt,
+    published_by: publishedBy,
+    nodes: normalizedNodes,
+  }
+}
+
+function nodeDraftFromNode(node: CampaignJourneyNode): CampaignJourneyNodeDraft {
+  return {
+    id: node.id,
+    type: node.type,
+    title: node.title,
+    configJson: JSON.stringify(node.config || {}, null, 2),
+    nextNodeIdsCsv: (node.next_node_ids || []).join(','),
+    branchPositiveNodeId: node.branch_positive_node_id || '',
+    branchNegativeNodeId: node.branch_negative_node_id || '',
+  }
+}
+
+function createDefaultJourneyNodeDraft(type: CampaignJourneyNodeType = 'action'): CampaignJourneyNodeDraft {
+  const stamp = Math.random().toString(36).slice(2, 7)
+  return {
+    id: `${type}-${stamp}`,
+    type,
+    title: type === 'action' ? 'Action node' : type === 'decision' ? 'Decision node' : 'Condition node',
+    configJson: type === 'action'
+      ? JSON.stringify({ action_key: 'send-message' }, null, 2)
+      : type === 'decision'
+        ? JSON.stringify({ field: 'engagement_score', operator: '>=' }, null, 2)
+        : JSON.stringify({ condition_key: 'in_segment' }, null, 2),
+    nextNodeIdsCsv: '',
+    branchPositiveNodeId: '',
+    branchNegativeNodeId: '',
+  }
+}
+
 export default function CampaignsPage() {
   const pathname = usePathname()
   const router = useRouter()
@@ -665,6 +770,21 @@ export default function CampaignsPage() {
     reminderType: 'in-app',
     scheduledFor: '',
   })
+  const [journeyNodeDrafts, setJourneyNodeDrafts] = useState<CampaignJourneyNodeDraft[]>([createDefaultJourneyNodeDraft('action')])
+  const [journeyGraphMeta, setJourneyGraphMeta] = useState<CampaignJourneyGraph | null>(null)
+  const [journeySaving, setJourneySaving] = useState(false)
+  const [journeyTimelineEntries, setJourneyTimelineEntries] = useState<CampaignJourneyTimelineEntry[]>([])
+  const [journeyTimelineLoading, setJourneyTimelineLoading] = useState(false)
+  const [journeyTimelineOffset, setJourneyTimelineOffset] = useState(0)
+  const [journeyTimelineHasMore, setJourneyTimelineHasMore] = useState(false)
+  const [journeyTimelineFilters, setJourneyTimelineFilters] = useState<CampaignJourneyTimelineFilters>({
+    startDate: '',
+    endDate: '',
+    nodeType: '',
+    branchOutcome: '',
+  })
+  const [journeyTimelineGeneratedAt, setJourneyTimelineGeneratedAt] = useState('')
+  const [highlightedJourneyNodeId, setHighlightedJourneyNodeId] = useState('')
 
   const [campaignDraft, setCampaignDraft] = useState({
     name: '',
@@ -801,6 +921,16 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     setCampaignDetailDraft(buildCampaignDetailDraft(selectedCampaign))
+  }, [selectedCampaign])
+
+  useEffect(() => {
+    const graph = parseJourneyGraphFromCampaign(selectedCampaign)
+    setJourneyGraphMeta(graph)
+    if (graph?.nodes.length) {
+      setJourneyNodeDrafts(graph.nodes.map(nodeDraftFromNode))
+      return
+    }
+    setJourneyNodeDrafts([createDefaultJourneyNodeDraft('action')])
   }, [selectedCampaign])
 
   useEffect(() => {
@@ -2036,6 +2166,193 @@ export default function CampaignsPage() {
     setErrorFromException,
   ])
 
+  const parseJourneyDraftNodes = useCallback((): CampaignJourneyNode[] => {
+    return journeyNodeDrafts.map((draft, index) => {
+      const id = draft.id.trim()
+      const title = draft.title.trim()
+      if (!id || !title) {
+        throw new Error(`Journey node ${index + 1} requires both id and title.`)
+      }
+      let config: Record<string, unknown> = {}
+      if (draft.configJson.trim()) {
+        try {
+          const parsed = JSON.parse(draft.configJson)
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Node config must be a JSON object.')
+          }
+          config = parsed as Record<string, unknown>
+        } catch (error) {
+          throw new Error(`Journey node ${id} has invalid JSON config: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+      const nextNodeIds = draft.nextNodeIdsCsv
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
+      return {
+        id,
+        type: draft.type,
+        title,
+        config,
+        next_node_ids: nextNodeIds,
+        branch_positive_node_id: draft.branchPositiveNodeId.trim() || null,
+        branch_negative_node_id: draft.branchNegativeNodeId.trim() || null,
+      }
+    })
+  }, [journeyNodeDrafts])
+
+  const loadJourneyTimelineFromInput = useCallback(async (offset = 0) => {
+    if (!selectedCampaign || !appUser?.user_id) {
+      setJourneyTimelineEntries([])
+      setJourneyTimelineHasMore(false)
+      return
+    }
+
+    setJourneyTimelineLoading(true)
+    try {
+      const response = await getCampaignJourneyTimeline({
+        actor: {
+          user_id: appUser.user_id,
+          user_email: appUser.email || '',
+        },
+        campaignId: selectedCampaign.id,
+        startDate: journeyTimelineFilters.startDate || '',
+        endDate: journeyTimelineFilters.endDate || '',
+        nodeType: journeyTimelineFilters.nodeType,
+        branchOutcome: journeyTimelineFilters.branchOutcome,
+        limit: 25,
+        offset,
+      })
+      if (offset === 0) {
+        setJourneyTimelineEntries(response.items)
+      } else {
+        setJourneyTimelineEntries(previous => [...previous, ...response.items])
+      }
+      setJourneyTimelineHasMore(response.hasMore)
+      setJourneyTimelineGeneratedAt(response.generatedAt)
+      setJourneyTimelineOffset(offset)
+    } catch {
+      if (offset === 0) setJourneyTimelineEntries([])
+      setJourneyTimelineHasMore(false)
+      setJourneyTimelineGeneratedAt('')
+    } finally {
+      setJourneyTimelineLoading(false)
+    }
+  }, [
+    appUser?.email,
+    appUser?.user_id,
+    journeyTimelineFilters.branchOutcome,
+    journeyTimelineFilters.endDate,
+    journeyTimelineFilters.nodeType,
+    journeyTimelineFilters.startDate,
+    selectedCampaign,
+  ])
+
+  const saveJourneyGraphFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    if (!isAdmin) {
+      setError('Journey editing requires campaign-admin access.')
+      return
+    }
+    setJourneySaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nodes = parseJourneyDraftNodes()
+      const result = await publishCampaignJourneyGraph({
+        campaignId: selectedCampaign.id,
+        actorUserId: appUser.user_id,
+        nodes,
+      })
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === result.campaign.id ? result.campaign : campaign
+      )))
+      setJourneyGraphMeta(result.graph)
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess(`Journey graph published as version ${result.graph.version}.`)
+      void loadJourneyTimelineFromInput(0)
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setJourneySaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    isAdmin,
+    loadJourneyTimelineFromInput,
+    markMutationSuccess,
+    parseJourneyDraftNodes,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  const exportJourneyTimelineFromInput = useCallback(async (format: 'csv' | 'json') => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const job = await requestCampaignJourneyTimelineExport({
+        actor: {
+          user_id: appUser.user_id,
+          user_email: appUser.email || '',
+        },
+        campaignId: selectedCampaign.id,
+        format,
+        filters: {
+          startDate: journeyTimelineFilters.startDate || '',
+          endDate: journeyTimelineFilters.endDate || '',
+          nodeType: journeyTimelineFilters.nodeType,
+          branchOutcome: journeyTimelineFilters.branchOutcome,
+        },
+      })
+
+      const downloaded = await downloadCampaignReportExport({
+        actor: {
+          user_id: appUser.user_id,
+          user_email: appUser.email || '',
+        },
+        exportId: job.id,
+      })
+      const mime = downloaded.format === 'json'
+        ? 'application/json;charset=utf-8'
+        : 'text/csv;charset=utf-8'
+      const blob = new Blob([downloaded.content], { type: mime })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = downloaded.filename || `campaign-journey-timeline-${new Date().toISOString().slice(0, 10)}.${format}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+      markMutationSuccess(`Journey timeline exported (${format.toUpperCase()}).`)
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    }
+  }, [
+    appUser?.email,
+    appUser?.user_id,
+    journeyTimelineFilters.branchOutcome,
+    journeyTimelineFilters.endDate,
+    journeyTimelineFilters.nodeType,
+    journeyTimelineFilters.startDate,
+    markMutationSuccess,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  useEffect(() => {
+    if (!selectedCampaign?.id) {
+      setJourneyTimelineEntries([])
+      setJourneyTimelineHasMore(false)
+      setJourneyTimelineOffset(0)
+      setJourneyTimelineGeneratedAt('')
+      return
+    }
+    void loadJourneyTimelineFromInput(0)
+  }, [loadJourneyTimelineFromInput, selectedCampaign?.id])
+
   const createContentDraftFromInput = useCallback(async (payload: {
     title?: string
     body?: string
@@ -2925,6 +3242,10 @@ export default function CampaignsPage() {
     jumpTo('reports')
   }, [jumpTo])
 
+  const openAutomationFromInput = useCallback(() => {
+    jumpTo('automation')
+  }, [jumpTo])
+
   const nextActions = useMemo(() => {
     const rows: Array<{
       id: string
@@ -3104,6 +3425,7 @@ export default function CampaignsPage() {
       openCalendar: payload => openCalendarFromInput(payload),
       openReminders: () => openRemindersFromInput(),
       openReports: () => openReportsFromInput(),
+      openAutomation: () => openAutomationFromInput(),
     }),
     [
       isAdmin,
@@ -3134,6 +3456,7 @@ export default function CampaignsPage() {
       openCalendarFromInput,
       openRemindersFromInput,
       openReportsFromInput,
+      openAutomationFromInput,
     ],
   )
 
@@ -3161,6 +3484,9 @@ export default function CampaignsPage() {
           break
         case 'open-reports':
           run = () => openReportsFromInput()
+          break
+        case 'open-automation':
+          run = () => openAutomationFromInput()
           break
         case 'show-campaign-summary':
           run = () => openReportsFromInput()
@@ -3207,6 +3533,7 @@ export default function CampaignsPage() {
     openContentLibraryFromInput,
     openRemindersFromInput,
     openReportsFromInput,
+    openAutomationFromInput,
     openReviewQueueFromInput,
     policyBlocked,
     reportSummary.waiting_review_count,
@@ -3269,6 +3596,13 @@ export default function CampaignsPage() {
             onClick={closeSidebar}
           >
             Reports
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.automation}
+            className={'app-sidebar-item' + (activeSidebarSection === 'automation' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Automation
           </Link>
         </div>
       </nav>
@@ -3373,6 +3707,7 @@ export default function CampaignsPage() {
                 <Link href={SECTION_TO_ROUTE.calendar} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'calendar' ? ' active' : '')}>Calendar</Link>
                 <Link href={SECTION_TO_ROUTE.reminders} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'reminders' ? ' active' : '')}>Reminders</Link>
                 <Link href={SECTION_TO_ROUTE.reports} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'reports' ? ' active' : '')}>Reports</Link>
+                <Link href={SECTION_TO_ROUTE.automation} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'automation' ? ' active' : '')}>Automation</Link>
               </div>
             </section>
           )}
@@ -4283,7 +4618,11 @@ export default function CampaignsPage() {
               const canSubmitOwnDraft =
                 capabilityMatrix.canEditOwnDraft(item)
                 || (item.status === 'unclaimed' && item.created_by === appUser?.user_id)
-              const canUpdatePostUrl = (item.status === 'claimed' || item.status === 'posted') && (item.posting_owner_id === appUser?.user_id || isAdmin)
+              const canUpdatePostUrl = (
+                item.status === 'draft'
+                || item.status === 'claimed'
+                || item.status === 'posted'
+              ) && (item.posting_owner_id === appUser?.user_id || item.created_by === appUser?.user_id || isAdmin)
               return (
                 <article key={item.id} className={'card campaign-card' + (contentFocusId === item.id ? ' campaign-card-focus' : '')}>
                   <div className="campaign-row-head">
@@ -4511,7 +4850,7 @@ export default function CampaignsPage() {
             {!capabilityMatrix.canReview && <div className="card">Review actions are admin-only.</div>}
             {capabilityMatrix.canReview && (
               <article className="card campaign-card">
-                <h3 className="campaign-card-title">Review Queue Controls</h3>
+                <h3 className="campaign-card-title">Queue Controls</h3>
                 <div className="campaign-form-grid">
                   <label className="campaign-filter-control">
                     <span className="campaign-card-copy">Sort Queue</span>
@@ -5374,6 +5713,326 @@ export default function CampaignsPage() {
             </section>
           )}
 
+          {shouldRenderSection('automation') && (
+            <section id="campaigns-automation" className="campaign-section">
+              <h2 className="campaign-section-title">Automation Journey and Timeline</h2>
+              <p className="campaign-section-subtitle">Visual journey orchestration with execution evidence and export.</p>
+              {!selectedCampaign && (
+                <article className="card campaign-card">
+                  <h3 className="campaign-card-title">No Campaign Selected</h3>
+                  <p className="campaign-card-copy">Select a campaign from workspace context to edit or inspect automation journey state.</p>
+                </article>
+              )}
+              {selectedCampaign && (
+                <>
+                  <article className="card campaign-card">
+                    <div className="campaign-row-head">
+                      <div>
+                        <h3 className="campaign-card-title">Journey Canvas</h3>
+                        <p className="campaign-card-copy">
+                          {isAdmin
+                            ? 'Action, decision, and condition nodes are editable and publish as versioned graph snapshots.'
+                            : 'Read-only mode. Campaign-admin capability is required to publish journey changes.'}
+                        </p>
+                      </div>
+                      <div className="campaign-card-actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => setJourneyNodeDrafts(previous => [...previous, createDefaultJourneyNodeDraft('action')])}
+                          disabled={!isAdmin}
+                        >
+                          Add Action
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => setJourneyNodeDrafts(previous => [...previous, createDefaultJourneyNodeDraft('decision')])}
+                          disabled={!isAdmin}
+                        >
+                          Add Decision
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => setJourneyNodeDrafts(previous => [...previous, createDefaultJourneyNodeDraft('condition')])}
+                          disabled={!isAdmin}
+                        >
+                          Add Condition
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--primary btn--sm"
+                          onClick={() => { void saveJourneyGraphFromInput() }}
+                          disabled={!isAdmin || journeySaving}
+                        >
+                          {journeySaving ? 'Publishing…' : 'Publish Journey'}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="campaign-card-copy">
+                      Current version: {journeyGraphMeta?.version || 0}
+                      {journeyGraphMeta?.published_at ? ` · Published ${new Date(journeyGraphMeta.published_at).toLocaleString()}` : ''}
+                      {journeyGraphMeta?.published_by ? ` · by ${journeyGraphMeta.published_by}` : ''}
+                    </p>
+                    <div className="campaign-grid">
+                      {journeyNodeDrafts.map((node, index) => (
+                        <article
+                          key={`journey-node-${node.id}-${index}`}
+                          className={'card campaign-card' + (highlightedJourneyNodeId && highlightedJourneyNodeId === node.id ? ' campaign-card-highlighted' : '')}
+                        >
+                          <div className="campaign-row-head">
+                            <p className="campaign-card-title">{node.title || `Node ${index + 1}`}</p>
+                            <span className="campaign-pill">{node.type}</span>
+                          </div>
+                          <div className="campaign-form-grid">
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Node ID</span>
+                              <input
+                                className="input"
+                                value={node.id}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, id: event.target.value } : row
+                                )))}
+                              />
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Type</span>
+                              <select
+                                className="input"
+                                value={node.type}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, type: event.target.value as CampaignJourneyNodeType } : row
+                                )))}
+                              >
+                                <option value="action">action</option>
+                                <option value="decision">decision</option>
+                                <option value="condition">condition</option>
+                              </select>
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Title</span>
+                              <input
+                                className="input"
+                                value={node.title}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, title: event.target.value } : row
+                                )))}
+                              />
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Next Node IDs (comma-separated)</span>
+                              <input
+                                className="input"
+                                value={node.nextNodeIdsCsv}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, nextNodeIdsCsv: event.target.value } : row
+                                )))}
+                              />
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Positive Branch Node ID</span>
+                              <input
+                                className="input"
+                                value={node.branchPositiveNodeId}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, branchPositiveNodeId: event.target.value } : row
+                                )))}
+                              />
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Negative Branch Node ID</span>
+                              <input
+                                className="input"
+                                value={node.branchNegativeNodeId}
+                                disabled={!isAdmin}
+                                onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                  rowIndex === index ? { ...row, branchNegativeNodeId: event.target.value } : row
+                                )))}
+                              />
+                            </label>
+                          </div>
+                          <label className="campaign-filter-control">
+                            <span className="campaign-card-copy">Config (JSON)</span>
+                            <textarea
+                              className="input"
+                              rows={5}
+                              value={node.configJson}
+                              disabled={!isAdmin}
+                              onChange={(event) => setJourneyNodeDrafts(previous => previous.map((row, rowIndex) => (
+                                rowIndex === index ? { ...row, configJson: event.target.value } : row
+                              )))}
+                            />
+                          </label>
+                          <div className="campaign-card-actions">
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => setHighlightedJourneyNodeId(node.id)}
+                            >
+                              Highlight
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => setJourneyNodeDrafts(previous => previous.filter((_, rowIndex) => rowIndex !== index))}
+                              disabled={!isAdmin || journeyNodeDrafts.length <= 1}
+                            >
+                              Remove Node
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="card campaign-card">
+                    <div className="campaign-row-head">
+                      <div>
+                        <h3 className="campaign-card-title">Execution Timeline</h3>
+                        <p className="campaign-card-copy">
+                          Timeline includes node executions and publish actions. Select entries to highlight linked nodes.
+                        </p>
+                      </div>
+                      <div className="campaign-card-actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => { void exportJourneyTimelineFromInput('csv') }}
+                        >
+                          Export CSV
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => { void exportJourneyTimelineFromInput('json') }}
+                        >
+                          Export JSON
+                        </button>
+                      </div>
+                    </div>
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Start Date</span>
+                        <input
+                          className="input"
+                          type="date"
+                          value={journeyTimelineFilters.startDate}
+                          onChange={(event) => setJourneyTimelineFilters(previous => ({ ...previous, startDate: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">End Date</span>
+                        <input
+                          className="input"
+                          type="date"
+                          value={journeyTimelineFilters.endDate}
+                          onChange={(event) => setJourneyTimelineFilters(previous => ({ ...previous, endDate: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Node Type</span>
+                        <select
+                          className="input"
+                          value={journeyTimelineFilters.nodeType}
+                          onChange={(event) => setJourneyTimelineFilters(previous => ({ ...previous, nodeType: event.target.value as CampaignJourneyNodeType | '' }))}
+                        >
+                          <option value="">All node types</option>
+                          <option value="action">action</option>
+                          <option value="decision">decision</option>
+                          <option value="condition">condition</option>
+                        </select>
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Branch Outcome</span>
+                        <select
+                          className="input"
+                          value={journeyTimelineFilters.branchOutcome}
+                          onChange={(event) => setJourneyTimelineFilters(previous => ({ ...previous, branchOutcome: event.target.value as CampaignJourneyBranchOutcome | '' }))}
+                        >
+                          <option value="">All outcomes</option>
+                          <option value="positive">positive</option>
+                          <option value="negative">negative</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="campaign-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => { void loadJourneyTimelineFromInput(0) }}
+                        disabled={journeyTimelineLoading}
+                      >
+                        {journeyTimelineLoading ? 'Loading…' : 'Apply Timeline Filters'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          setJourneyTimelineFilters({ startDate: '', endDate: '', nodeType: '', branchOutcome: '' })
+                          void loadJourneyTimelineFromInput(0)
+                        }}
+                      >
+                        Reset Timeline Filters
+                      </button>
+                    </div>
+                    <p className="campaign-card-copy">
+                      Freshness: {journeyTimelineGeneratedAt ? new Date(journeyTimelineGeneratedAt).toLocaleString() : 'n/a'}
+                    </p>
+                    {journeyTimelineEntries.length === 0 && !journeyTimelineLoading && (
+                      <p className="campaign-card-copy">No timeline entries match current filters.</p>
+                    )}
+                    <div className="campaign-timeline-groups">
+                      {journeyTimelineEntries.map(entry => (
+                        <article key={entry.id} className={'campaign-timeline-item' + (entry.node_id && highlightedJourneyNodeId === entry.node_id ? ' campaign-card-highlighted' : '')}>
+                          <div className="campaign-row-head">
+                            <p className="campaign-card-title">{entry.message}</p>
+                            <span className="campaign-pill">{entry.node_type || 'publish'}</span>
+                          </div>
+                          <p className="campaign-card-copy">
+                            {entry.branch_outcome !== 'n/a' ? `${entry.branch_outcome} · ` : ''}
+                            {entry.actor_type}
+                            {entry.actor_user_id ? `:${entry.actor_user_id}` : ''}
+                            {' · '}
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </p>
+                          {entry.node_id && (
+                            <div className="campaign-card-actions">
+                              <button
+                                type="button"
+                                className="btn btn--secondary btn--sm"
+                                onClick={() => setHighlightedJourneyNodeId(entry.node_id || '')}
+                              >
+                                Highlight Node
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                    {journeyTimelineHasMore && (
+                      <div className="campaign-card-actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => { void loadJourneyTimelineFromInput(journeyTimelineOffset + 25) }}
+                          disabled={journeyTimelineLoading}
+                        >
+                          {journeyTimelineLoading ? 'Loading…' : 'Load More'}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                </>
+              )}
+            </section>
+          )}
+
           {shouldRenderSection('reports') && (
             <section id="campaigns-reports" className="campaign-section">
             <h2 className="campaign-section-title">Reports</h2>
@@ -5598,7 +6257,7 @@ export default function CampaignsPage() {
                 <div key={job.id} className="campaign-asset-row">
                   <div>
                     <p className="campaign-card-copy">
-                      {job.file_name || job.id} · {job.format} · {job.status}
+                      {job.file_name || (job as { filename?: string }).filename || job.id} · {job.format} · {job.status}
                     </p>
                     <p className="campaign-card-copy">
                       Requested: {job.requested_at ? new Date(job.requested_at).toLocaleString() : 'n/a'}

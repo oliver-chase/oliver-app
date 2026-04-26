@@ -122,3 +122,121 @@ test('campaigns API contract: duplicate export request reuses existing fingerpri
     assert.equal(dedupeLogged, true)
   })
 })
+
+test('campaigns API contract: journey timeline filters and export are supported', { concurrency: false }, async () => {
+  let timelineExportLogged = false
+
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['campaigns'],
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/campaign_activity_log' && method === 'GET') {
+      return jsonResponse([
+        {
+          id: 'timeline-1',
+          entity_id: 'campaign-1',
+          action_type: 'campaign-journey-node-executed',
+          performed_by: 'system-worker',
+          timestamp: '2026-04-26T14:00:00.000Z',
+          metadata: {
+            journey_node_id: 'node-action-1',
+            journey_node_type: 'action',
+            branch_outcome: 'positive',
+            actor_type: 'system',
+            message: 'Action executed for qualified segment',
+          },
+        },
+      ])
+    }
+
+    if (url.pathname === '/rest/v1/campaign_report_exports' && method === 'GET') {
+      return jsonResponse([])
+    }
+
+    if (url.pathname === '/rest/v1/campaign_report_exports' && method === 'POST') {
+      return jsonResponse([{
+        id: 'journey-export-1',
+        requested_by_user_id: 'admin-1',
+        format: 'csv',
+        filters: { campaign_id: 'campaign-1', export_type: 'journey-timeline' },
+        status: 'completed',
+        file_name: 'campaign-journey-timeline-2026-04-26.csv',
+        file_payload: 'id,campaign_id,timestamp\n',
+        requested_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      }], 201)
+    }
+
+    if (url.pathname === '/rest/v1/campaign_activity_log' && method === 'POST') {
+      const payload = JSON.parse(String(init.body || '{}'))
+      timelineExportLogged = payload.action_type === 'journey-timeline-export-generated'
+      return jsonResponse([], 201)
+    }
+
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const timelineRequest = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get-journey-timeline',
+        actor: {
+          user_id: 'admin-1',
+          user_email: 'admin@example.com',
+        },
+        campaign_id: 'campaign-1',
+        filters: {
+          nodeType: 'action',
+          branchOutcome: 'positive',
+          limit: 25,
+          offset: 0,
+        },
+      }),
+    })
+
+    const timelineResponse = await onRequestPost({ request: timelineRequest, env: { ...BASE_ENV } })
+    const timelineBody = await timelineResponse.json()
+    assert.equal(timelineResponse.status, 200)
+    assert.equal(timelineBody.ok, true)
+    assert.equal(Array.isArray(timelineBody.items), true)
+    assert.equal(timelineBody.items[0]?.node_id, 'node-action-1')
+
+    const exportRequest = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'request-journey-timeline-export',
+        actor: {
+          user_id: 'admin-1',
+          user_email: 'admin@example.com',
+        },
+        campaign_id: 'campaign-1',
+        format: 'csv',
+        filters: {
+          nodeType: 'action',
+          branchOutcome: 'positive',
+        },
+      }),
+    })
+
+    const exportResponse = await onRequestPost({ request: exportRequest, env: { ...BASE_ENV } })
+    const exportBody = await exportResponse.json()
+
+    assert.equal(exportResponse.status, 201)
+    assert.equal(exportBody.ok, true)
+    assert.equal(exportBody.job?.id, 'journey-export-1')
+    assert.equal(timelineExportLogged, true)
+  })
+})

@@ -285,3 +285,37 @@ export interface CampaignAdminOverrideInput {
   post_url?: string | null
   posted_at?: string | null
 }
+
+export type CampaignJourneyNodeType = 'action' | 'decision' | 'condition'
+export type CampaignJourneyBranchOutcome = 'positive' | 'negative' | 'n/a'
+
+export interface CampaignJourneyNode {
+  id: string
+  type: CampaignJourneyNodeType
+  title: string
+  config: Record<string, unknown>
+  next_node_ids: string[]
+  branch_positive_node_id?: string | null
+  branch_negative_node_id?: string | null
+}
+
+export interface CampaignJourneyGraph {
+  version: number
+  published_at: string
+  published_by: string
+  nodes: CampaignJourneyNode[]
+}
+
+export interface CampaignJourneyTimelineEntry {
+  id: string
+  campaign_id: string
+  node_id: string | null
+  node_type: CampaignJourneyNodeType | null
+  branch_outcome: CampaignJourneyBranchOutcome
+  actor_type: 'system' | 'user'
+  actor_user_id: string | null
+  action_type: string
+  message: string
+  timestamp: string
+  metadata: Record<string, unknown>
+}

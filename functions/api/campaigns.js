@@ -201,6 +201,25 @@ function parseFilters(input) {
   };
 }
 
+function parseJourneyTimelineFilters(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const startDate = asString(source.startDate || source.start_date || '');
+  const endDate = asString(source.endDate || source.end_date || '');
+  const nodeType = asString(source.nodeType || source.node_type || '');
+  const branchOutcome = asString(source.branchOutcome || source.branch_outcome || '');
+  const limit = Number.parseInt(String(source.limit ?? '50'), 10);
+  const offset = Number.parseInt(String(source.offset ?? '0'), 10);
+
+  return {
+    startDate,
+    endDate,
+    nodeType,
+    branchOutcome,
+    limit: Number.isFinite(limit) ? Math.max(1, Math.min(limit, 200)) : 50,
+    offset: Number.isFinite(offset) ? Math.max(0, offset) : 0,
+  };
+}
+
 function canonicalizeForJson(value) {
   if (Array.isArray(value)) return value.map(canonicalizeForJson);
   if (value && typeof value === 'object') {
@@ -536,6 +555,103 @@ function parseFormat(raw) {
   return 'markdown';
 }
 
+function parseJourneyExportFormat(raw) {
+  const normalized = asString(raw).toLowerCase();
+  if (normalized === 'json') return 'json';
+  return 'csv';
+}
+
+function normalizeTimelineRow(row) {
+  const metadata = row && typeof row.metadata === 'object' && row.metadata ? row.metadata : {};
+  const nodeType = asString(metadata.journey_node_type || '');
+  const branchOutcome = asString(metadata.branch_outcome || '');
+  const actorType = asString(metadata.actor_type || '') === 'system' ? 'system' : 'user';
+  const message = asString(metadata.message || '')
+    || (row.action_type === 'campaign-journey-published'
+      ? `Journey published as version ${metadata.after_graph_version || 'unknown'}`
+      : `${nodeType || 'node'} execution recorded`);
+
+  return {
+    id: row.id,
+    campaign_id: row.entity_id,
+    node_id: asString(metadata.journey_node_id || '') || null,
+    node_type: nodeType || null,
+    branch_outcome: row.action_type === 'campaign-journey-published' ? 'n/a' : (branchOutcome || 'n/a'),
+    actor_type: actorType,
+    actor_user_id: row.performed_by || null,
+    action_type: row.action_type,
+    message,
+    timestamp: row.timestamp,
+    metadata,
+  };
+}
+
+async function fetchJourneyTimelineRows(env, campaignId, filters = {}) {
+  const pageLimit = Math.max(1, Math.min(Number(filters.limit || 50), 200));
+  const pageOffset = Math.max(0, Number(filters.offset || 0));
+  const queryLimit = pageLimit + 1;
+
+  const parts = [
+    '/rest/v1/campaign_activity_log?select=id,entity_id,action_type,performed_by,timestamp,metadata',
+    '&entity_id=eq.' + encodeURIComponent(campaignId),
+    '&action_type=in.(campaign-journey-node-executed,campaign-journey-published)',
+    '&order=timestamp.desc',
+    '&limit=' + queryLimit,
+    '&offset=' + pageOffset,
+  ];
+
+  const startIso = dateToIsoOrNull(filters.startDate || '', false);
+  const endIso = dateToIsoOrNull(filters.endDate || '', true);
+  if (startIso) parts.push('&timestamp=gte.' + encodeURIComponent(startIso));
+  if (endIso) parts.push('&timestamp=lte.' + encodeURIComponent(endIso));
+
+  const nodeType = asString(filters.nodeType || '');
+  const branchOutcome = asString(filters.branchOutcome || '');
+  if (nodeType) parts.push('&metadata->>journey_node_type=eq.' + encodeURIComponent(nodeType));
+  if (branchOutcome && branchOutcome !== 'n/a') parts.push('&metadata->>branch_outcome=eq.' + encodeURIComponent(branchOutcome));
+
+  const loaded = await supabaseJson(env, parts.join(''));
+  if (!loaded.ok) {
+    return {
+      ok: false,
+      status: loaded.status,
+      error: 'Failed to load campaign journey timeline rows: ' + loaded.text,
+      items: [],
+      hasMore: false,
+    };
+  }
+
+  const rows = Array.isArray(loaded.data) ? loaded.data : [];
+  const hasMore = rows.length > pageLimit;
+  return {
+    ok: true,
+    items: rows.slice(0, pageLimit).map(normalizeTimelineRow),
+    hasMore,
+  };
+}
+
+function buildJourneyTimelineCsv(items) {
+  const headers = [
+    'id',
+    'campaign_id',
+    'timestamp',
+    'node_id',
+    'node_type',
+    'branch_outcome',
+    'actor_type',
+    'actor_user_id',
+    'action_type',
+    'message',
+  ];
+
+  const escapeCsv = (value) => `"${String(value || '').replaceAll('"', '""')}"`;
+  const lines = [
+    headers.join(','),
+    ...items.map((item) => headers.map((header) => escapeCsv(item[header] || '')).join(',')),
+  ];
+  return lines.join('\n');
+}
+
 async function generateSummaryAndGroupings(env, filters) {
   const loaded = await fetchContentRows(env, filters);
   if (!loaded.ok) return loaded;
@@ -674,6 +790,23 @@ export async function onRequestPost(context) {
     });
   }
 
+  if (action === 'get-journey-timeline') {
+    const campaignId = asString(body.campaign_id || body.campaignId || '');
+    if (!campaignId) return errorResponse('campaign_id is required', 400);
+
+    const filters = parseJourneyTimelineFilters(body.filters || {});
+    const loaded = await fetchJourneyTimelineRows(env, campaignId, filters);
+    if (!loaded.ok) return errorResponse(loaded.error, loaded.status || 500);
+
+    return jsonResponse({
+      ok: true,
+      items: loaded.items,
+      hasMore: loaded.hasMore,
+      generatedAt: new Date().toISOString(),
+      filters,
+    });
+  }
+
   if (action === 'request-report-export') {
     const filters = parseFilters(body.filters || {});
     const format = parseFormat(body.format || 'markdown');
@@ -718,6 +851,61 @@ export async function onRequestPost(context) {
       deduped: !!created.deduped,
       summary: result.summary,
       groupings: result.groupings,
+    }, created.deduped ? 200 : 201);
+  }
+
+  if (action === 'request-journey-timeline-export') {
+    const campaignId = asString(body.campaign_id || body.campaignId || '');
+    if (!campaignId) return errorResponse('campaign_id is required', 400);
+
+    const filters = parseJourneyTimelineFilters(body.filters || {});
+    const format = parseJourneyExportFormat(body.format || 'csv');
+    const loaded = await fetchJourneyTimelineRows(env, campaignId, { ...filters, limit: 200, offset: 0 });
+    if (!loaded.ok) return errorResponse(loaded.error, loaded.status || 500);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const payload = format === 'json'
+      ? JSON.stringify({
+        generated_at: new Date().toISOString(),
+        campaign_id: campaignId,
+        filters,
+        items: loaded.items,
+      }, null, 2)
+      : buildJourneyTimelineCsv(loaded.items);
+    const fileName = `campaign-journey-timeline-${stamp}.${format}`;
+    const fingerprint = buildExportFingerprint({
+      format,
+      filters: { ...filters, campaign_id: campaignId, export_type: 'journey-timeline' },
+    });
+
+    const created = await createExportJob(env, {
+      requestedBy: authz.actor.user_id,
+      format,
+      filters: { ...filters, campaign_id: campaignId, export_type: 'journey-timeline' },
+      fingerprint,
+      fileName,
+      payload,
+    });
+    if (!created.ok) return errorResponse(created.error, created.status || 500);
+
+    await insertCampaignActivity(env, {
+      entity_type: 'campaign-report',
+      entity_id: created.row?.id || 'unknown',
+      action_type: created.deduped ? 'journey-timeline-export-deduped' : 'journey-timeline-export-generated',
+      performed_by: authz.actor.user_id,
+      metadata: {
+        campaign_id: campaignId,
+        format,
+        filters,
+        deduped: !!created.deduped,
+      },
+    });
+
+    return jsonResponse({
+      ok: true,
+      job: created.row,
+      deduped: !!created.deduped,
+      count: loaded.items.length,
     }, created.deduped ? 200 : 201);
   }
 
