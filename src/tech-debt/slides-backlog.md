@@ -89,3 +89,22 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 3. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
 4. SLD-FE-610: Decompose `src/app/slides/page.tsx` into bounded feature modules.
 5. SLD-BE-510: Expand async job/retry orchestration for export + compliance retention.
+
+## Program Backlog Addendum (2026-04-25)
+
+The following dedicated backlog bundle captures the full Slides V1 completion scope plus V2 and V3 expansion requirements:
+
+- `.github/user-stories/oliver-app/backlog/slides-module-v1-completion-v2-expansion-2026-04-25/README.md`
+- `.github/user-stories/oliver-app/backlog/slides-module-v1-completion-v2-expansion-2026-04-25/SLD-V1-V2-V3-program-spec.md`
+- `US-SLD-050`..`US-SLD-058` (V1 completion, including intake validation, warning taxonomy, editability normalization contract, and sample parity gate)
+- `US-SLD-060`..`US-SLD-065` (V2 templates/themes/layout-aware/editor expansion)
+- `US-SLD-070` (V3 responsive + aspect ratio intelligent repositioning)
+
+Coverage locked in this addendum:
+
+1. Convert imported HTML into canonical editable SlideDocument JSON.
+2. Export from JSON to HTML, PDF (via rendered HTML), and PPTX (best-effort editable objects).
+3. Support multi-slide decks with ordered slide operations.
+4. Support proportional resize behavior for fixed-layout slides.
+5. Add V2 template + theme systems, reusable layout blocks, and content replacement while preserving structure.
+6. Add V3 layout constraints, pinned elements, and aspect-ratio-aware intelligent repositioning.
