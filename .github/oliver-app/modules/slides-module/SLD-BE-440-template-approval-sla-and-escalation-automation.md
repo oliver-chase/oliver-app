@@ -1,8 +1,8 @@
 ---
 ID: SLD-BE-440
 Title: Template Approval SLA and Escalation Automation
-Status: In Progress
-Verified: false
+Status: Complete
+Verified: true
 Backdated: 2026-04-25
 ---
 
@@ -13,7 +13,7 @@ So stale requests trigger deterministic escalation and do not remain unresolved 
 Acceptance Criteria:
 - [x] Approval records include SLA deadline and escalation state fields.
 - [x] Scheduled process flags overdue approvals and writes escalation audit events.
-- [ ] Escalation routing supports configurable admin targets and notification channels.
+- [x] Escalation routing supports configurable admin targets and notification channels.
 - [x] API exposes SLA status fields for queue rendering and requester visibility.
 - [x] Escalation processing is idempotent and safe under retries.
 
@@ -25,13 +25,21 @@ QA / Evidence:
 - `functions/api/slides.js`:
   - `handleEscalateTemplateApprovalAction` records manual escalation metadata and appends escalation entries.
 - `functions/api/slides.js`:
+  - `resolveEscalationRoutingConfig` resolves configurable escalation channels (`in-app`, `email`, `slack`) and destination targets from env with owner-policy fallback.
+  - Manual and scheduled escalation events persist `routing` metadata (channels, targets, adapters), and related audit details persist `routing_channels` and `routing_targets`.
+- `functions/api/slides.js`:
   - `resource=template-approvals` GET path supports status filtering and role-scope protections for requester/admin visibility.
+- `src/lib/slides.ts`:
+  - Local fallback escalation paths now mirror routing metadata shape so local/e2e behavior remains contract-compatible.
+- `tests/contracts/slides-api.contract.test.mjs`:
+  - `slides API contract: approval escalation includes configured routing channels and targets`.
 - `tests/e2e/slides-regression.spec.ts`:
   - `SLD-FE-440 and SLD-BE-440 show SLA aging and support approval escalation reminders`
   - `SLD-BE-440 admin escalation sweep escalates overdue approvals without manual prompts`
 - `tests/e2e/slides-regression.spec.ts`: `SLD-BE-440` assertions confirm escalation count and sweep behavior.
 - Verification status:
-  - Attempted: `PLAYWRIGHT_WEB_SERVER_PORT=3002 npx playwright test tests/e2e/slides-regression.spec.ts -g "SLD-BE-440 admin escalation sweep escalates overdue approvals without manual prompts" --workers=1`
-  - Blocked by sandbox web-server start error `EPERM: operation not permitted 0.0.0.0:3002`.
-  - Remaining AC gap: no configurable notification destination/channel plumbing was confirmed in current implementation.
-  - Action item: add configurable admin routing map and channel adapter (`email`/`slack`/`in-app`) before state transition to Done.
+  - `npm run lint` ✅
+  - `npm run typecheck` ✅
+  - `npm run test:contracts` ✅
+  - `npx playwright test tests/e2e/slides-regression.spec.ts -g "SLD-BE-440|SLD-FE-440" --workers=1` ✅
+  - `npx playwright test tests/e2e/slides-regression.spec.ts tests/e2e/slides-visual.spec.ts --workers=1` ✅ (`50 passed`)

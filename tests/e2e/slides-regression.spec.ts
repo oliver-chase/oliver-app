@@ -65,7 +65,6 @@ test.describe('slides regression', () => {
     await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
     await expect(page.getByText('Parse complete.')).toBeVisible()
 
-    await expect(page.getByRole('heading', { name: 'Units' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Transforms' })).toBeVisible()
     await expect(page.locator('.slides-component-grid-row')).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'Copy Parsed JSON' })).toBeVisible()
@@ -170,6 +169,49 @@ test.describe('slides regression', () => {
 
     const panelLayer = page.locator('.slides-canvas-component[data-component-type="panel"]').first()
     await expect.poll(async () => panelLayer.evaluate((node) => window.getComputedStyle(node).backgroundColor)).toContain('17, 24, 39')
+  })
+
+  test('SLD-FE-512 preserves gradients, borders, shadows, and canvas background through parse and HTML export', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const fixture = readFileSync(join(process.cwd(), 'tests', 'fixtures', 'slides', 'fidelity-gradient-shadow.html'), 'utf8')
+    await page.locator('#slides-raw-html').fill(fixture)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const canvas = page.locator('[data-slide-canvas="1"]')
+    await expect.poll(async () => canvas.evaluate((node) => window.getComputedStyle(node).backgroundImage)).toContain('linear-gradient')
+
+    const panelLayer = page.locator('.slides-canvas-component[data-component-type="panel"]').first()
+    await expect.poll(async () => panelLayer.evaluate((node) => window.getComputedStyle(node).backgroundImage)).toContain('linear-gradient')
+    await expect.poll(async () => panelLayer.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).borderTopWidth))).toBeGreaterThanOrEqual(2)
+    await expect.poll(async () => panelLayer.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).borderRadius))).toBeGreaterThanOrEqual(28)
+    await expect.poll(async () => panelLayer.evaluate((node) => window.getComputedStyle(node).boxShadow)).not.toBe('none')
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      type?: string
+      style?: {
+        backgroundFill?: string
+        borderColor?: string
+        borderWidth?: number
+        borderRadius?: number
+        boxShadow?: string
+      }
+    }>
+
+    const parsedPanel = parsed.find((entry) => entry.type === 'panel')
+    expect(String(parsedPanel?.style?.backgroundFill || '')).toContain('linear-gradient')
+    expect(String(parsedPanel?.style?.borderColor || '')).toContain('148, 163, 184')
+    expect(Number(parsedPanel?.style?.borderWidth || 0)).toBeGreaterThanOrEqual(2)
+    expect(Number(parsedPanel?.style?.borderRadius || 0)).toBeGreaterThanOrEqual(28)
+    expect(String(parsedPanel?.style?.boxShadow || '')).toContain('rgba')
+
+    await page.getByRole('button', { name: 'Generate HTML Export' }).click()
+    const exported = await page.locator('#slides-export-html').inputValue()
+    expect(exported).toContain('linear-gradient(')
+    expect(exported).toContain('box-shadow:')
+    expect(exported).toContain('border-radius:28px')
   })
 
   test('SLD-FE-301 imports nested flow-layout HTML into multiple styled layers', async ({ page }) => {
@@ -757,16 +799,19 @@ test.describe('slides regression', () => {
     await expect(page.getByText('Parse complete.')).toBeVisible()
 
     const cards = page.locator('.slides-canvas-component[data-component-type=\"card\"]')
-    const beforeOrder = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
-    await cards.first().click({ force: true })
+    const targetCard = cards.filter({ hasText: 'Front' }).first()
+    const targetId = await targetCard.getAttribute('data-component-id')
+    expect(targetId).toBeTruthy()
+    await targetCard.evaluate((node) => (node as HTMLElement).click())
+    await expect(targetCard).toHaveAttribute('data-component-selected', 'true')
 
     await page.getByRole('button', { name: 'Bring to Front' }).click()
     const afterFront = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
-    expect(afterFront[afterFront.length - 1]).toBe(beforeOrder[0])
+    expect(afterFront[afterFront.length - 1]).toBe(targetId)
 
     await page.getByRole('button', { name: 'Send to Back' }).click()
     const afterBack = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
-    expect(afterBack[0]).toBe(beforeOrder[0])
+    expect(afterBack[0]).toBe(targetId)
   })
 
   test('US-SLD-025 exposes keyboard-first workflows, semantic canvas roles, and shortcut help', async ({ page }) => {

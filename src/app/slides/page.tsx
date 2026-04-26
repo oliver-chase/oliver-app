@@ -38,6 +38,7 @@ import {
   duplicateSlide,
   duplicateTemplateAsSlide,
   downloadAuditExportJob,
+  downloadPptxExportJob,
   deleteAuditPreset,
   escalateTemplateApproval,
   listAuditPresets,
@@ -49,6 +50,7 @@ import {
   listTemplates,
   publishTemplateFromSlide,
   recordExportEvent,
+  requestPptxExportJob,
   requestAuditExportJob,
   removeTemplateCollaborator,
   resolveTemplateApproval,
@@ -509,9 +511,23 @@ function measureTextAutoSizeHeight(component: SlideComponent, width: number): nu
   measureNode.style.wordBreak = 'break-word'
   measureNode.style.overflowWrap = 'anywhere'
   measureNode.style.backgroundColor = component.style.backgroundColor || getThemeColorCssVar('--color-bg-card')
+  if (component.style.backgroundFill) {
+    measureNode.style.background = component.style.backgroundFill
+  }
+  if (component.style.borderColor) measureNode.style.borderColor = component.style.borderColor
+  if (component.style.borderStyle) measureNode.style.borderStyle = component.style.borderStyle
+  if (typeof component.style.borderWidth === 'number' && component.style.borderWidth > 0) {
+    measureNode.style.borderWidth = `${component.style.borderWidth}px`
+    if (!component.style.borderStyle) measureNode.style.borderStyle = 'solid'
+  }
+  if (typeof component.style.borderRadius === 'number' && component.style.borderRadius > 0) {
+    measureNode.style.borderRadius = `${component.style.borderRadius}px`
+  }
+  if (component.style.boxShadow) measureNode.style.boxShadow = component.style.boxShadow
   measureNode.style.color = component.style.color || getThemeColorCssVar('--color-text-primary')
   measureNode.style.fontSize = `${Math.max(MIN_FONT_SIZE, component.style.fontSize || MIN_FONT_SIZE)}px`
   measureNode.style.fontWeight = String(component.style.fontWeight || 400)
+  if (component.style.fontFamily) measureNode.style.fontFamily = component.style.fontFamily
   measureNode.style.fontStyle = component.style.fontStyle || 'normal'
   measureNode.style.lineHeight = component.style.lineHeight
     ? `${component.style.lineHeight}px`
@@ -582,7 +598,18 @@ function buildCanvasComponentStyle(component: SlideComponent): CSSProperties {
   if (component.style.fontWeight) style.fontWeight = component.style.fontWeight
   if (component.style.fontFamily) style.fontFamily = component.style.fontFamily
   if (component.style.color) style.color = component.style.color
+  if (component.style.backgroundFill) style.background = component.style.backgroundFill
   if (component.style.backgroundColor) style.backgroundColor = component.style.backgroundColor
+  if (component.style.borderColor) style.borderColor = component.style.borderColor
+  if (component.style.borderStyle) style.borderStyle = component.style.borderStyle
+  if (typeof component.style.borderWidth === 'number' && component.style.borderWidth > 0) {
+    style.borderWidth = `${component.style.borderWidth}px`
+    if (!component.style.borderStyle) style.borderStyle = 'solid'
+  }
+  if (typeof component.style.borderRadius === 'number' && component.style.borderRadius > 0) {
+    style.borderRadius = `${component.style.borderRadius}px`
+  }
+  if (component.style.boxShadow) style.boxShadow = component.style.boxShadow
   if (component.style.fontStyle) style.fontStyle = component.style.fontStyle
   if (component.style.lineHeight) style.lineHeight = `${component.style.lineHeight}px`
   if (component.style.textAlign) style.textAlign = component.style.textAlign
@@ -1005,8 +1032,15 @@ export default function SlidesPage() {
       if (
         leftStyle.fontSize !== rightStyle.fontSize ||
         leftStyle.fontWeight !== rightStyle.fontWeight ||
+        leftStyle.fontFamily !== rightStyle.fontFamily ||
         leftStyle.color !== rightStyle.color ||
+        leftStyle.backgroundFill !== rightStyle.backgroundFill ||
         leftStyle.backgroundColor !== rightStyle.backgroundColor ||
+        leftStyle.borderColor !== rightStyle.borderColor ||
+        leftStyle.borderWidth !== rightStyle.borderWidth ||
+        leftStyle.borderStyle !== rightStyle.borderStyle ||
+        leftStyle.borderRadius !== rightStyle.borderRadius ||
+        leftStyle.boxShadow !== rightStyle.boxShadow ||
         leftStyle.fontStyle !== rightStyle.fontStyle ||
         leftStyle.lineHeight !== rightStyle.lineHeight ||
         leftStyle.textAlign !== rightStyle.textAlign ||
@@ -3023,6 +3057,9 @@ export default function SlidesPage() {
         ...component.style,
         ...patch,
       }
+      if (patch.backgroundColor !== undefined) {
+        delete nextStyle.backgroundFill
+      }
       if (typeof nextStyle.fontSize === 'number') {
         nextStyle.fontSize = Math.max(MIN_FONT_SIZE, nextStyle.fontSize)
       }
@@ -3434,6 +3471,24 @@ export default function SlidesPage() {
     setPptxExportWarnings([])
     setSaveError(null)
     try {
+      const backendJob = await requestPptxExportJob(actor, {
+        slideIds: options?.auditSlideIds || [],
+        slides: slidesToExport,
+        filenamePrefix: options?.filenamePrefix || 'slides-export',
+        includeHidden: true,
+        idempotencyKey: `${(options?.filenamePrefix || 'slides-export').trim().toLowerCase()}-${slidesToExport.map((slide) => slide.id).join(',')}`,
+        maxAttempts: 3,
+      })
+
+      if (backendJob.status === 'failed') {
+        throw new Error(backendJob.error_message || 'PPTX export job failed.')
+      }
+
+      const resolvedJob = await downloadPptxExportJob(actor, backendJob.id)
+      const backendWarnings = Array.isArray(resolvedJob.warnings)
+        ? resolvedJob.warnings.map((warning) => warning.message)
+        : []
+
       const { blob, warnings, slideCount } = convertSlidesToPptx(
         slidesToExport.map((slide) => ({
           id: slide.id,
@@ -3444,28 +3499,19 @@ export default function SlidesPage() {
       )
       const prefix = (options?.filenamePrefix || 'slides-export').replace(/\\s+/g, '-').toLowerCase()
       downloadBlobFile(blob, `${prefix}.pptx`)
-      setPptxExportWarnings(warnings)
+      const mergedWarnings = Array.from(new Set([...backendWarnings, ...warnings]))
+      setPptxExportWarnings(mergedWarnings)
 
       const auditSlideIds = options?.auditSlideIds || []
       if (auditSlideIds.length > 0) {
-        await Promise.all(auditSlideIds.map(async (slideId) => {
-          try {
-            await recordExportEvent(actor, {
-              slideId,
-              format: 'pptx',
-              outcome: 'success',
-            })
-          } catch {
-            // Do not block user download if one audit event write fails.
-          }
-        }))
+        // Server-side export job orchestration writes canonical export-pptx audit events.
         await refreshLibraryData()
       }
 
       setEditorNotice({
         tone: 'info',
-        text: warnings.length > 0
-          ? `Exported ${slideCount} slide(s) to PPTX with ${warnings.length} warning(s).`
+        text: mergedWarnings.length > 0
+          ? `Exported ${slideCount} slide(s) to PPTX with ${mergedWarnings.length} warning(s).`
           : `Exported ${slideCount} slide(s) to PPTX.`,
       })
     } catch (error) {
@@ -4361,6 +4407,7 @@ export default function SlidesPage() {
                             style={{
                               width: `${canvasDimensions.width}px`,
                               height: `${canvasDimensions.height}px`,
+                              background: result.canvas.background || 'var(--color-bg-card)',
                               transform: `scale(${canvasScale})`,
                             }}
                           >
@@ -4853,6 +4900,7 @@ export default function SlidesPage() {
                           style={{
                             width: `${template.canvas.width}px`,
                             height: `${template.canvas.height}px`,
+                            background: template.canvas.background || 'var(--color-bg-card)',
                             transform: `scale(${getTemplatePreviewScale(template.canvas, 220, 124)})`,
                           }}
                         >
@@ -5153,6 +5201,7 @@ export default function SlidesPage() {
                               style={{
                                 width: `${activeTemplateQuickPreview.template.canvas.width}px`,
                                 height: `${activeTemplateQuickPreview.template.canvas.height}px`,
+                                background: activeTemplateQuickPreview.template.canvas.background || 'var(--color-bg-card)',
                                 transform: `scale(${getTemplatePreviewScale(activeTemplateQuickPreview.template.canvas, 860, 500)})`,
                               }}
                             >

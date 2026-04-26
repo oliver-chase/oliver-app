@@ -15,6 +15,12 @@ export interface SlideComponentStyle {
   fontFamily?: string
   color?: string
   backgroundColor?: string
+  backgroundFill?: string
+  borderColor?: string
+  borderWidth?: number
+  borderStyle?: string
+  borderRadius?: number
+  boxShadow?: string
   fontStyle?: 'normal' | 'italic'
   lineHeight?: number
   textAlign?: 'left' | 'center' | 'right' | 'justify'
@@ -39,6 +45,7 @@ export interface SlideImportResult {
   canvas: {
     width: number
     height: number
+    background?: string
   }
   components: SlideComponent[]
   warnings: string[]

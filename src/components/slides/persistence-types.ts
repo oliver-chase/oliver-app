@@ -3,6 +3,7 @@ import type { SlideComponent } from '@/components/slides/types'
 export interface SlideCanvas {
   width: number
   height: number
+  background?: string
 }
 
 export interface SlideRecord {
@@ -137,6 +138,52 @@ export interface SlideAuditExportJob {
   started_at: string | null
   completed_at: string | null
   updated_at: string
+}
+
+export type SlidePptxExportJobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
+
+export interface SlidePptxExportWarning {
+  code: string
+  message: string
+  slide_id: string
+  component_id: string
+  component_type: string
+}
+
+export interface SlidePptxExportObject {
+  slide_id: string
+  component_id: string
+  component_type: string
+  native_kind: 'text' | 'shape' | 'image'
+  editable: boolean
+}
+
+export interface SlidePptxExportJob {
+  id: string
+  requested_by_user_id: string
+  requested_by_email: string | null
+  status: SlidePptxExportJobStatus
+  slide_ids: string[]
+  options: {
+    filename_prefix: string
+    include_hidden: boolean
+  }
+  attempts: number
+  max_attempts: number
+  warning_count: number
+  warnings: SlidePptxExportWarning[]
+  native_objects: SlidePptxExportObject[]
+  artifact: {
+    file_name: string
+    expires_at: string
+    download_token: string
+  } | null
+  requested_at: string
+  started_at: string | null
+  completed_at: string | null
+  updated_at: string
+  error_message: string | null
+  idempotency_key: string | null
 }
 
 export interface SlideActor {

@@ -162,22 +162,122 @@ function toPlainText(html: string): string {
     .trim()
 }
 
-function normalizeHexColor(value: string | undefined): string | null {
+interface ParsedColor {
+  hex: string
+  alpha: number
+}
+
+interface ParsedGradientStop {
+  color: ParsedColor
+  pos: number
+}
+
+interface ParsedLinearGradient {
+  angleDeg: number
+  stops: ParsedGradientStop[]
+}
+
+function parseCssColor(value: string | undefined): ParsedColor | null {
   if (!value) return null
   const raw = value.trim().toLowerCase()
-  if (/^#[0-9a-f]{6}$/.test(raw)) return raw.slice(1).toUpperCase()
+  if (!raw) return null
+  if (/^#[0-9a-f]{6}$/.test(raw)) return { hex: raw.slice(1).toUpperCase(), alpha: 1 }
   if (/^#[0-9a-f]{3}$/.test(raw)) {
     const [, r, g, b] = raw
-    return `${r}${r}${g}${g}${b}${b}`.toUpperCase()
+    return { hex: `${r}${r}${g}${g}${b}${b}`.toUpperCase(), alpha: 1 }
   }
-  const rgbMatch = raw.match(/^rgb\(([^,]+),\s*([^,]+),\s*([^\)]+)\)$/)
+  if (/^#[0-9a-f]{8}$/.test(raw)) {
+    const rgb = raw.slice(1, 7).toUpperCase()
+    const alpha = Number.parseInt(raw.slice(7), 16) / 255
+    return { hex: rgb, alpha: clamp(alpha, 0, 1) }
+  }
+  const rgbMatch = raw.match(/^rgba?\(([^,]+),\s*([^,]+),\s*([^,\)]+)(?:,\s*([^\)]+))?\)$/)
   if (rgbMatch) {
     const vals = [rgbMatch[1], rgbMatch[2], rgbMatch[3]].map((part) => Number.parseInt(part.trim(), 10))
-    if (vals.every((part) => Number.isFinite(part) && part >= 0 && part <= 255)) {
-      return vals.map((part) => part.toString(16).padStart(2, '0')).join('').toUpperCase()
+    if (!vals.every((part) => Number.isFinite(part) && part >= 0 && part <= 255)) return null
+    const alphaRaw = rgbMatch[4] ? Number.parseFloat(rgbMatch[4].trim()) : 1
+    if (!Number.isFinite(alphaRaw)) return null
+    return {
+      hex: vals.map((part) => part.toString(16).padStart(2, '0')).join('').toUpperCase(),
+      alpha: clamp(alphaRaw, 0, 1),
     }
   }
   return null
+}
+
+function normalizeHexColor(value: string | undefined): string | null {
+  return parseCssColor(value)?.hex || null
+}
+
+function toPptAlpha(alpha: number): number {
+  return clamp(Math.round(alpha * 100_000), 0, 100_000)
+}
+
+function splitCssArgs(value: string): string[] {
+  const tokens: string[] = []
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]
+    if (char === '(') depth += 1
+    if (char === ')') depth = Math.max(0, depth - 1)
+    if (char === ',' && depth === 0) {
+      tokens.push(value.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  tokens.push(value.slice(start).trim())
+  return tokens.filter(Boolean)
+}
+
+function parseLinearGradient(value: string | undefined): ParsedLinearGradient | null {
+  if (!value) return null
+  const match = value.trim().match(/^linear-gradient\(([\s\S]+)\)$/i)
+  if (!match) return null
+  const args = splitCssArgs(match[1] || '')
+  if (args.length < 2) return null
+
+  let angleDeg = 180
+  let startIndex = 0
+  const angleToken = args[0].trim().toLowerCase()
+  if (/^-?\d*\.?\d+deg$/.test(angleToken)) {
+    angleDeg = Number.parseFloat(angleToken.replace('deg', ''))
+    startIndex = 1
+  }
+
+  const rawStops = args.slice(startIndex)
+  const stops: ParsedGradientStop[] = []
+  for (let index = 0; index < rawStops.length; index += 1) {
+    const token = rawStops[index]
+    const posMatch = token.match(/(-?\d*\.?\d+)%\s*$/)
+    const colorToken = posMatch ? token.slice(0, posMatch.index).trim() : token.trim()
+    const color = parseCssColor(colorToken)
+    if (!color) continue
+    const inferredPos = rawStops.length <= 1 ? 0 : Math.round((index / (rawStops.length - 1)) * 100_000)
+    const explicitPos = posMatch ? clamp(Math.round(Number.parseFloat(posMatch[1]) * 1_000), 0, 100_000) : inferredPos
+    stops.push({ color, pos: explicitPos })
+  }
+
+  if (stops.length < 2) return null
+  return {
+    angleDeg,
+    stops,
+  }
+}
+
+function buildSolidFillXml(color: ParsedColor): string {
+  const alphaXml = color.alpha < 1 ? `<a:alpha val="${toPptAlpha(color.alpha)}"/>` : ''
+  return `<a:solidFill><a:srgbClr val="${color.hex}">${alphaXml}</a:srgbClr></a:solidFill>`
+}
+
+function buildGradientFillXml(gradient: ParsedLinearGradient): string {
+  const angle = ((gradient.angleDeg % 360) + 360) % 360
+  const pptAngle = Math.round(angle * 60_000)
+  const stops = gradient.stops.map((stop) => {
+    const alphaXml = stop.color.alpha < 1 ? `<a:alpha val="${toPptAlpha(stop.color.alpha)}"/>` : ''
+    return `<a:gs pos="${stop.pos}"><a:srgbClr val="${stop.color.hex}">${alphaXml}</a:srgbClr></a:gs>`
+  }).join('')
+  return `<a:gradFill rotWithShape="1"><a:gsLst>${stops}</a:gsLst><a:lin ang="${pptAngle}" scaled="1"/></a:gradFill>`
 }
 
 function toEmu(px: number, scale: number): number {
@@ -205,7 +305,21 @@ function defaultHeightForComponent(component: SlideComponent, text: string): num
   return clamp(estimated, 40, 800)
 }
 
-function buildTextParagraphs(text: string, fontSizePt: number, textColorHex: string, align: string, bold: boolean, italic: boolean): string {
+function resolveTypeface(fontFamily: string | undefined): string {
+  if (!fontFamily) return 'Arial'
+  const token = fontFamily.split(',')[0]?.trim().replace(/^['"]|['"]$/g, '')
+  return token || 'Arial'
+}
+
+function buildTextParagraphs(
+  text: string,
+  fontSizePt: number,
+  textColorHex: string,
+  align: string,
+  bold: boolean,
+  italic: boolean,
+  typeface: string,
+): string {
   const lines = text.split('\n')
   const size = Math.max(8, Math.min(120, Math.round(fontSizePt * 100)))
   const boldAttr = bold ? ' b="1"' : ''
@@ -214,9 +328,60 @@ function buildTextParagraphs(text: string, fontSizePt: number, textColorHex: str
   return lines
     .map((line) => {
       const content = line.trim().length > 0 ? line : ' '
-      return `<a:p><a:pPr algn="${align}"/><a:r><a:rPr lang="en-US" sz="${size}"${boldAttr}${italicAttr}><a:solidFill><a:srgbClr val="${textColorHex}"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>${escXml(content)}</a:t></a:r><a:endParaRPr lang="en-US" sz="${size}"/></a:p>`
+      return `<a:p><a:pPr algn="${align}"/><a:r><a:rPr lang="en-US" sz="${size}"${boldAttr}${italicAttr}><a:solidFill><a:srgbClr val="${textColorHex}"/></a:solidFill><a:latin typeface="${escXml(typeface)}"/></a:rPr><a:t>${escXml(content)}</a:t></a:r><a:endParaRPr lang="en-US" sz="${size}"/></a:p>`
     })
     .join('')
+}
+
+function parseBoxShadow(value: string | undefined): { x: number; y: number; blur: number; color: ParsedColor } | null {
+  if (!value) return null
+  const candidates = splitCssArgs(value)
+  for (const candidate of candidates) {
+    if (!candidate || /\binset\b/i.test(candidate)) continue
+    const colorMatch = candidate.match(/(rgba?\([^\)]*\)|#[0-9a-fA-F]{3,8})/)
+    const color = parseCssColor(colorMatch?.[1])
+    if (!color) continue
+    const clean = candidate.replace(colorMatch?.[1] || '', ' ')
+    const lengths = clean.match(/-?\d*\.?\d+px/g) || []
+    if (lengths.length < 2) continue
+    const xToken = lengths[0]
+    const yToken = lengths[1]
+    if (!xToken || !yToken) continue
+    const x = Number.parseFloat(xToken.replace('px', ''))
+    const y = Number.parseFloat(yToken.replace('px', ''))
+    const blur = lengths[2] ? Math.max(0, Number.parseFloat(lengths[2].replace('px', ''))) : 0
+    if (![x, y, blur].every((entry) => Number.isFinite(entry))) continue
+    return { x, y, blur, color }
+  }
+  return null
+}
+
+function buildLineXml(component: SlideComponent): string {
+  const borderWidth = typeof component.style.borderWidth === 'number' && component.style.borderWidth > 0
+    ? component.style.borderWidth
+    : 0
+  const borderColor = parseCssColor(component.style.borderColor)
+  if (borderWidth <= 0 || !borderColor) return '<a:ln><a:noFill/></a:ln>'
+
+  const dash = component.style.borderStyle && /dashed|dotted/i.test(component.style.borderStyle)
+    ? '<a:prstDash val="sysDot"/>'
+    : ''
+  return `<a:ln w="${toEmu(borderWidth, 9_525)}"><a:solidFill><a:srgbClr val="${borderColor.hex}">${borderColor.alpha < 1 ? `<a:alpha val="${toPptAlpha(borderColor.alpha)}"/>` : ''}</a:srgbClr></a:solidFill>${dash}</a:ln>`
+}
+
+function buildShapeFillXml(component: SlideComponent, hasDefaultFill: boolean, warnings: string[], warningPrefix: string): string {
+  const backgroundFill = component.style.backgroundFill || component.style.backgroundColor
+  const gradient = parseLinearGradient(backgroundFill)
+  if (gradient) return buildGradientFillXml(gradient)
+
+  if (typeof backgroundFill === 'string' && /gradient\(/i.test(backgroundFill)) {
+    warnings.push(`${warningPrefix}: unsupported gradient syntax was simplified to a solid fill.`)
+  }
+
+  const solidColor = parseCssColor(backgroundFill) || parseCssColor(component.style.backgroundColor)
+  if (solidColor) return buildSolidFillXml(solidColor)
+  if (hasDefaultFill) return '<a:solidFill><a:srgbClr val="F3F4F6"/></a:solidFill>'
+  return '<a:noFill/>'
 }
 
 function buildShapeXml(
@@ -231,21 +396,16 @@ function buildShapeXml(
     warnings.push(`${slideRef}: component ${component.id} (${component.type}) was hidden and was skipped in PPTX export.`)
     return ''
   }
-  if (
-    typeof component.style.backgroundColor === 'string'
-    && component.style.backgroundColor.trim().length > 0
-    && !normalizeHexColor(component.style.backgroundColor)
-    && /gradient|url\(|pattern/i.test(component.style.backgroundColor)
-  ) {
-    warnings.push(`${slideRef}: component ${component.id} (${component.type}) uses unsupported background style; simplified style was used in PPTX export.`)
-  }
   if (component.type === 'logo') {
     warnings.push(`${slideRef}: component ${component.id} (${component.type}) exported as warning only; native logo/image mapping not yet supported.`)
     return ''
   }
 
   const text = toPlainText(component.content || '')
-  if (!text && !component.style.backgroundColor) {
+  const hasBackground = !!(component.style.backgroundFill || component.style.backgroundColor)
+  const hasBorder = !!(component.style.borderColor && component.style.borderWidth && component.style.borderWidth > 0)
+  const hasShadow = !!component.style.boxShadow
+  if (!text && !hasBackground && !hasBorder && !hasShadow) {
     warnings.push(`${slideRef}: component ${component.id} skipped because it contains no text content.`)
     return ''
   }
@@ -256,9 +416,7 @@ function buildShapeXml(
   const h = toEmu(defaultHeightForComponent(component, text), scaleY)
 
   const textColorHex = normalizeHexColor(component.style.color) || '111111'
-  const fillHex = normalizeHexColor(component.style.backgroundColor)
-  const hasFill = !!fillHex || ['card', 'panel', 'row', 'stat'].includes(component.type)
-  const resolvedFill = fillHex || 'F3F4F6'
+  const hasDefaultFill = ['card', 'panel', 'row', 'stat'].includes(component.type)
   const align = component.style.textAlign === 'center'
     ? 'ctr'
     : component.style.textAlign === 'right'
@@ -269,13 +427,18 @@ function buildShapeXml(
   const fontSize = fontSizeForComponent(component)
   const bold = (component.style.fontWeight || 0) >= 600 || component.type === 'heading'
   const italic = component.style.fontStyle === 'italic'
-  const shapeGeom = ['card', 'panel'].includes(component.type) ? 'roundRect' : 'rect'
+  const cornerRadius = typeof component.style.borderRadius === 'number' ? component.style.borderRadius : 0
+  const shapeGeom = ['card', 'panel'].includes(component.type) || cornerRadius > 1 ? 'roundRect' : 'rect'
+  const fillXml = buildShapeFillXml(component, hasDefaultFill, warnings, `${slideRef}: component ${component.id} (${component.type})`)
+  const lineXml = buildLineXml(component)
+  const shadow = parseBoxShadow(component.style.boxShadow)
+  const shadowXml = shadow
+    ? `<a:effectLst><a:outerShdw blurRad="${toEmu(shadow.blur, 9_525)}" dist="${toEmu(Math.hypot(shadow.x, shadow.y), 9_525)}" dir="${Math.round((((Math.atan2(shadow.y, shadow.x) * 180) / Math.PI) + 360) % 360 * 60_000)}" algn="ctr" rotWithShape="0"><a:srgbClr val="${shadow.color.hex}">${shadow.color.alpha < 1 ? `<a:alpha val="${toPptAlpha(shadow.color.alpha)}"/>` : ''}</a:srgbClr></a:outerShdw></a:effectLst>`
+    : ''
+  const typeface = resolveTypeface(component.style.fontFamily)
 
-  const spPr = hasFill
-    ? `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="${shapeGeom}"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${resolvedFill}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>`
-    : `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr>`
-
-  const txBody = `<p:txBody><a:bodyPr wrap="square"/><a:lstStyle/>${buildTextParagraphs(text || component.type, fontSize, textColorHex, align, bold, italic)}</p:txBody>`
+  const spPr = `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="${shapeGeom}"><a:avLst/></a:prstGeom>${fillXml}${lineXml}${shadowXml}</p:spPr>`
+  const txBody = `<p:txBody><a:bodyPr wrap="square"/><a:lstStyle/>${buildTextParagraphs(text || component.type, fontSize, textColorHex, align, bold, italic, typeface)}</p:txBody>`
 
   return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="${escXml(component.type + '-' + component.id)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>${spPr}${txBody}</p:sp>`
 }
@@ -289,6 +452,18 @@ function buildSlideXml(slide: SlidePptxExportInput, slideIndex: number, warnings
 
   const shapes: string[] = []
   let shapeId = 2
+
+  const canvasGradient = parseLinearGradient(slide.canvas.background)
+  const canvasColor = parseCssColor(slide.canvas.background)
+  if (canvasGradient || canvasColor) {
+    const fillXml = canvasGradient
+      ? buildGradientFillXml(canvasGradient)
+      : buildSolidFillXml(canvasColor as ParsedColor)
+    const bg = `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="slide-background"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fillXml}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`
+    shapes.push(bg)
+    shapeId += 1
+  }
+
   for (const component of slide.components) {
     const shapeXml = buildShapeXml(component, shapeId, scaleX, scaleY, slideRef, warnings)
     if (!shapeXml) continue
@@ -377,6 +552,9 @@ export function convertSlidesToPptx(slidesInput: SlidePptxExportInput[]): SlideP
     canvas: {
       width: Math.max(1, Number(slide.canvas?.width || 1920)),
       height: Math.max(1, Number(slide.canvas?.height || 1080)),
+      ...(typeof slide.canvas?.background === 'string' && slide.canvas.background.trim()
+        ? { background: slide.canvas.background.trim() }
+        : {}),
     },
     components: Array.isArray(slide.components) ? slide.components : [],
   }))
