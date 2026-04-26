@@ -27,6 +27,10 @@ Acceptance Criteria:
 - [ ] Data URI images are supported.
 - [ ] Imported slide background matches source instead of editor default fallback.
 - [ ] Imported output for fixed-size sample slides preserves two-column/card/logo structure without overlap.
+- [ ] Source coordinates are stored in canonical slide units and not pre-scaled into 1920×1080 viewport units.
+- [ ] Parser output canvas size is derived from detected source slide root dimensions (with default fallback) and renderer scaling is visual-only.
+- [ ] Text, widths, heights, and typography are scaled at most once by viewport fit/zoom, never by parser-side coordinate normalization.
+- [ ] For `slide-10-artifacts.html`, source canvas is treated as `.page`-driven 1900×1060 intent while preserving 16:9 editorial viewport rendering.
 
 Notes:
 - This story covers V1 critical import fidelity defects and parser correctness gates.
@@ -37,3 +41,15 @@ Progress Notes (2026-04-26):
 - Added regression coverage:
   - `SLD-FE-305` for `.page` root priority over lower-priority slide containers.
   - `SLD-FE-306` for oversized-root width normalization without tiny-text compression.
+  - `US-SLD-003` frontend assertions now validate canonical 1280×720 input stays 1280×720 in parser output with unscaled node units.
+  - `SLD-FE-300` now validates unscaled heading coordinates and typography when importing render-sized HTML.
+
+Implementation Evidence (2026-04-26):
+- `src/components/slides/html-import.ts`
+  - removed parser coordinate/typography scaling toward fixed viewport canvas defaults.
+  - introduced source-canvas detection flow from inline, computed, and measured root dimensions.
+  - canvas metadata now returns source dimensions for downstream visual fit scaling.
+- `tests/e2e/frontend-smoke.spec.ts`
+  - added/updated assertions for canonical parse output on non-1920 fixed-size HTML.
+- `tests/e2e/slides-regression.spec.ts`
+  - updated `SLD-FE-300` assertions for canonical coordinates and typography scaling behavior.

@@ -1104,8 +1104,7 @@ test.describe('frontend smoke', () => {
     await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
 
     await expect(page.getByText('Parse complete.')).toBeVisible()
-    await expect(page.getByText(/Canvas:\s*1920 × 1080/)).toBeVisible()
-    await expect(page.getByText(/Normalized imported canvas from 1280x720 to 1920x1080/)).toBeVisible()
+    await expect(page.getByText(/Canvas:\s*1280 × 720/)).toBeVisible()
     await expect(page.getByText(/unsupported left unit/i)).toBeVisible()
     await expect(page.getByText(/unsupported transform/i)).toBeVisible()
 
@@ -1113,8 +1112,8 @@ test.describe('frontend smoke', () => {
     const parsedComponents = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
     expect(Array.isArray(parsedComponents)).toBe(true)
     expect(parsedComponents).toHaveLength(1)
-    expect(parsedComponents[0]?.width).toBe(960)
-    expect(parsedComponents[0]?.x).toBe(0)
+    expect(parsedComponents[0]?.width).toBe(640)
+    expect(parsedComponents[0]?.x).toBe(128)
     expect(String(parsedComponents[0]?.content || '')).not.toContain('<script')
     expect(String(parsedComponents[0]?.content || '')).not.toContain('onclick=')
     expect(String(parsedComponents[0]?.content || '')).not.toContain('javascript:')
@@ -1133,9 +1132,9 @@ test.describe('frontend smoke', () => {
     await page.getByRole('button', { name: 'Show Raw JSON' }).click()
     const parsedComponents = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]'))
     expect(parsedComponents).toHaveLength(1)
-    expect(parsedComponents[0]?.x).toBe(207)
-    expect(parsedComponents[0]?.y).toBe(78)
-    expect(parsedComponents[0]?.width).toBe(960)
+    expect(parsedComponents[0]?.x).toBe(138)
+    expect(parsedComponents[0]?.y).toBe(52)
+    expect(parsedComponents[0]?.width).toBe(640)
   })
 
   test('US-SLD-029 slides chatbot commands cover parse, save, export, and workspace navigation intents', async ({ page }) => {

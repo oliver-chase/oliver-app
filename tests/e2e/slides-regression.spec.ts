@@ -152,18 +152,18 @@ test.describe('slides regression', () => {
     await expect(page.getByText('Parse complete.')).toBeVisible()
 
     const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
-    await expect(headingLayer).toHaveAttribute('data-component-x', '144')
+    await expect(headingLayer).toHaveAttribute('data-component-x', '120')
     await expect(headingLayer).toHaveAttribute('data-component-y', '108')
-    await expect(headingLayer).toHaveAttribute('data-component-width', '912')
+    await expect(headingLayer).toHaveAttribute('data-component-width', '760')
 
     await expect.poll(async () => {
       const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
       return Number.parseFloat(value)
-    }).toBeGreaterThan(67)
+    }).toBeGreaterThan(55)
     await expect.poll(async () => {
       const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
       return Number.parseFloat(value)
-    }).toBeLessThan(68)
+    }).toBeLessThan(58)
     await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('15, 118, 110')
     await headingLayer.click()
     await expect(page.locator('#slides-style-color')).toHaveValue('#0f766e')

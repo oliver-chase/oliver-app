@@ -72,7 +72,7 @@ interface RenderSnapshot {
 }
 
 function createSettlingTimeout(timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     window.setTimeout(() => {
       reject(new Error(`Timeout waiting for import render settle after ${timeoutMs}ms.`))
     }, timeoutMs)
@@ -85,7 +85,7 @@ async function waitForImageLoad(image: HTMLImageElement): Promise<void> {
     const done = () => {
       image.removeEventListener('load', done)
       image.removeEventListener('error', done)
-      resolve()
+      resolve(undefined)
     }
     image.addEventListener('load', done, { once: true })
     image.addEventListener('error', done, { once: true })
@@ -456,6 +456,14 @@ function parseCanvasPx(
   return parsed.value
 }
 
+function canonicalCanvasValue(rectValue: number | undefined, fallback: number, warnings: string[], axis: 'width' | 'height', fileLabel: string): number {
+  if (typeof rectValue !== 'number' || !Number.isFinite(rectValue) || rectValue <= 0) {
+    warnings.push('Could not resolve ' + fileLabel + ' canvas ' + axis + '; defaulted to ' + fallback + '.')
+    return fallback
+  }
+  return rectValue
+}
+
 function parseTransformOffsets(
   transformRaw: string | undefined,
   nodeLabel: string,
@@ -628,29 +636,15 @@ function getNodeLabel(node: HTMLElement): string {
   return node.tagName.toLowerCase()
 }
 
-function scaleValue(value: number, scale: number): number {
-  return Number((value * scale).toFixed(3))
+function asCanonicalDimension(value: number | undefined, fallback = 0): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback
+  return Number(value.toFixed(3))
 }
 
-function scaleTypographyStyle(
-  style: SlideComponentStyle,
-  scaleX: number,
-  scaleY: number,
-  options?: {
-    minScale?: number
-  },
-): SlideComponentStyle {
-  let typographyScale = Number(((scaleX + scaleY) / 2).toFixed(6))
-  if (typeof options?.minScale === 'number') {
-    typographyScale = Math.max(options.minScale, typographyScale)
-  }
-  if (!Number.isFinite(typographyScale) || typographyScale === 1) return style
-
-  return {
-    ...style,
-    fontSize: typeof style.fontSize === 'number' ? scaleValue(style.fontSize, typographyScale) : style.fontSize,
-    lineHeight: typeof style.lineHeight === 'number' ? scaleValue(style.lineHeight, typographyScale) : style.lineHeight,
-  }
+function asCanonicalDimensionOptional(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined
+  if (!Number.isFinite(value)) return undefined
+  return Number(value.toFixed(3))
 }
 
 function measureNodeRect(node: HTMLElement, root: HTMLElement): MeasuredNodeRect {
@@ -863,6 +857,9 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
     const measuredRootRect = renderSnapshot.root ? measureNodeRect(renderSnapshot.root, renderSnapshot.root) : {}
     const explicitCanvasWidth = parseCanvasPx(rootStyle.width ?? root.getAttribute('width') ?? undefined, 'width', warnings)
     const explicitCanvasHeight = parseCanvasPx(rootStyle.height ?? root.getAttribute('height') ?? undefined, 'height', warnings)
+    const computedRootStyle = readComputedStyleSafe(renderSnapshot.root || root)
+    const computedCanvasWidth = parseLength(computedRootStyle?.width || '')?.value
+    const computedCanvasHeight = parseLength(computedRootStyle?.height || '')?.value
 
     const absoluteNodes = allNodes.filter((node) => {
       const nodeId = node.getAttribute('data-import-node-id') || ''
@@ -889,11 +886,11 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
         : 'fallback'
     const contentBounds = measureContentBounds(nodes, renderSnapshot, root)
     let sourceCanvasWidth = explicitCanvasWidth
-      ?? measuredRootRect.width
-      ?? DEFAULT_CANVAS_WIDTH
+      ?? (typeof computedCanvasWidth === 'number' ? canonicalCanvasValue(computedCanvasWidth, DEFAULT_CANVAS_WIDTH, warnings, 'width', 'computed style') : undefined)
+      ?? canonicalCanvasValue(measuredRootRect.width, DEFAULT_CANVAS_WIDTH, warnings, 'width', 'measured root')
     let sourceCanvasHeight = explicitCanvasHeight
-      ?? measuredRootRect.height
-      ?? DEFAULT_CANVAS_HEIGHT
+      ?? (typeof computedCanvasHeight === 'number' ? canonicalCanvasValue(computedCanvasHeight, DEFAULT_CANVAS_HEIGHT, warnings, 'height', 'computed style') : undefined)
+      ?? canonicalCanvasValue(measuredRootRect.height, DEFAULT_CANVAS_HEIGHT, warnings, 'height', 'measured root')
 
     sourceCanvasWidth = clampAutoImportCanvasAxis(sourceCanvasWidth, 'width', warnings)
     sourceCanvasHeight = clampAutoImportCanvasAxis(sourceCanvasHeight, 'height', warnings)
@@ -911,10 +908,6 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
       )
     }
 
-    const scaleX = DEFAULT_CANVAS_WIDTH / sourceCanvasWidth
-    const scaleY = DEFAULT_CANVAS_HEIGHT / sourceCanvasHeight
-    const shouldClampTypographyScale = explicitCanvasWidth === undefined || explicitCanvasHeight === undefined
-
     if (absoluteNodes.length === 0) {
       if (flowNodes.length > 0) {
         warnings.push('No absolutely positioned elements found; imported flow-layout nodes using computed bounds.')
@@ -924,15 +917,11 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
     }
     if (sourceCanvasWidth !== DEFAULT_CANVAS_WIDTH || sourceCanvasHeight !== DEFAULT_CANVAS_HEIGHT) {
       warnings.push(
-        'Normalized imported canvas from ' +
+        'Detected source canvas ' +
         sourceCanvasWidth +
         'x' +
         sourceCanvasHeight +
-        ' to ' +
-        DEFAULT_CANVAS_WIDTH +
-        'x' +
-        DEFAULT_CANVAS_HEIGHT +
-        '.',
+        ' (canonical coordinates preserved).',
       )
     }
     if (importMode === 'fallback' && nodes.length > 0) {
@@ -971,26 +960,22 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
         id: 'import-' + String(index + 1).padStart(3, '0'),
         type: inferType(node),
         sourceLabel: fallbackLocked ? `${nodeLabel} (fallback)` : nodeLabel,
-        x: scaleValue(baseX + transformOffsets.x, scaleX),
-        y: scaleValue(baseY + transformOffsets.y, scaleY),
-        width: scaleValue(baseWidth, scaleX),
-        height: baseHeight === undefined ? undefined : scaleValue(baseHeight, scaleY),
+        x: asCanonicalDimension(baseX + transformOffsets.x),
+        y: asCanonicalDimension(baseY + transformOffsets.y),
+        width: asCanonicalDimension(baseWidth),
+        height: asCanonicalDimensionOptional(baseHeight),
         content,
-        style: scaleTypographyStyle(
-          extractedStyle,
-          scaleX,
-          scaleY,
-          shouldClampTypographyScale
-            ? { minScale: 0.75 }
-            : undefined,
-        ),
+        style: extractedStyle,
         locked: fallbackLocked,
         visible: true,
       }
     })
 
     return {
-      canvas: { width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT },
+      canvas: {
+        width: sourceCanvasWidth,
+        height: sourceCanvasHeight,
+      },
       components,
       warnings: Array.from(new Set(warnings)),
     }
