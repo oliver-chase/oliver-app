@@ -117,3 +117,5 @@ Status: In Progress
 - macOS Calendar import check for generated `.ics` files.
 - Windows Outlook import check for generated `.ics` files.
 - Final staging release signoff capture. *(tracked by US-CMP-QA-1114, priority: High)*
+- Manual execution evidence for US-CMP-QA-1113 and US-CMP-QA-1114 must be logged in
+  `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` and linked from each ticket file.

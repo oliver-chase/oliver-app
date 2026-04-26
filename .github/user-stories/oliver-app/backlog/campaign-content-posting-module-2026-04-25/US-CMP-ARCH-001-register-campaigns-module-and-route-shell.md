@@ -2,7 +2,7 @@
 ID: US-CMP-ARCH-001
 Title: Register campaigns module and route shell
 Status: Done
-Verified: false
+Verified: true
 Backdated: 2026-04-25
 Ticket: CMP-ARCH-001
 Epic: CMP-E0: Module Foundation and Access
@@ -13,8 +13,8 @@ I want to open a campaign module from the hub so I can use campaign workflows in
 So campaign execution lives inside the existing application shell.
 
 Acceptance Criteria:
-- [ ] `campaigns` module appears in module registry with route `/campaigns`.
-- [ ] Hub card visibility follows assigned permissions.
-- [ ] Unauthorized users are redirected by `useModuleAccess` behavior.
-- [ ] Module route uses shared shell classes and responsive sidebar/topbar behavior.
-- [ ] Module route registers Oliver config and scoped conversation path.
+- [x] `campaigns` module appears in module registry with route `/campaigns`.
+- [x] Hub card visibility follows assigned permissions.
+- [x] Unauthorized users are redirected by `useModuleAccess` behavior.
+- [x] Module route uses shared shell classes and responsive sidebar/topbar behavior.
+- [x] Module route registers Oliver config and scoped conversation path.

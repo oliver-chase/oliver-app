@@ -30,7 +30,7 @@ export function ReviewsLanding() {
         </div>
       </div>
 
-      <section id="reviews-focus-areas" className="review-section">
+      <section id="focus-areas" className="review-section">
         <h2 className="review-section-title">Focus Areas</h2>
         <p className="review-section-subtitle">
           Company-wide framework for goals, updates, evidence, and reflections.
@@ -45,7 +45,7 @@ export function ReviewsLanding() {
         </div>
       </section>
 
-      <section id="reviews-cycles" className="review-section">
+      <section id="review-cycles" className="review-section">
         <h2 className="review-section-title">Review Cycles</h2>
         <p className="review-section-subtitle">
           Continuous capture during the year, then quarterly and annual synthesis for reviewers.

@@ -22,3 +22,14 @@ Acceptance Criteria:
 
 Evidence location:
 `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md`
+
+Evidence target:
+- Primary: `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md`
+- Gate tracking: `src/tech-debt/campaign-rollout-and-dod-gates.md`
+
+Notes:
+- Core DoD and contract evidence are already recorded in:
+  - `src/tech-debt/campaign-rollout-and-dod-gates.md`
+  - `.github/user-stories/.../US-CMP-QA-1112-mvp-dod-verification-checklist.md`
+  - `.github/user-stories/.../US-CMP-QA-1113-ics-import-platform-verification.md`
+- Current blocker: manual staging and external-client validations are still pending and tracked directly in the package evidence file.

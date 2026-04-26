@@ -315,20 +315,20 @@ export default function ReviewsPage() {
         case 'open-goals':
           run = () => {
             setActivePanel('goals')
-            document.getElementById('reviews-goals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            document.getElementById('goals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
           break
         case 'open-updates':
           run = () => {
             setActivePanel('updates')
-            document.getElementById('reviews-updates')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            document.getElementById('updates')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
           break
         case 'open-focus-areas':
-          run = () => document.getElementById('reviews-focus-areas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          run = () => document.getElementById('focus-areas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           break
         case 'open-review-cycles':
-          run = () => document.getElementById('reviews-cycles')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          run = () => document.getElementById('review-cycles')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           break
         case 'open-admin-setup':
           run = () => router.push('/admin')
@@ -420,7 +420,7 @@ export default function ReviewsPage() {
             </div>
           )}
 
-          <section id="reviews-goals" className="review-section">
+          <section id="goals" className="review-section">
             <div className="review-panel-tabs" role="tablist" aria-label="Reviews workspace sections">
               <button type="button" className={'btn btn--secondary btn--sm' + (activePanel === 'goals' ? ' review-tab-active' : '')} onClick={() => setActivePanel('goals')}>Goals</button>
               <button type="button" className={'btn btn--secondary btn--sm' + (activePanel === 'updates' ? ' review-tab-active' : '')} onClick={() => setActivePanel('updates')}>Updates</button>
@@ -533,7 +533,7 @@ export default function ReviewsPage() {
           )}
 
           {activePanel === 'updates' && (
-            <section id="reviews-updates" className="review-section">
+            <section id="updates" className="review-section">
               <h2 className="review-section-title">Updates</h2>
               <form
                 className="card review-form"
@@ -607,7 +607,7 @@ export default function ReviewsPage() {
           )}
 
           {activePanel === 'quarterly' && (
-            <section className="review-section">
+            <section id="quarterly" className="review-section">
               <h2 className="review-section-title">Quarterly Reflection</h2>
               <form
                 className="card review-form"
@@ -657,7 +657,7 @@ export default function ReviewsPage() {
           )}
 
           {activePanel === 'annual' && (
-            <section className="review-section">
+            <section id="annual" className="review-section">
               <h2 className="review-section-title">Annual Self-Review</h2>
               <form
                 className="card review-form"

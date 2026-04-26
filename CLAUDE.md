@@ -66,6 +66,12 @@ When a module changes (route, permission, visibility, commands, flows, or data c
 - Same design system as ops-dashboard: tokens.css, components*.css, accounts.css — no new CSS values
 - No nested template literals
 - TypeScript strict — no `any` unless unavoidable
+- Intake gate: every meaningful request is represented as a story before work starts:
+  - define `Epic`, `Status`, and explicit Acceptance Criteria
+  - run a quick prioritization check against active backlog entries
+  - add to active backlog with default priority when not explicitly prioritized
+  - do not execute without that backlog/story record
+- Backlog lifecycle is mandatory before closure: use the global [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md) for all docs reviews so in-progress stories with complete AC + evidence are moved to `Done`, marked `Verified`, and removed from active planning queues.
 
 ## Commit Rules
 - Do not auto-commit after every change.
