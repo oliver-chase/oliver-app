@@ -168,6 +168,16 @@ interface RankedTemplateEntry {
   isBestMatch: boolean
 }
 
+const TEMPLATE_PREVIEW_COMPONENT_LIMIT = 10
+const TEMPLATE_LIBRARY_PREVIEW_SKELETON_COUNT = 4
+
+function getTemplatePreviewFingerprint(template: SlideTemplateRecord): string {
+  return template.components
+    .filter((component) => component.visible !== false)
+    .map((component) => `${component.id}:${component.type}:${component.x}:${component.y}:${component.width}:${component.height}`)
+    .join('|')
+}
+
 function getTemplatePreviewScale(
   canvas: { width: number; height: number },
   maxWidth: number,
@@ -717,6 +727,8 @@ export default function SlidesPage() {
   const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
   const [templateCollaboratorPanelId, setTemplateCollaboratorPanelId] = useState<string | null>(null)
   const [templateQuickPreviewId, setTemplateQuickPreviewId] = useState<string | null>(null)
+  const [templatePreviewRefreshAtById, setTemplatePreviewRefreshAtById] = useState<Record<string, number>>({})
+  const [templatePreviewFingerprintById, setTemplatePreviewFingerprintById] = useState<Record<string, string>>({})
   const [templateCollaboratorsByTemplate, setTemplateCollaboratorsByTemplate] = useState<Record<string, SlideTemplateCollaborator[]>>({})
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
@@ -871,6 +883,38 @@ export default function SlidesPage() {
     for (const template of templates) map.set(template.id, template)
     return map
   }, [templates])
+  const templatePreviewStatusById = useMemo(() => {
+    const rows: Record<string, {
+      missing: boolean
+      stale: boolean
+      needsRefresh: boolean
+      visibleCount: number
+    }> = {}
+    for (const template of templates) {
+      const visibleComponents = template.components.filter((component) => component.visible !== false)
+      const updatedAt = Date.parse(template.updated_at)
+      const refreshedAt = templatePreviewRefreshAtById[template.id]
+      const recordedFingerprint = templatePreviewFingerprintById[template.id]
+      const currentFingerprint = getTemplatePreviewFingerprint(template)
+      const hasRecordedFingerprint = typeof recordedFingerprint === 'string' && recordedFingerprint.length > 0
+      const missing = visibleComponents.length === 0
+      const stale = !!(
+        !missing &&
+        Number.isFinite(updatedAt) &&
+        typeof refreshedAt === 'number' &&
+        updatedAt > refreshedAt &&
+        hasRecordedFingerprint &&
+        recordedFingerprint !== currentFingerprint
+      )
+      rows[template.id] = {
+        missing,
+        stale,
+        needsRefresh: missing || stale,
+        visibleCount: visibleComponents.length,
+      }
+    }
+    return rows
+  }, [templatePreviewFingerprintById, templatePreviewRefreshAtById, templates])
   const pendingApprovalsByTemplate = useMemo(() => {
     const byTemplate: Record<string, SlideTemplateApproval[]> = {}
     for (const approval of templateApprovals) {
@@ -973,6 +1017,36 @@ export default function SlidesPage() {
     }
     return true
   }, [])
+
+  useEffect(() => {
+    setTemplatePreviewRefreshAtById((previous) => {
+      const next = { ...previous }
+      const templateIds = new Set<string>()
+      for (const template of templates) {
+        templateIds.add(template.id)
+        if (next[template.id] === undefined) {
+          const updatedAt = Date.parse(template.updated_at)
+          if (Number.isFinite(updatedAt)) next[template.id] = updatedAt
+        }
+      }
+      for (const templateId of Object.keys(next)) {
+        if (!templateIds.has(templateId)) delete next[templateId]
+      }
+      return next
+    })
+    setTemplatePreviewFingerprintById((previous) => {
+      const next = { ...previous }
+      const templateIds = new Set<string>()
+      for (const template of templates) {
+        templateIds.add(template.id)
+        next[template.id] = getTemplatePreviewFingerprint(template)
+      }
+      for (const templateId of Object.keys(next)) {
+        if (!templateIds.has(templateId)) delete next[templateId]
+      }
+      return next
+    })
+  }, [templates])
 
   const pushHistorySnapshot = useCallback((components: SlideComponent[]) => {
     setHistoryPast((previous) => {
@@ -2589,6 +2663,28 @@ export default function SlidesPage() {
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
+  const handleRefreshTemplatePreview = useCallback(async (template: SlideTemplateRecord) => {
+    if (!(isSlidesAdmin || template.owner_user_id === actor.user_id)) return
+    if (templateActionBusyId === template.id) return
+    setTemplateActionBusyId(template.id)
+    setLibraryError(null)
+    try {
+      setTemplatePreviewRefreshAtById((previous) => ({
+        ...previous,
+        [template.id]: Date.now(),
+      }))
+      await refreshLibraryData()
+      setTemplatePreviewFingerprintById((previous) => ({
+        ...previous,
+        [template.id]: getTemplatePreviewFingerprint(template),
+      }))
+    } catch (error) {
+      setLibraryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setTemplateActionBusyId(null)
+    }
+  }, [actor.user_id, isSlidesAdmin, refreshLibraryData, templateActionBusyId])
+
   const openPublishTemplateDraft = useCallback((slide: SlideRecord) => {
     setLibraryError(null)
     setTemplatePublishDraft({
@@ -3163,6 +3259,7 @@ export default function SlidesPage() {
         slideId: activeSlideId || 'unsaved-slide',
         revision: activeRevision,
         source: 'oliver-app',
+        exportedAt: new Date().toISOString(),
       },
     })
     setExportHtml(html)
@@ -4727,8 +4824,26 @@ export default function SlidesPage() {
                       : 'No templates available yet.'}
                   </p>
                 )}
+                {libraryLoading && rankedTemplates.length === 0 && templates.length === 0 && (
+                  <div className="slides-template-skeleton-list" aria-label="Loading templates">
+                    {Array.from({ length: TEMPLATE_LIBRARY_PREVIEW_SKELETON_COUNT }).map((_, index) => (
+                      <article key={`template-skeleton-${index}`} className="slides-library-card">
+                        <div className="slides-template-skeleton-preview" />
+                        <div className="slides-template-skeleton-line" />
+                        <div className="slides-template-skeleton-line slides-template-skeleton-line-sm" />
+                        <div className="slides-template-skeleton-actions">
+                          <span className="slides-template-skeleton-btn" />
+                          <span className="slides-template-skeleton-btn" />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
                 {rankedTemplates.map((entry) => {
                   const template = entry.template
+                  const templateStatus = templatePreviewStatusById[template.id]
+                  const canManageTemplate = isSlidesAdmin || template.owner_user_id === actor.user_id
+                  const visibleComponents = template.components.filter((component) => component.visible !== false)
                   return (
                   <article key={template.id} className="slides-library-card">
                     <div>
@@ -4741,26 +4856,31 @@ export default function SlidesPage() {
                             transform: `scale(${getTemplatePreviewScale(template.canvas, 220, 124)})`,
                           }}
                         >
-                          {template.components
-                            .filter((component) => component.visible !== false)
-                            .slice(0, 10)
-                            .map((component) => (
-                              <div
-                                key={`${template.id}:${component.id}`}
-                                className="slides-template-preview-component"
-                                data-preview-type={component.type}
-                                style={buildCanvasComponentStyle(component)}
-                              >
-                                {component.type === 'logo' ? (
-                                  <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
-                                ) : (
-                                  <div
-                                    className="slides-template-preview-content"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
-                                  />
-                                )}
-                              </div>
-                            ))}
+                          {visibleComponents.length === 0 ? (
+                            <div className="slides-template-preview-empty" role="img" aria-label="No visible preview components">
+                              No preview components
+                            </div>
+                          ) : (
+                            visibleComponents
+                              .slice(0, TEMPLATE_PREVIEW_COMPONENT_LIMIT)
+                              .map((component) => (
+                                <div
+                                  key={`${template.id}:${component.id}`}
+                                  className="slides-template-preview-component"
+                                  data-preview-type={component.type}
+                                  style={buildCanvasComponentStyle(component)}
+                                >
+                                  {component.type === 'logo' ? (
+                                    <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
+                                  ) : (
+                                    <div
+                                      className="slides-template-preview-content"
+                                      dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
+                                    />
+                                  )}
+                                </div>
+                              ))
+                          )}
                         </div>
                       </div>
                       <h3>{template.name}</h3>
@@ -4769,6 +4889,17 @@ export default function SlidesPage() {
                       <p>
                         Visibility: {template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(template.updated_at)}
                       </p>
+                      {templateStatus?.needsRefresh ? (
+                        <p className="slides-card-note">
+                          {templateStatus.missing
+                            ? 'Preview missing: no visible components captured.'
+                            : 'Preview may be stale relative to latest template updates.'}
+                        </p>
+                      ) : (
+                        <p className="slides-card-note">
+                          Preview components: {templateStatus?.visibleCount || 0}
+                        </p>
+                      )}
                       {entry.pendingApprovals > 0 && (
                         <p className="slides-card-note">
                           Pending approvals: {entry.pendingApprovals}
@@ -4799,6 +4930,16 @@ export default function SlidesPage() {
                       >
                         Duplicate to My Slides
                       </button>
+                      {templateStatus?.needsRefresh && canManageTemplate && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost btn--compact"
+                          onClick={() => void handleRefreshTemplatePreview(template)}
+                          disabled={templateActionBusyId === template.id}
+                        >
+                          {templateActionBusyId === template.id ? 'Refreshing preview…' : 'Refresh Preview'}
+                        </button>
+                      )}
                       {(isSlidesAdmin || template.owner_user_id === actor.user_id) && (
                         <>
                           {(template.is_shared || isSlidesAdmin) && (
@@ -4977,6 +5118,20 @@ export default function SlidesPage() {
                       <p className="slides-card-note">
                         {activeTemplateQuickPreview.template.description || 'No description'} · Components: {activeTemplateQuickPreview.template.components.length}
                       </p>
+                      {activeTemplateQuickPreview.template.components.filter((component) => component.visible !== false).length === 0 && (
+                        <p className="slides-card-note">
+                          Preview missing: no visible components captured.
+                        </p>
+                      )}
+                      {(() => {
+                        const status = templatePreviewStatusById[activeTemplateQuickPreview.template.id]
+                        if (!status?.stale) return null
+                        return (
+                          <p className="slides-card-note">
+                            Preview may be stale relative to latest template updates.
+                          </p>
+                        )
+                      })()}
                       <p className="slides-card-note">
                         Visibility: {activeTemplateQuickPreview.template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(activeTemplateQuickPreview.template.updated_at)}
                       </p>
@@ -4987,35 +5142,44 @@ export default function SlidesPage() {
                         </p>
                       )}
                       <div className="slides-template-preview-modal-stage-shell">
-                        <div
-                          className="slides-template-preview-stage"
-                          style={{
-                            width: `${activeTemplateQuickPreview.template.canvas.width}px`,
-                            height: `${activeTemplateQuickPreview.template.canvas.height}px`,
-                            transform: `scale(${getTemplatePreviewScale(activeTemplateQuickPreview.template.canvas, 860, 500)})`,
-                          }}
-                        >
-                          {activeTemplateQuickPreview.template.components
-                            .filter((component) => component.visible !== false)
-                            .slice(0, 28)
-                            .map((component) => (
-                              <div
-                                key={`${activeTemplateQuickPreview.template.id}:${component.id}`}
-                                className="slides-template-preview-component"
-                                data-preview-type={component.type}
-                                style={buildCanvasComponentStyle(component)}
-                              >
-                                {component.type === 'logo' ? (
-                                  <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
-                                ) : (
-                                  <div
-                                    className="slides-template-preview-content"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
-                                  />
-                                )}
-                              </div>
-                            ))}
-                        </div>
+                        {(() => {
+                          const visibleComponents = activeTemplateQuickPreview.template.components.filter(
+                            (component) => component.visible !== false,
+                          )
+                          const hasVisibleComponents = visibleComponents.length > 0
+                          return hasVisibleComponents ? (
+                            <div
+                              className="slides-template-preview-stage"
+                              style={{
+                                width: `${activeTemplateQuickPreview.template.canvas.width}px`,
+                                height: `${activeTemplateQuickPreview.template.canvas.height}px`,
+                                transform: `scale(${getTemplatePreviewScale(activeTemplateQuickPreview.template.canvas, 860, 500)})`,
+                              }}
+                            >
+                              {visibleComponents.slice(0, 28).map((component) => (
+                                <div
+                                  key={`${activeTemplateQuickPreview.template.id}:${component.id}`}
+                                  className="slides-template-preview-component"
+                                  data-preview-type={component.type}
+                                  style={buildCanvasComponentStyle(component)}
+                                >
+                                  {component.type === 'logo' ? (
+                                    <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
+                                  ) : (
+                                    <div
+                                      className="slides-template-preview-content"
+                                      dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="slides-template-preview-empty slides-template-preview-empty--large">
+                              No preview components
+                            </div>
+                          )
+                        })()}
                       </div>
                       <div className="slides-inline-actions">
                         <button

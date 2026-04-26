@@ -22,3 +22,8 @@ Slide editing workspace for HTML import, canvas editing, autosave, template mana
 - Keep autosave/degraded-mode behavior documented when changed.
 - Keep chatbot commands and flows aligned with slide actions and approval flows.
 - Update this doc when new template/audit surfaces are added.
+
+## Test commands
+- Local default (Playwright manages web server): `npm run test:smoke`
+- External target (skip Playwright webServer, use provided base URL): `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 npm run test:smoke:external`
+- Slides-focused external suite: `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 npm run test:smoke:slides:external`

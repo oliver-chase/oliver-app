@@ -38,6 +38,63 @@ function sanitizeContent(content: string): string {
     .replace(/\s(href|src)\s*=\s*'javascript:[^']*'/gi, '')
 }
 
+function buildPrintSafeStyles(canvas: SlideCanvas): string {
+  const safeWidth = Number.isFinite(canvas.width) && canvas.width > 0 ? Math.max(1, Math.round(canvas.width)) : 1920
+  const safeHeight = Number.isFinite(canvas.height) && canvas.height > 0 ? Math.max(1, Math.round(canvas.height)) : 1080
+
+  return [
+    '@media print{',
+    '@page{',
+    `size:${safeWidth}px ${safeHeight}px;`,
+    'margin:0;',
+    '}',
+    'html,body{',
+    'width:100%;',
+    'height:100%;',
+    'margin:0;',
+    'padding:0;',
+    'background:#fff;',
+    '}',
+    '*{',
+    'print-color-adjust:exact;',
+    '-webkit-print-color-adjust:exact;',
+    '}',
+    '.slide-canvas{',
+    'position:relative !important;',
+    'width:100% !important;',
+    'height:100% !important;',
+    'overflow:visible !important;',
+    '}',
+    '}',
+    'html,body{',
+    'width:100%;',
+    'height:100%;',
+    'margin:0;',
+    'padding:0;',
+    'background:#fff;',
+    'display:flex;',
+    'align-items:flex-start;',
+    'justify-content:flex-start;',
+    '}',
+    '.slides-export-root{',
+    'display:flex;',
+    'align-items:flex-start;',
+    'justify-content:flex-start;',
+    'width:100%;',
+    'height:100%;',
+    'overflow:hidden;',
+    'background:#fff;',
+    '}',
+    '.slide-canvas{',
+    'position:relative;',
+    `width:${safeWidth}px;`,
+    `height:${safeHeight}px;`,
+    'overflow:hidden;',
+    'background:#fff;',
+    '}',
+  ].join('')
+}
+
 function componentToHtml(component: SlideComponent): string {
   const attrs = [
     `data-component-id="${escapeAttribute(component.id)}"`,
@@ -57,18 +114,30 @@ export function convertSlideComponentsToHtml(input: {
     slideId?: string
     revision?: number
     source?: string
+    exportedAt?: string
   }
 }): string {
   const { canvas, components, metadata } = input
   const slideId = metadata?.slideId || 'unsaved-slide'
   const revision = Number.isFinite(metadata?.revision) ? String(metadata?.revision) : '0'
   const source = metadata?.source || 'oliver-app'
+  const exportedAt = metadata?.exportedAt || new Date().toISOString()
 
-  const header = '<!doctype html>\n<html><head><meta charset="utf-8" /><title>Oliver Slide Export</title></head><body>'
+  const header = [
+    '<!doctype html>',
+    '<html>',
+    '<head>',
+    '<meta charset="utf-8" />',
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+    '<title>Oliver Slide Export</title>',
+    `<style>${buildPrintSafeStyles(canvas)}</style>`,
+    '</head>',
+    '<body>',
+  ].join('\n')
   const rootOpen =
-    `<div class="slide-canvas" data-slide-root="1" data-oliver-export-version="1" data-oliver-source="${escapeAttribute(source)}" data-oliver-slide-id="${escapeAttribute(slideId)}" data-oliver-revision="${escapeAttribute(revision)}" style="position:relative;width:${canvas.width}px;height:${canvas.height}px;overflow:hidden;">`
+    `<div class="slides-export-root"><div class="slide-canvas" data-slide-root="1" data-oliver-export-version="1" data-oliver-source="${escapeAttribute(source)}" data-oliver-slide-id="${escapeAttribute(slideId)}" data-oliver-revision="${escapeAttribute(revision)}" data-oliver-exported-at="${escapeAttribute(exportedAt)}" style="position:relative;width:${canvas.width}px;height:${canvas.height}px;overflow:hidden;">`
   const body = components.map(componentToHtml).join('\n')
-  const rootClose = '</div>'
+  const rootClose = '</div></div>'
   const footer = '</body></html>'
 
   return `${header}\n${rootOpen}\n${body}\n${rootClose}\n${footer}`
