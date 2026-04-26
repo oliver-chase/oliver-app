@@ -13,8 +13,8 @@ I want safe rollout controls so module launch can be staged and reversed if need
 So production stability is preserved.
 
 Acceptance Criteria:
-- [ ] Feature flag controls module visibility by environment.
-- [ ] DB migrations are additive and backward compatible.
-- [ ] Rollback playbook exists for function-level failures.
-- [ ] Data backfill steps are documented where required.
+- [x] Feature flag controls module visibility by environment.
+- [x] DB migrations are additive and backward compatible.
+- [x] Rollback playbook exists for function-level failures.
+- [x] Data backfill steps are documented where required.
 - [ ] Staging signoff checklist completed before production exposure.

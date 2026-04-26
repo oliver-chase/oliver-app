@@ -21,3 +21,12 @@ Acceptance Criteria:
 - [ ] Validation confirms event title, description/body text, and module deep link are preserved after import.
 - [x] Any import failure includes a troubleshooting note and a fallback remediation path in the campaign help/ops notes (`src/tech-debt/campaign-ics-troubleshooting.md`).
 - [ ] Completion is recorded as signed manual evidence in `src/tech-debt/campaign-rollout-and-dod-gates.md` and linked from `US-CMP-QA-1112`.
+   - Progress: external import checks are pending execution in shared QA environments.
+   - Planned evidence capture target: signed artifacts + screenshots in `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` and `src/tech-debt/campaign-rollout-and-dod-gates.md`.
+   - Staging execution evidence owner and timestamp are currently TBD.
+
+## Pending Evidence Capture
+
+- [ ] macOS Calendar import smoke for `.ics` with title/body/deep-link verification.
+- [ ] Windows Outlook import smoke for `.ics` with title/body/deep-link verification.
+- [ ] Link evidence IDs in `src/tech-debt/campaign-rollout-and-dod-gates.md` and cross-link from `US-CMP-QA-1112`.

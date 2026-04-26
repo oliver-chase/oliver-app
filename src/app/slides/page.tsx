@@ -69,6 +69,7 @@ import {
 import { useUser } from '@/context/UserContext'
 import { SLIDES_COMMANDS } from '@/app/slides/commands'
 import { buildSlidesFlows } from '@/app/slides/flows'
+import { useSlidesPptxSelection } from '@/app/slides/hooks/use-slides-pptx-selection'
 import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
 import { getThemeColorCssVar, getThemeColorInputValue } from '@/lib/theme-tokens'
@@ -739,7 +740,6 @@ export default function SlidesPage() {
 
   const [searchValue, setSearchValue] = useState('')
   const [exportHtml, setExportHtml] = useState('')
-  const [pptxSelectedSlideIds, setPptxSelectedSlideIds] = useState<string[]>([])
   const [pptxExportWarnings, setPptxExportWarnings] = useState<string[]>([])
   const [pptxExportBusy, setPptxExportBusy] = useState(false)
 
@@ -767,12 +767,18 @@ export default function SlidesPage() {
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
   const trimmedSearchValue = searchValue.trim()
   const visibleSlideIds = useMemo(() => slides.map((slide) => slide.id), [slides])
-  const selectedVisibleSlideCount = useMemo(() => (
-    pptxSelectedSlideIds.filter((slideId) => visibleSlideIds.includes(slideId)).length
-  ), [pptxSelectedSlideIds, visibleSlideIds])
-  const selectedHiddenSlideCount = Math.max(0, pptxSelectedSlideIds.length - selectedVisibleSlideCount)
-  const hasHiddenSelections = selectedHiddenSlideCount > 0
-  const areAllVisibleSlidesSelected = slides.length > 0 && selectedVisibleSlideCount === slides.length
+  const {
+    pptxSelectedSlideIds,
+    selectedVisibleSlideCount,
+    selectedHiddenSlideCount,
+    hasHiddenSelections,
+    areAllVisibleSlidesSelected,
+    togglePptxSlideSelection,
+    selectAllVisibleSlides,
+    keepVisibleSelection,
+    clearPptxSelection,
+    clearMissingSelections,
+  } = useSlidesPptxSelection({ visibleSlideIds })
   const workspaceLabel = workspaceTab === 'import'
     ? 'Import Workspace'
     : workspaceTab === 'my-slides'
@@ -1921,10 +1927,8 @@ export default function SlidesPage() {
 
   useEffect(() => {
     if (trimmedSearchValue.length > 0) return
-    setPptxSelectedSlideIds((previous) =>
-      previous.filter((slideId) => slides.some((slide) => slide.id === slideId)),
-    )
-  }, [slides, trimmedSearchValue])
+    clearMissingSelections(slides.map((slide) => slide.id))
+  }, [clearMissingSelections, slides, trimmedSearchValue])
 
   useEffect(() => {
     if (!selectedAuditPresetId) return
@@ -3457,29 +3461,6 @@ export default function SlidesPage() {
     )
   }, [actor, pptxSelectedSlideIds, runPptxExport, slides])
 
-  const togglePptxSlideSelection = useCallback((slideId: string) => {
-    setPptxSelectedSlideIds((previous) => (
-      previous.includes(slideId)
-        ? previous.filter((id) => id !== slideId)
-        : [...previous, slideId]
-    ))
-  }, [])
-
-  const selectAllVisibleSlides = useCallback(() => {
-    setPptxSelectedSlideIds((previous) => {
-      if (slides.length === 0) return previous
-      const next = new Set(previous)
-      for (const slide of slides) {
-        next.add(slide.id)
-      }
-      return Array.from(next)
-    })
-  }, [slides])
-
-  const keepVisibleSelection = useCallback(() => {
-    setPptxSelectedSlideIds((previous) => previous.filter((slideId) => visibleSlideIds.includes(slideId)))
-  }, [visibleSlideIds])
-
   const handleConflictReload = useCallback(() => {
     if (!conflictServerSlide) return
     loadSlide(conflictServerSlide, { skipUnsavedConfirm: true })
@@ -4517,7 +4498,7 @@ export default function SlidesPage() {
                   <button
                     type="button"
                     className="btn btn-sm btn-ghost btn--compact"
-                    onClick={() => setPptxSelectedSlideIds([])}
+                    onClick={() => clearPptxSelection()}
                     disabled={pptxSelectedSlideIds.length === 0 || pptxExportBusy}
                   >
                     Clear Selection

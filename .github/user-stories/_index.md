@@ -29,6 +29,10 @@ index table yet.
 | oliver-ux-audit-2026-04-24 | UX audit findings and cross-repo clarifications | US-O1..US-O7 |
 | slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-039 |
 
+Backlog protocol reminder: planning files are the active work queue. Completed stories must be transitioned to `Done`, marked `Verified` when evidence is in git, and removed from active backlog files immediately. This is enforced by the global [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md).
+
+New-request protocol: before implementation work, convert the request into/attach to a story with full Acceptance Criteria and run a quick prioritization pass against this queue unless the user provides explicit priority. Add at default priority when unspecified.
+
 ## Story Index
 
 | ID | Title | Status | Verified | Milestone | Backdated |
