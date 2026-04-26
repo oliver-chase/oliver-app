@@ -238,6 +238,166 @@ test.describe('campaign module report and automation flows', () => {
     await expect.poll(() => campaignApiBodies.filter(body => body.action === 'get-journey-timeline').length).toBeGreaterThan(0)
   })
 
+  test('automation journey canvas is read-only for non-admin users', async ({ page }) => {
+    await seedQaAuth(page, {
+      role: 'member',
+      page_permissions: ['campaigns'],
+    })
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-automation-ro',
+            name: 'Automation ReadOnly Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+
+    const automation = page.locator('#campaigns-automation')
+    await expect(automation.getByText('Read-only mode')).toBeVisible()
+    await expect(automation.getByRole('button', { name: 'Publish Journey' })).toBeDisabled()
+    await expect(automation.getByRole('button', { name: 'Add Action' })).toBeDisabled()
+  })
+
+  test('automation publish blocks invalid journey config and shows validation guidance', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+      if (method === 'PATCH') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-automation-invalid',
+            name: 'Automation Invalid Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+    const automation = page.locator('#campaigns-automation')
+    await automation.locator('textarea').first().fill('{}')
+    await automation.getByRole('button', { name: 'Publish Journey' }).click()
+    await expect(page.getByText('missing required config.action_key')).toBeVisible()
+  })
+
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
     const campaignApiBodies: CampaignApiBody[] = []
 
@@ -2954,11 +3114,12 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/reports')
 
     const reports = page.locator('#campaigns-reports')
     await expect(reports.getByText('Export History')).toBeVisible()
-    await expect(reports.getByText('campaign-summary-2026-04-25.md')).toBeVisible()
+    await page.getByRole('button', { name: 'Refresh campaign data' }).click()
+    await expect.poll(async () => reports.getByText('campaign-summary-2026-04-25.md').count()).toBeGreaterThan(0)
 
     const downloadPromise = page.waitForEvent('download')
     await reports.getByRole('button', { name: 'Download' }).first().click()

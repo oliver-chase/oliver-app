@@ -66,6 +66,8 @@ Scope: all module stories for campaigns including execution, parity, rollout, an
   - `.github/oliver-app/modules/campaigns-module/SMK-CMP-007-campaign-sidebar-design-system-parity.md`
 - `SMK-CMP-008` Schema-missing + top-right error-state hardening
   - `.github/oliver-app/modules/campaigns-module/SMK-CMP-008-campaign-schema-missing-and-error-state-hardening.md`
+- `SMK-CMP-009` Campaign Playwright webserver stability (mid-suite `ERR_CONNECTION_REFUSED`)
+  - Track and fix Next dev-server drop during long campaign suite runs; keep functional assertions separate from harness reliability.
 
 ## Mautic-Informed Expansion Backlog (2026-04-26)
 
@@ -93,6 +95,18 @@ Global acceptance guardrails for all stories in Themes `CMP-T14` to `CMP-T17`:
 4. All critical flows require mobile and desktop responsive behavior with no horizontal overflow in module shell.
 5. Every async surface must define loading, empty, error, and recovery states with deterministic operator guidance.
 6. Reported metrics and recommendation outputs must expose freshness timestamps and source coverage/confidence metadata.
+
+Mandatory execution protocol for every story in this section:
+1. Perform pre-implementation gap analysis documenting regression risk, schema assumptions, and contract drift risk.
+2. Write/refresh detailed user story acceptance criteria before coding when implementation reveals missing behavior.
+3. Implement against acceptance criteria only after explicit stack-compatibility check (`Next.js static export + Supabase + Cloudflare Functions`).
+4. Add or update tests at all applicable layers:
+5. `contract` tests for API payload/permission/error-shape.
+6. `e2e` tests for happy path + error path + permission/read-only path.
+7. `style/responsive` checks for mobile/desktop no-overflow behavior on changed surfaces.
+8. Run full campaign QA sweep before merge: TypeScript check, campaign contracts, campaign e2e suite, campaign smoke lists.
+9. Record post-implementation gap analysis with uncovered tech debt and create follow-up backlog stories for every unresolved gap.
+10. Do not mark a story complete unless acceptance criteria, evidence, and regression coverage are all satisfied.
 
 ### Theme CMP-T14: Visual Campaign Orchestration and Operator Clarity
 
@@ -127,6 +141,17 @@ Acceptance Criteria:
 5. Timeline queries use paginated backend reads and keep p95 response <= 400ms for 30-day windows.
 6. Timeline is exportable to JSON and CSV through existing report-export infrastructure.
 
+**Story US-CMP-QA-1905: Certify journey/timeline regression and policy safety gates**
+As a QA lead, I want explicit regression gates for journey automation so future changes cannot silently break orchestration behavior.
+
+Acceptance Criteria:
+1. Test coverage includes admin publish path, non-admin read-only path, graph validation failures, and timeline filtering.
+2. API contracts assert permission-denied and malformed-payload envelopes for journey timeline actions.
+3. End-to-end tests assert timeline-to-node highlight behavior and route navigation from sidebar and chatbot command.
+4. Evidence package records full campaign-suite pass/fail state with concrete command output timestamps.
+5. Any unresolved failures must create tracked backlog items before merge.
+6. Story cannot close without documented post-implementation gap analysis and follow-up items.
+
 #### Epic CMP-E14B: Visual Planning Surfaces and Focus Operations
 
 **Story US-CMP-FE-1903: Add campaign planning board with objective and channel blocks**
@@ -150,6 +175,17 @@ Acceptance Criteria:
 4. Focus-item impressions and conversions are tracked via existing event pipeline and visible in reporting.
 5. Domain allowlist checks are enforced before enabling a focus item.
 6. Mobile preview exists for all focus-item types.
+
+**Story US-CMP-ARCH-1906: Harden planning/focus schema contracts and rollback safety**
+As a platform owner, I want deterministic schema/version contracts for planning-board and focus-item payloads so upgrades do not cause data loss.
+
+Acceptance Criteria:
+1. Planning-board and focus-item payloads include explicit schema version fields and migration-safe defaults.
+2. Save operations are idempotent and preserve unknown fields for forward/backward compatibility.
+3. Change snapshots include before/after payload hash and actor metadata.
+4. Rollback path is documented and tested for latest prior version.
+5. Contract tests validate malformed payload rejection with actionable error responses.
+6. Feature rollout includes a kill-switch and recovery guidance in runbook.
 
 ### Theme CMP-T15: Audience Intelligence and Data Enrichment
 

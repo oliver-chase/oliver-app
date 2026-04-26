@@ -240,3 +240,75 @@ test('campaigns API contract: journey timeline filters and export are supported'
     assert.equal(timelineExportLogged, true)
   })
 })
+
+test('campaigns API contract: journey timeline requires campaign_id', { concurrency: false }, async () => {
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['campaigns'],
+      }])
+    }
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get-journey-timeline',
+        actor: {
+          user_id: 'admin-1',
+          user_email: 'admin@example.com',
+        },
+        filters: {
+          nodeType: 'action',
+        },
+      }),
+    })
+
+    const response = await onRequestPost({ request, env: { ...BASE_ENV } })
+    const body = await response.json()
+    assert.equal(response.status, 400)
+    assert.equal(body.error, 'campaign_id is required')
+  })
+})
+
+test('campaigns API contract: journey timeline actions reject unauthorized actors', { concurrency: false }, async () => {
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([])
+    }
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'request-journey-timeline-export',
+        actor: {
+          user_id: 'non-member',
+          user_email: 'non-member@example.com',
+        },
+        campaign_id: 'campaign-1',
+        format: 'csv',
+      }),
+    })
+
+    const response = await onRequestPost({ request, env: { ...BASE_ENV } })
+    const body = await response.json()
+    assert.equal(response.status, 403)
+    assert.match(String(body.error || ''), /forbidden|permission/i)
+  })
+})

@@ -287,7 +287,12 @@ function campaignTransitionMessageFromError(error: unknown) {
         refreshRecommended: true,
       }
     }
-    if (normalized.includes('does not exist')) {
+    if (
+      normalized.includes('does not exist')
+      && !normalized.includes('public.campaign_')
+      && !normalized.includes('function public.campaign_')
+      && !normalized.includes('could not find the table')
+    ) {
       return {
         message: 'Campaign item not found or stale. Refresh and retry.',
         refreshRecommended: true,
