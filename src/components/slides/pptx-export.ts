@@ -227,7 +227,18 @@ function buildShapeXml(
   slideRef: string,
   warnings: string[],
 ): string {
-  if (component.visible === false) return ''
+  if (component.visible === false) {
+    warnings.push(`${slideRef}: component ${component.id} (${component.type}) was hidden and was skipped in PPTX export.`)
+    return ''
+  }
+  if (
+    typeof component.style.backgroundColor === 'string'
+    && component.style.backgroundColor.trim().length > 0
+    && !normalizeHexColor(component.style.backgroundColor)
+    && /gradient|url\(|pattern/i.test(component.style.backgroundColor)
+  ) {
+    warnings.push(`${slideRef}: component ${component.id} (${component.type}) uses unsupported background style; simplified style was used in PPTX export.`)
+  }
   if (component.type === 'logo') {
     warnings.push(`${slideRef}: component ${component.id} (${component.type}) exported as warning only; native logo/image mapping not yet supported.`)
     return ''
