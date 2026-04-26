@@ -378,7 +378,7 @@ test.describe('slides regression', () => {
     await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).fontFamily.toLowerCase())).toContain('times')
   })
 
-  test('SLD-FE-310 preserves style declaration order across inline and linked CSS', async ({ page }) => {
+  test('SLD-FE-310 preserves style declaration order across inline and linked CSS (SLD-TE-311)', async ({ page }) => {
     await page.route('**/ordered-theme.css', (route) => {
       route.fulfill({
         status: 200,
