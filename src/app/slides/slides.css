@@ -897,7 +897,7 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
 .slides-template-preview-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.52);
+  background: var(--color-backdrop-overlay);
   z-index: 1200;
   padding: var(--spacing-lg);
   display: flex;

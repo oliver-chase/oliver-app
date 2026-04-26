@@ -6,6 +6,7 @@ import type { OliverAction, OliverConfig } from '@/components/shared/OliverConte
 import type { CSSProperties, FocusEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
 import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
+import { AppNotice } from '@/components/shared/AppNotice'
 import type { SlideComponent, SlideComponentType, SlideImportResult } from '@/components/slides/types'
 import { convertHtmlToSlideComponents } from '@/components/slides/html-import'
 import { convertSlideComponentsToHtml } from '@/components/slides/html-export'
@@ -70,6 +71,7 @@ import { SLIDES_COMMANDS } from '@/app/slides/commands'
 import { buildSlidesFlows } from '@/app/slides/flows'
 import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
+import { getThemeColorCssVar, getThemeColorInputValue } from '@/lib/theme-tokens'
 
 const AUTOSAVE_DELAY_MS = 5000
 const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
@@ -495,8 +497,8 @@ function measureTextAutoSizeHeight(component: SlideComponent, width: number): nu
   measureNode.style.whiteSpace = 'normal'
   measureNode.style.wordBreak = 'break-word'
   measureNode.style.overflowWrap = 'anywhere'
-  measureNode.style.backgroundColor = component.style.backgroundColor || '#ffffff'
-  measureNode.style.color = component.style.color || '#0f172a'
+  measureNode.style.backgroundColor = component.style.backgroundColor || getThemeColorCssVar('--color-bg-card')
+  measureNode.style.color = component.style.color || getThemeColorCssVar('--color-text-primary')
   measureNode.style.fontSize = `${Math.max(MIN_FONT_SIZE, component.style.fontSize || MIN_FONT_SIZE)}px`
   measureNode.style.fontWeight = String(component.style.fontWeight || 400)
   measureNode.style.fontStyle = component.style.fontStyle || 'normal'
@@ -522,10 +524,38 @@ function sanitizeHtmlContent(content: string): string {
     .replace(/\s(href|src)\s*=\s*'javascript:[^']*'/gi, '')
 }
 
+function parseRgbToHex(value: string): string | undefined {
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed.startsWith('rgb(') && !trimmed.startsWith('rgba(')) return undefined
+
+  const raw = trimmed.replace(/^rgba?\(/, '').replace(/\)$/, '')
+  const parts = raw.split(',').map((part) => part.trim())
+  if (parts.length < 3) return undefined
+
+  const red = Number.parseInt(parts[0], 10)
+  const green = Number.parseInt(parts[1], 10)
+  const blue = Number.parseInt(parts[2], 10)
+
+  if (![red, green, blue].every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)) {
+    return undefined
+  }
+
+  if (parts[3] !== undefined) {
+    const alpha = Number.parseFloat(parts[3])
+    if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) return undefined
+    if (alpha === 0) return undefined
+  }
+
+  const toHex = (channel: number) => channel.toString(16).toUpperCase().padStart(2, '0')
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`
+}
+
 function toColorInputValue(color: string | undefined, fallback: string): string {
   if (typeof color !== 'string') return fallback
   const value = color.trim()
   if (/^#[0-9a-f]{3,8}$/i.test(value)) return value
+  const rgbValue = parseRgbToHex(value)
+  if (rgbValue) return rgbValue
   return fallback
 }
 
@@ -763,6 +793,8 @@ export default function SlidesPage() {
   )
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
+  const defaultTextColor = useMemo(() => getThemeColorInputValue('--color-text-primary'), [])
+  const defaultBackgroundColor = useMemo(() => getThemeColorInputValue('--color-bg-card'), [])
   const updateCanvasSnapGuides = useCallback((next: CanvasSnapGuides) => {
     setCanvasSnapGuides((previous) => (
       previous.x === next.x && previous.y === next.y
@@ -801,11 +833,11 @@ export default function SlidesPage() {
       fontWeight: lead.style.fontWeight || 400,
       fontStyle: lead.style.fontStyle || 'normal',
       textAlign: lead.style.textAlign || 'left',
-      color: toColorInputValue(lead.style.color, '#0f172a'),
-      backgroundColor: toColorInputValue(lead.style.backgroundColor, '#ffffff'),
+      color: toColorInputValue(lead.style.color, defaultTextColor),
+      backgroundColor: toColorInputValue(lead.style.backgroundColor, defaultBackgroundColor),
       textAutoSize: !!lead.style.textAutoSize,
     }
-  }, [selectedComponents])
+  }, [defaultBackgroundColor, defaultTextColor, selectedComponents])
   const selectedBounds = useMemo(() => {
     if (selectedComponents.length !== 1) return null
     const lead = selectedComponents[0]
@@ -1128,6 +1160,79 @@ export default function SlidesPage() {
     setDirty()
   }, [cloneComponents, historyFuture, result, setDirty])
 
+  const reorderSelection = useCallback((mode: 'forward' | 'backward' | 'front' | 'back') => {
+    if (!result || selectedComponentIds.length === 0) {
+      setEditorNotice({ tone: 'error', text: 'Select at least one layer before changing ordering.' })
+      return
+    }
+
+    const selectedIds = new Set(
+      result.components
+        .filter((component) => selectedComponentIds.includes(component.id) && !component.locked)
+        .map((component) => component.id),
+    )
+    if (selectedIds.size === 0) {
+      setEditorNotice({ tone: 'error', text: 'Select at least one unlocked layer before changing ordering.' })
+      return
+    }
+
+    const nextComponents = [...result.components]
+    if (mode === 'front') {
+      const moving = nextComponents.filter((component) => selectedIds.has(component.id))
+      const remaining = nextComponents.filter((component) => !selectedIds.has(component.id))
+      nextComponents.length = 0
+      nextComponents.push(...remaining, ...moving)
+    } else if (mode === 'back') {
+      const moving = nextComponents.filter((component) => selectedIds.has(component.id))
+      const remaining = nextComponents.filter((component) => !selectedIds.has(component.id))
+      nextComponents.length = 0
+      nextComponents.push(...moving, ...remaining)
+    } else if (mode === 'forward') {
+      const movingIds = nextComponents
+        .filter((component) => selectedIds.has(component.id))
+        .map((component) => component.id)
+      for (const id of movingIds.reverse()) {
+        const source = nextComponents.findIndex((component) => component.id === id)
+        if (source < 0 || source >= nextComponents.length - 1) continue
+        ;[nextComponents[source], nextComponents[source + 1]] = [nextComponents[source + 1], nextComponents[source]]
+      }
+    } else {
+      const movingIds = nextComponents
+        .filter((component) => selectedIds.has(component.id))
+        .map((component) => component.id)
+      for (const id of movingIds) {
+        const source = nextComponents.findIndex((component) => component.id === id)
+        if (source <= 0) continue
+        ;[nextComponents[source], nextComponents[source - 1]] = [nextComponents[source - 1], nextComponents[source]]
+      }
+    }
+
+    if (areComponentsEqual(result.components, nextComponents)) {
+      setEditorNotice({ tone: 'info', text: 'Layer order did not change.' })
+      return
+    }
+
+    const movedCount = selectedIds.size
+    const nextSelection = nextComponents
+      .filter((component) => selectedIds.has(component.id))
+      .map((component) => component.id)
+    pushHistorySnapshot(result.components)
+    setResult((previous) => (previous ? { ...previous, components: nextComponents } : previous))
+    setSelectedComponentIds(nextSelection)
+    setDirty()
+    setEditorNotice({
+      tone: 'info',
+      text:
+        mode === 'front'
+          ? `Moved ${movedCount} layer(s) to front.`
+          : mode === 'back'
+            ? `Moved ${movedCount} layer(s) to back.`
+            : mode === 'forward'
+              ? `Raised ${movedCount} layer(s).`
+              : `Lowered ${movedCount} layer(s).`,
+    })
+  }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
+
   const handleCanvasKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!result) return
     if (isTextEntryTarget(event.target)) {
@@ -1160,6 +1265,30 @@ export default function SlidesPage() {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'y') {
       event.preventDefault()
       handleRedo()
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.key === '[') {
+      event.preventDefault()
+      reorderSelection('back')
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.key === ']') {
+      event.preventDefault()
+      reorderSelection('front')
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === '[') {
+      event.preventDefault()
+      reorderSelection('backward')
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === ']') {
+      event.preventDefault()
+      reorderSelection('forward')
       return
     }
 
@@ -1318,6 +1447,7 @@ export default function SlidesPage() {
     handleRedo,
     handleUndo,
     isTextEntryTarget,
+    reorderSelection,
     primarySelectedComponentId,
     pushHistorySnapshot,
     result,
@@ -3589,9 +3719,9 @@ export default function SlidesPage() {
             </div>
 
             {libraryError && (
-              <p className="slides-error" role="alert">
+              <AppNotice tone="error">
                 Library error: {libraryError}
-              </p>
+              </AppNotice>
             )}
 
             {workspaceTab === 'import' && (
@@ -3856,16 +3986,56 @@ export default function SlidesPage() {
                         >
                           ⇆≡
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
-                          onClick={() => distributeSelection('vertical')}
-                          title="Distribute Vertically"
-                          aria-label="Distribute Vertically"
-                        >
-                          ⇅≡
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
+                        onClick={() => distributeSelection('vertical')}
+                        title="Distribute Vertically"
+                        aria-label="Distribute Vertically"
+                      >
+                        ⇅≡
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
+                        onClick={() => reorderSelection('backward')}
+                        disabled={selectedComponentIds.length === 0}
+                        title="Send Back"
+                        aria-label="Send Back"
+                      >
+                        ⤌
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
+                        onClick={() => reorderSelection('forward')}
+                        disabled={selectedComponentIds.length === 0}
+                        title="Bring Forward"
+                        aria-label="Bring Forward"
+                      >
+                        ⤍
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
+                        onClick={() => reorderSelection('back')}
+                        disabled={selectedComponentIds.length === 0}
+                        title="Send to Back"
+                        aria-label="Send to Back"
+                      >
+                        ↘
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
+                        onClick={() => reorderSelection('front')}
+                        disabled={selectedComponentIds.length === 0}
+                        title="Bring to Front"
+                        aria-label="Bring to Front"
+                      >
+                        ↗
+                      </button>
+                    </div>
 
                       <div className="slides-editor-toolbar-row slides-editor-toolbar-row--inputs">
                         <label className="slides-editor-field" htmlFor="slides-style-x">
@@ -3964,7 +4134,7 @@ export default function SlidesPage() {
                           <input
                             id="slides-style-color"
                             type="color"
-                            value={selectedStyle?.color ?? '#0f172a'}
+                            value={selectedStyle?.color ?? defaultTextColor}
                             onChange={(event) => applyStyleToSelection({ color: event.target.value })}
                             disabled={selectedComponentIds.length === 0}
                           />
@@ -3974,7 +4144,7 @@ export default function SlidesPage() {
                           <input
                             id="slides-style-background"
                             type="color"
-                            value={selectedStyle?.backgroundColor ?? '#ffffff'}
+                            value={selectedStyle?.backgroundColor ?? defaultBackgroundColor}
                             onChange={(event) => applyStyleToSelection({ backgroundColor: event.target.value })}
                             disabled={selectedComponentIds.length === 0}
                           />
@@ -4014,6 +4184,7 @@ export default function SlidesPage() {
                         <li>Shift+click toggles multi-select. Ctrl/Cmd+A selects all visible layers.</li>
                         <li>PageUp/PageDown cycles layer selection.</li>
                         <li>Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y redo.</li>
+                        <li>Ctrl/Cmd+[, Ctrl/Cmd+] move selected layers back/forward in stack order.</li>
                       </ul>
                     </details>
 

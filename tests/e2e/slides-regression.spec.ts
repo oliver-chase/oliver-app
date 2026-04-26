@@ -165,6 +165,8 @@ test.describe('slides regression', () => {
       return Number.parseFloat(value)
     }).toBeLessThan(68)
     await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('15, 118, 110')
+    await headingLayer.click()
+    await expect(page.locator('#slides-style-color')).toHaveValue('#0f766e')
 
     const panelLayer = page.locator('.slides-canvas-component[data-component-type="panel"]').first()
     await expect.poll(async () => panelLayer.evaluate((node) => window.getComputedStyle(node).backgroundColor)).toContain('17, 24, 39')
@@ -698,6 +700,30 @@ test.describe('slides regression', () => {
     await expect(layer).toHaveAttribute('data-component-x', String(movedX - 1))
     await page.keyboard.press('ControlOrMeta+Shift+Z')
     await expect(layer).toHaveAttribute('data-component-x', String(movedX))
+  })
+
+  test('US-SLD-065 provides layer stack ordering controls', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class=\"slide-canvas\" style=\"width:1920px;height:1080px;\">
+      <div class=\"card\" style=\"position:absolute;left:120px;top:120px;width:360px;height:180px;\">Front</div>
+      <div class=\"card\" style=\"position:absolute;left:160px;top:160px;width:360px;height:180px;\">Middle</div>
+      <div class=\"card\" style=\"position:absolute;left:200px;top:200px;width:360px;height:180px;\">Back</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const cards = page.locator('.slides-canvas-component[data-component-type=\"card\"]')
+    const beforeOrder = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
+    await cards.first().click()
+
+    await page.getByRole('button', { name: 'Bring to Front' }).click()
+    const afterFront = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
+    expect(afterFront[afterFront.length - 1]).toBe(beforeOrder[0])
+
+    await page.getByRole('button', { name: 'Send to Back' }).click()
+    const afterBack = await cards.evaluateAll((entries) => entries.map((entry) => entry.getAttribute('data-component-id')))
+    expect(afterBack[0]).toBe(beforeOrder[0])
   })
 
   test('US-SLD-025 exposes keyboard-first workflows, semantic canvas roles, and shortcut help', async ({ page }) => {
