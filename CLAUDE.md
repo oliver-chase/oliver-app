@@ -39,6 +39,27 @@ Always confirm the user means to ship to production before running "merge stagin
 - Types: `src/types/index.ts` — all table schemas
 - Data hook: `src/hooks/useAccountsData.ts`
 
+## Module Docs (Required)
+- Global module map: `docs/MODULE_CONTEXT.md`
+- Agent/module workflow: `docs/MODULE_INSTRUCTIONS.md`
+- Per-module breakouts: `docs/modules/README.md` and `docs/modules/*.md`
+- Source-of-truth module registry: `src/modules/registry.ts`
+- Source-of-truth access gate behavior: `src/modules/use-module-access.ts`
+
+When a module changes (route, permission, visibility, commands, flows, or data contracts), update the corresponding `docs/modules/<module>.md` file in the same change.
+
+## Current Module Surfaces (2026-04-25)
+- Hub: `/` (entry/navigation only)
+- Accounts: `/accounts` (`accounts`)
+- HR: `/hr` (`hr`)
+- SDR: `/sdr` (`sdr`)
+- Slides: `/slides` (`slides`)
+- Campaigns: `/campaigns` (`campaigns`)
+- Reviews: `/reviews` (`reviews`, coming-soon/admin-only while flagged)
+- CRM: `/crm` (`crm`, disabled by default and hidden from hub)
+- Admin workspace: `/admin` (admin role)
+- Design System workspace: `/design-system` (admin role)
+
 ## Key rules
 - All work starts on `staging` branch — verify with `git branch --show-current`
 - Run local QA gates (`typecheck`, `lint`, `build`, relevant tests) before push

@@ -153,6 +153,113 @@ interface TemplateCollaboratorDraft {
   role: SlideTemplateCollaboratorRole
 }
 
+interface RankedTemplateEntry {
+  template: SlideTemplateRecord
+  searchScore: number
+  matchSignals: string[]
+  pendingApprovals: number
+  isBestMatch: boolean
+}
+
+function getTemplatePreviewScale(
+  canvas: { width: number; height: number },
+  maxWidth: number,
+  maxHeight: number,
+): number {
+  const width = canvas.width > 0 ? canvas.width : 1
+  const height = canvas.height > 0 ? canvas.height : 1
+  return Math.min(maxWidth / width, maxHeight / height)
+}
+
+function normalizeTemplateSearchText(value: string | null | undefined): string {
+  return (value || '').toLowerCase().trim()
+}
+
+function buildTemplateContentSearchCorpus(template: SlideTemplateRecord): string {
+  return template.components
+    .slice(0, 24)
+    .map((component) => {
+      const plainContent = (component.content || '').replace(/<[^>]+>/g, ' ')
+      return [component.type, component.sourceLabel || '', plainContent].join(' ')
+    })
+    .join(' ')
+    .toLowerCase()
+}
+
+function rankTemplateForSearch(template: SlideTemplateRecord, query: string): {
+  score: number
+  matchSignals: string[]
+} {
+  const normalizedQuery = normalizeTemplateSearchText(query)
+  if (!normalizedQuery) return { score: 0, matchSignals: [] }
+
+  const name = normalizeTemplateSearchText(template.name)
+  const description = normalizeTemplateSearchText(template.description)
+  const owner = normalizeTemplateSearchText(template.owner_user_id)
+  const contentCorpus = buildTemplateContentSearchCorpus(template)
+
+  const signals = new Set<string>()
+  let score = 0
+
+  if (name === normalizedQuery) {
+    score += 200
+    signals.add('Exact Name')
+  } else if (name.startsWith(normalizedQuery)) {
+    score += 140
+    signals.add('Name Prefix')
+  } else if (name.includes(normalizedQuery)) {
+    score += 110
+    signals.add('Name')
+  }
+
+  if (description.includes(normalizedQuery)) {
+    score += 80
+    signals.add('Description')
+  }
+
+  if (owner.includes(normalizedQuery)) {
+    score += 40
+    signals.add('Owner')
+  }
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean)
+  let tokenHitCount = 0
+  for (const token of tokens) {
+    let tokenMatched = false
+    if (name.includes(token)) {
+      score += 24
+      tokenMatched = true
+      signals.add('Name')
+    }
+    if (description.includes(token)) {
+      score += 14
+      tokenMatched = true
+      signals.add('Description')
+    }
+    if (owner.includes(token)) {
+      score += 8
+      tokenMatched = true
+      signals.add('Owner')
+    }
+    if (contentCorpus.includes(token)) {
+      score += 6
+      tokenMatched = true
+      signals.add('Content')
+    }
+    if (tokenMatched) tokenHitCount += 1
+  }
+
+  if (tokens.length > 1 && tokenHitCount === tokens.length) {
+    score += 30
+    signals.add('All Tokens')
+  }
+
+  return {
+    score,
+    matchSignals: Array.from(signals),
+  }
+}
+
 function readHistoryIndex(state: unknown): number | null {
   if (!state || typeof state !== 'object') return null
   const candidate = (state as { idx?: unknown }).idx
@@ -574,6 +681,7 @@ export default function SlidesPage() {
   const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
   const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
   const [templateCollaboratorPanelId, setTemplateCollaboratorPanelId] = useState<string | null>(null)
+  const [templateQuickPreviewId, setTemplateQuickPreviewId] = useState<string | null>(null)
   const [templateCollaboratorsByTemplate, setTemplateCollaboratorsByTemplate] = useState<Record<string, SlideTemplateCollaborator[]>>({})
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
@@ -727,6 +835,49 @@ export default function SlidesPage() {
     }
     return byTemplate
   }, [templateApprovals])
+  const rankedTemplates = useMemo<RankedTemplateEntry[]>(() => {
+    const query = normalizeTemplateSearchText(trimmedSearchValue)
+    const rows = templates.map((template) => {
+      const pendingCount = (pendingApprovalsByTemplate[template.id] || []).length
+      const rank = rankTemplateForSearch(template, query)
+      const recencyBoost = Number.isFinite(Date.parse(template.updated_at))
+        ? Math.max(0, 7 - Math.floor((Date.now() - Date.parse(template.updated_at)) / (1000 * 60 * 60 * 24)))
+        : 0
+      const queryScore = rank.score > 0
+        ? rank.score + recencyBoost + Math.min(12, pendingCount * 3)
+        : 0
+      return {
+        template,
+        searchScore: query ? queryScore : 0,
+        matchSignals: rank.matchSignals,
+        pendingApprovals: pendingCount,
+        isBestMatch: false,
+      }
+    })
+
+    const filtered = query
+      ? rows.filter((entry) => entry.searchScore > 0)
+      : rows
+
+    const sorted = [...filtered].sort((left, right) => {
+      if (query) {
+        if (right.searchScore !== left.searchScore) return right.searchScore - left.searchScore
+      }
+      if (right.pendingApprovals !== left.pendingApprovals) return right.pendingApprovals - left.pendingApprovals
+      const updatedCompare = right.template.updated_at.localeCompare(left.template.updated_at)
+      if (updatedCompare !== 0) return updatedCompare
+      return left.template.name.localeCompare(right.template.name)
+    })
+
+    if (query && sorted.length > 0) {
+      sorted[0] = { ...sorted[0], isBestMatch: true }
+    }
+    return sorted
+  }, [pendingApprovalsByTemplate, templates, trimmedSearchValue])
+  const activeTemplateQuickPreview = useMemo(
+    () => rankedTemplates.find((entry) => entry.template.id === templateQuickPreviewId) || null,
+    [rankedTemplates, templateQuickPreviewId],
+  )
   const showTemplateApprovalQueue = actor.role === 'admin' || templateApprovals.length > 0
   const overdueTemplateApprovals = useMemo(
     () => templateApprovals.filter((approval) => getApprovalSlaState(approval).tone === 'overdue').length,
@@ -1631,6 +1782,25 @@ export default function SlidesPage() {
     if (auditPresets.some((preset) => preset.id === selectedAuditPresetId)) return
     setSelectedAuditPresetId('')
   }, [auditPresets, selectedAuditPresetId])
+
+  useEffect(() => {
+    if (!templateQuickPreviewId) return
+    if (templates.some((template) => template.id === templateQuickPreviewId)) return
+    setTemplateQuickPreviewId(null)
+  }, [templateQuickPreviewId, templates])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !templateQuickPreviewId) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setTemplateQuickPreviewId(null)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [templateQuickPreviewId])
 
   const resetAuditFilters = useCallback(() => {
     setAuditActionFilter('all')
@@ -4183,6 +4353,11 @@ export default function SlidesPage() {
             {workspaceTab === 'templates' && (
               <div className="slides-library-section">
                 <h2>Template Library</h2>
+                {trimmedSearchValue && rankedTemplates.length > 0 && (
+                  <p className="slides-card-note slides-template-search-summary">
+                    Showing {rankedTemplates.length} template match{rankedTemplates.length === 1 ? '' : 'es'} sorted by relevance.
+                  </p>
+                )}
                 {showTemplateApprovalQueue && (
                   <div className="slides-template-draft">
                     <p className="slides-card-note">
@@ -4274,14 +4449,16 @@ export default function SlidesPage() {
                     })}
                   </div>
                 )}
-                {templates.length === 0 && (
+                {rankedTemplates.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
                       ? `No templates match "${trimmedSearchValue}". Clear or update search to continue.`
                       : 'No templates available yet.'}
                   </p>
                 )}
-                {templates.map((template) => (
+                {rankedTemplates.map((entry) => {
+                  const template = entry.template
+                  return (
                   <article key={template.id} className="slides-library-card">
                     <div>
                       <div className="slides-template-preview" aria-hidden="true">
@@ -4290,7 +4467,7 @@ export default function SlidesPage() {
                           style={{
                             width: `${template.canvas.width}px`,
                             height: `${template.canvas.height}px`,
-                            transform: `scale(${Math.min(220 / template.canvas.width, 124 / template.canvas.height)})`,
+                            transform: `scale(${getTemplatePreviewScale(template.canvas, 220, 124)})`,
                           }}
                         >
                           {template.components
@@ -4321,13 +4498,29 @@ export default function SlidesPage() {
                       <p>
                         Visibility: {template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(template.updated_at)}
                       </p>
-                      {(pendingApprovalsByTemplate[template.id] || []).length > 0 && (
+                      {entry.pendingApprovals > 0 && (
                         <p className="slides-card-note">
-                          Pending approvals: {(pendingApprovalsByTemplate[template.id] || []).length}
+                          Pending approvals: {entry.pendingApprovals}
+                        </p>
+                      )}
+                      {trimmedSearchValue && (
+                        <p
+                          className="slides-card-note slides-template-rank-note"
+                          data-rank={entry.isBestMatch ? 'top' : 'match'}
+                        >
+                          {entry.isBestMatch ? 'Best match' : `Match score ${entry.searchScore}`}
+                          {entry.matchSignals.length > 0 ? ` · ${entry.matchSignals.join(' · ')}` : ''}
                         </p>
                       )}
                     </div>
                     <div className="slides-inline-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost btn--compact"
+                        onClick={() => setTemplateQuickPreviewId(template.id)}
+                      >
+                        Quick Preview
+                      </button>
                       <button
                         type="button"
                         className="btn btn-sm btn-primary btn--compact"
@@ -4483,7 +4676,99 @@ export default function SlidesPage() {
                       </div>
                     )}
                   </article>
-                ))}
+                  )
+                })}
+                {activeTemplateQuickPreview && (
+                  <div
+                    className="slides-template-preview-modal-backdrop"
+                    onClick={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      setTemplateQuickPreviewId(null)
+                    }}
+                    role="presentation"
+                  >
+                    <section
+                      className="slides-template-preview-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label={`Quick Preview: ${activeTemplateQuickPreview.template.name}`}
+                    >
+                      <div className="slides-template-preview-modal-header">
+                        <h3>Quick Preview: {activeTemplateQuickPreview.template.name}</h3>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost btn--compact"
+                          onClick={() => setTemplateQuickPreviewId(null)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <p className="slides-card-note">
+                        {activeTemplateQuickPreview.template.description || 'No description'} · Components: {activeTemplateQuickPreview.template.components.length}
+                      </p>
+                      <p className="slides-card-note">
+                        Visibility: {activeTemplateQuickPreview.template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(activeTemplateQuickPreview.template.updated_at)}
+                      </p>
+                      {trimmedSearchValue && (
+                        <p className="slides-card-note slides-template-rank-note" data-rank={activeTemplateQuickPreview.isBestMatch ? 'top' : 'match'}>
+                          {activeTemplateQuickPreview.isBestMatch ? 'Best match' : `Match score ${activeTemplateQuickPreview.searchScore}`}
+                          {activeTemplateQuickPreview.matchSignals.length > 0 ? ` · ${activeTemplateQuickPreview.matchSignals.join(' · ')}` : ''}
+                        </p>
+                      )}
+                      <div className="slides-template-preview-modal-stage-shell">
+                        <div
+                          className="slides-template-preview-stage"
+                          style={{
+                            width: `${activeTemplateQuickPreview.template.canvas.width}px`,
+                            height: `${activeTemplateQuickPreview.template.canvas.height}px`,
+                            transform: `scale(${getTemplatePreviewScale(activeTemplateQuickPreview.template.canvas, 860, 500)})`,
+                          }}
+                        >
+                          {activeTemplateQuickPreview.template.components
+                            .filter((component) => component.visible !== false)
+                            .slice(0, 28)
+                            .map((component) => (
+                              <div
+                                key={`${activeTemplateQuickPreview.template.id}:${component.id}`}
+                                className="slides-template-preview-component"
+                                data-preview-type={component.type}
+                                style={buildCanvasComponentStyle(component)}
+                              >
+                                {component.type === 'logo' ? (
+                                  <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
+                                ) : (
+                                  <div
+                                    className="slides-template-preview-content"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
+                                  />
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                      <div className="slides-inline-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary btn--compact"
+                          onClick={() => {
+                            const templateId = activeTemplateQuickPreview.template.id
+                            setTemplateQuickPreviewId(null)
+                            void handleDuplicateTemplate(templateId)
+                          }}
+                        >
+                          Duplicate to My Slides
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost btn--compact"
+                          onClick={() => setTemplateQuickPreviewId(null)}
+                        >
+                          Close Preview
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             )}
 

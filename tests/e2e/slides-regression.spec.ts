@@ -684,6 +684,120 @@ test.describe('slides regression', () => {
     await expect(page.locator('.slides-library-card')).toHaveCount(3)
   })
 
+  test('SLD-FE-210 template search ranks best matches and quick preview supports duplicate flow', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-rank-1',
+            owner_user_id: 'qa-admin-user',
+            name: 'Executive QBR Narrative',
+            description: 'Board-level quarterly narrative.',
+            is_shared: true,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-1-heading',
+                type: 'heading',
+                sourceLabel: '.heading',
+                x: 120,
+                y: 120,
+                width: 900,
+                content: 'Executive QBR Narrative',
+                style: { fontSize: 56, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-25T10:00:00.000Z',
+            updated_at: '2026-04-25T10:00:00.000Z',
+          },
+          {
+            id: 'template-rank-2',
+            owner_user_id: 'qa-admin-user',
+            name: 'Narrative Outline',
+            description: 'Executive QBR talking points and timeline.',
+            is_shared: true,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-2-panel',
+                type: 'panel',
+                sourceLabel: '.panel',
+                x: 180,
+                y: 240,
+                width: 760,
+                height: 360,
+                content: '<h3>Executive QBR</h3><p>Summary</p>',
+                style: { fontSize: 28, color: '#111827', backgroundColor: '#f8fafc' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+          {
+            id: 'template-rank-3',
+            owner_user_id: 'qa-admin-user',
+            name: 'Hiring Kickoff',
+            description: 'People planning and role kickoff.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-3-text',
+                type: 'text',
+                sourceLabel: '.text',
+                x: 120,
+                y: 140,
+                width: 860,
+                content: 'Hiring Kickoff Plan',
+                style: { fontSize: 40, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-23T10:00:00.000Z',
+            updated_at: '2026-04-23T10:00:00.000Z',
+          },
+        ],
+        collaborators: [],
+        approvals: [],
+        audits: [],
+        auditPresets: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    await page.locator('#slides-search').fill('executive qbr')
+    await expect(page.getByText('Showing 2 template matches sorted by relevance.')).toBeVisible()
+
+    const rankedCards = page.locator('.slides-library-card')
+    await expect(rankedCards).toHaveCount(2)
+    await expect(rankedCards.first().locator('h3')).toHaveText('Executive QBR Narrative')
+    await expect(rankedCards.first().getByText('Best match')).toBeVisible()
+
+    await rankedCards.first().getByRole('button', { name: 'Quick Preview' }).click()
+    const previewDialog = page.getByRole('dialog', { name: 'Quick Preview: Executive QBR Narrative' })
+    await expect(previewDialog).toBeVisible()
+    await expect(previewDialog.getByText('Best match')).toBeVisible()
+
+    await previewDialog.getByRole('button', { name: 'Duplicate to My Slides' }).click()
+    await expect(page.locator('#slides-title')).toHaveValue('Executive QBR Narrative (Copy)')
+
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await expect(page.getByText('Executive QBR Narrative (Copy)')).toBeVisible()
+  })
+
   test('SLD-FE-400 and SLD-BE-400 support visibility controls and template ownership governance', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.removeItem('oliver-slides-store-v1')
