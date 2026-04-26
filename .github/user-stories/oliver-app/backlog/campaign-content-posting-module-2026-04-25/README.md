@@ -4,6 +4,9 @@ Date: 2026-04-25
 Source: `src/tech-debt/campaign-content-posting-backlog.md`
 Story Count: 38
 
+Related parity follow-up backlog:
+- `.github/user-stories/oliver-app/backlog/campaigns-spec-parity-prioritization-2026-04-25/README.md`
+
 ## Epic Coverage
 - CMP-E0: Module Foundation and Access — 3 tickets
 - CMP-E1: Campaign Management and Cadence — 3 tickets

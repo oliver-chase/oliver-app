@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverAction, OliverConfig } from '@/components/shared/OliverContext'
@@ -15,6 +17,7 @@ import { useUser } from '@/context/UserContext'
 import {
   addCampaignPerformanceMetrics,
   approveCampaignContent,
+  campaignAdminOverrideContent,
   claimCampaignContent,
   createCampaign,
   createCampaignAsset,
@@ -22,9 +25,11 @@ import {
   createCampaignReminder,
   isCampaignsAccessDenied,
   isCampaignsSchemaMissing,
+  listCampaignActivityLogs,
   listCampaignAssets,
   listCampaignContentItems,
   listCampaigns,
+  isCampaignAssetsTableAvailable,
   markCampaignContentPosted,
   removeCampaignAsset,
   rejectCampaignContent,
@@ -36,10 +41,13 @@ import {
   submitCampaignContentForReview,
   type CampaignSyncState,
   unclaimCampaignContent,
+  updateCampaign,
   updateCampaignContentPostUrl,
   updateCampaignContentSchedule,
 } from '@/lib/campaigns'
 import type {
+  CampaignActivityLog,
+  CampaignAdminOverrideAction,
   CampaignAsset,
   CampaignContentItem,
   CampaignContentMetrics,
@@ -60,6 +68,32 @@ const SECTION_TO_ANCHOR: Record<CampaignSection, string> = {
   review: 'campaigns-review',
   calendar: 'campaigns-calendar',
   reports: 'campaigns-reports',
+}
+
+const SECTION_TO_ROUTE: Record<CampaignSection, string> = {
+  list: '/campaigns/campaigns',
+  content: '/campaigns/content',
+  review: '/campaigns/review-queue',
+  calendar: '/campaigns/calendar',
+  reports: '/campaigns/reports',
+}
+
+function sectionFromPathname(pathname: string): CampaignSection | null {
+  const normalized = pathname.replace(/\/+$/, '')
+  switch (normalized) {
+    case '/campaigns/campaigns':
+      return 'list'
+    case '/campaigns/content':
+      return 'content'
+    case '/campaigns/review-queue':
+      return 'review'
+    case '/campaigns/calendar':
+      return 'calendar'
+    case '/campaigns/reports':
+      return 'reports'
+    default:
+      return null
+  }
 }
 
 const CAMPAIGN_STATUS_OPTIONS: Array<{ value: CampaignRecord['status']; label: string }> = [
@@ -89,6 +123,7 @@ type CampaignReportFilters = {
 
 type ReviewQueueSort = 'oldest' | 'newest' | 'campaign' | 'topic'
 type ContentLibraryOwnershipFilter = 'all' | 'created-by-me' | 'claimed-by-me' | 'unclaimed'
+type ContentLibraryViewMode = 'action' | 'all'
 type CalendarSort = 'overdue-first' | 'soonest' | 'latest' | 'title'
 type CalendarTimingFilter = 'all' | 'overdue' | 'today' | 'next-7' | 'unscheduled'
 type CalendarView = 'weekly' | 'monthly' | 'list'
@@ -116,10 +151,17 @@ type CampaignReasonModalState = {
   title: string
 } | null
 
+type CampaignAdminOverrideModalState = {
+  contentId: string
+  title: string
+  currentStatus: CampaignContentItem['status']
+} | null
+
 type CalendarTimelineKind = 'claimed' | 'posted' | 'missed' | 'open-slot'
 
 type CalendarTimelineEntry = {
   id: string
+  contentId: string | null
   startsAt: Date
   dateKey: string
   title: string
@@ -127,6 +169,19 @@ type CalendarTimelineEntry = {
   campaignLabel: string
   channel: string | null
   detail: string
+}
+
+type CampaignDetailDraft = {
+  name: string
+  description: string
+  offerDefinition: string
+  targetAudience: string
+  primaryCta: string
+  keywords: string
+  startDate: string
+  endDate: string
+  cadencePreset: CampaignCadencePreset
+  status: CampaignRecord['status']
 }
 
 type CampaignDensityDay = {
@@ -183,6 +238,22 @@ function isHttpUrl(value: string) {
   } catch {
     return false
   }
+}
+
+function isCampaignStaleStateError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
+  return (
+    message.includes('cmp_invalid_state')
+    || message.includes('cmp_not_found')
+    || message.includes('already')
+    || message.includes('empty rpc response')
+  )
+}
+
+function humanizeActionType(value: string) {
+  const cleaned = value.trim().replace(/[_-]+/g, ' ')
+  if (!cleaned) return 'activity'
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
 }
 
 function toDateTimeLocalValue(input: string | null) {
@@ -256,6 +327,49 @@ function buildCadenceRuleFromPreset(preset: CampaignCadencePreset): Record<strin
   return {
     preset: 'weekly',
     posts_per_week: 5,
+  }
+}
+
+function getCadencePresetFromRule(rule: CampaignRecord['cadence_rule']): CampaignCadencePreset {
+  if (!rule || typeof rule !== 'object') return 'none'
+  const source = rule as Record<string, unknown>
+  const preset = typeof source.preset === 'string' ? source.preset : ''
+  if (preset === 'every-weekday') return 'weekdays'
+  if (preset === 'every-other-day') return 'every-other-day'
+
+  const weeklyTargetRaw = source.posts_per_week ?? source.postsPerWeek ?? source.weekly_target ?? source.weeklyTarget
+  const weeklyTarget = Number(weeklyTargetRaw)
+  if (Number.isFinite(weeklyTarget) && weeklyTarget >= 5) return 'weekly-5'
+  if (Number.isFinite(weeklyTarget) && weeklyTarget >= 3) return 'weekly-3'
+  return 'none'
+}
+
+function buildCampaignDetailDraft(campaign: CampaignRecord | null): CampaignDetailDraft {
+  if (!campaign) {
+    return {
+      name: '',
+      description: '',
+      offerDefinition: '',
+      targetAudience: '',
+      primaryCta: '',
+      keywords: '',
+      startDate: '',
+      endDate: '',
+      cadencePreset: 'none',
+      status: 'draft',
+    }
+  }
+  return {
+    name: campaign.name || '',
+    description: campaign.description || '',
+    offerDefinition: campaign.offer_definition || '',
+    targetAudience: campaign.target_audience || '',
+    primaryCta: campaign.primary_cta || '',
+    keywords: Array.isArray(campaign.keywords) ? campaign.keywords.join(', ') : '',
+    startDate: campaign.start_date || '',
+    endDate: campaign.end_date || '',
+    cadencePreset: getCadencePresetFromRule(campaign.cadence_rule),
+    status: campaign.status,
   }
 }
 
@@ -367,19 +481,26 @@ function countReportGroupings(rows: CampaignContentItem[], groupBy: (item: Campa
 }
 
 export default function CampaignsPage() {
+  const pathname = usePathname()
+  const router = useRouter()
   const { allowRender } = useModuleAccess('campaigns')
   const { appUser, isAdmin } = useUser()
+  const routedSection = useMemo(() => sectionFromPathname(pathname || ''), [pathname])
+  const sectionPageMode = routedSection !== null
+  const activeSidebarSection = routedSection || 'list'
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([])
   const [contentItems, setContentItems] = useState<CampaignContentItem[]>([])
   const [assets, setAssets] = useState<CampaignAsset[]>([])
+  const [activityLogs, setActivityLogs] = useState<CampaignActivityLog[]>([])
   const [serverReportSummary, setServerReportSummary] = useState<CampaignReportSummary | null>(null)
   const [serverReportGroupings, setServerReportGroupings] = useState<CampaignReportGroupings | null>(null)
   const [reportSummaryLoading, setReportSummaryLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [syncState, setSyncState] = useState<CampaignSyncState>('syncing')
   const [error, setError] = useState<string | null>(null)
+  const [refreshRecommended, setRefreshRecommended] = useState(false)
   const [schemaMissing, setSchemaMissing] = useState(false)
   const [policyBlocked, setPolicyBlocked] = useState(false)
   const initialRange = useMemo(() => getPresetDateRange('last-30'), [])
@@ -415,6 +536,13 @@ export default function CampaignsPage() {
   const [reasonModalInput, setReasonModalInput] = useState('')
   const [reasonModalError, setReasonModalError] = useState<string | null>(null)
   const [reasonModalRunning, setReasonModalRunning] = useState(false)
+  const [adminOverrideModalState, setAdminOverrideModalState] = useState<CampaignAdminOverrideModalState>(null)
+  const [adminOverrideAction, setAdminOverrideAction] = useState<CampaignAdminOverrideAction>('reset-draft')
+  const [adminOverrideReason, setAdminOverrideReason] = useState('')
+  const [adminOverridePostUrl, setAdminOverridePostUrl] = useState('')
+  const [adminOverrideError, setAdminOverrideError] = useState<string | null>(null)
+  const [adminOverrideRunning, setAdminOverrideRunning] = useState(false)
+  const [campaignAssetsAvailable, setCampaignAssetsAvailable] = useState(true)
   const [contentLibraryFilters, setContentLibraryFilters] = useState<ContentLibraryFilters>({
     query: '',
     status: 'all',
@@ -422,6 +550,7 @@ export default function CampaignsPage() {
     campaignId: '',
     ownership: 'all',
   })
+  const [contentLibraryViewMode, setContentLibraryViewMode] = useState<ContentLibraryViewMode>('action')
   const [calendarSort, setCalendarSort] = useState<CalendarSort>('overdue-first')
   const [calendarFilters, setCalendarFilters] = useState<CalendarFilters>({
     query: '',
@@ -432,6 +561,11 @@ export default function CampaignsPage() {
   const [focusedCampaignId, setFocusedCampaignId] = useState('')
   const [calendarView, setCalendarView] = useState<CalendarView>('weekly')
   const [calendarCursorDate, setCalendarCursorDate] = useState(() => toDateInputValue(new Date()))
+  const [selectedCampaignId, setSelectedCampaignId] = useState('')
+  const [campaignDetailDraft, setCampaignDetailDraft] = useState<CampaignDetailDraft>(() => buildCampaignDetailDraft(null))
+  const [campaignDetailSaving, setCampaignDetailSaving] = useState(false)
+  const [contentFocusId, setContentFocusId] = useState('')
+  const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
   const [campaignDraft, setCampaignDraft] = useState({
     name: '',
@@ -473,11 +607,108 @@ export default function CampaignsPage() {
     [campaigns],
   )
 
+  const selectedCampaign = useMemo(
+    () => campaigns.find(campaign => campaign.id === selectedCampaignId) || null,
+    [campaigns, selectedCampaignId],
+  )
+
+  const selectedCampaignContent = useMemo(
+    () => (selectedCampaign ? contentItems.filter(item => item.campaign_id === selectedCampaign.id) : []),
+    [contentItems, selectedCampaign],
+  )
+
+  const selectedCampaignContentByStatus = useMemo(() => ({
+    draft: selectedCampaignContent.filter(item => item.status === 'draft'),
+    needs_review: selectedCampaignContent.filter(item => item.status === 'needs_review'),
+    unclaimed: selectedCampaignContent.filter(item => item.status === 'unclaimed'),
+    claimed: selectedCampaignContent.filter(item => item.status === 'claimed'),
+    posted: selectedCampaignContent.filter(item => item.status === 'posted'),
+  }), [selectedCampaignContent])
+
+  const selectedCampaignLifecycleGroups = useMemo(() => ([
+    { key: 'draft', label: 'Draft', items: selectedCampaignContentByStatus.draft },
+    { key: 'needs_review', label: 'Needs Review', items: selectedCampaignContentByStatus.needs_review },
+    { key: 'unclaimed', label: 'Unclaimed', items: selectedCampaignContentByStatus.unclaimed },
+    { key: 'claimed', label: 'Claimed', items: selectedCampaignContentByStatus.claimed },
+    { key: 'posted', label: 'Posted', items: selectedCampaignContentByStatus.posted },
+  ]), [selectedCampaignContentByStatus])
+
+  const selectedCampaignUpcomingClaimed = useMemo(
+    () => selectedCampaignContentByStatus.claimed
+      .filter(item => !!item.scheduled_for)
+      .sort((left, right) => new Date(left.scheduled_for || 0).getTime() - new Date(right.scheduled_for || 0).getTime())
+      .slice(0, 5),
+    [selectedCampaignContentByStatus.claimed],
+  )
+
+  const selectedCampaignRecentPosted = useMemo(
+    () => selectedCampaignContentByStatus.posted
+      .sort((left, right) => new Date(right.posted_at || right.updated_at || 0).getTime() - new Date(left.posted_at || left.updated_at || 0).getTime())
+      .slice(0, 5),
+    [selectedCampaignContentByStatus.posted],
+  )
+
+  const selectedCampaignActivity = useMemo(() => {
+    if (!selectedCampaign) return []
+    const contentIdSet = new Set(selectedCampaignContent.map(item => item.id))
+    return activityLogs
+      .filter(entry => {
+        if (entry.entity_type === 'campaign' && entry.entity_id === selectedCampaign.id) return true
+        if (entry.entity_type === 'campaign-content' && contentIdSet.has(entry.entity_id)) return true
+        const metadataCampaignId = typeof entry.metadata?.campaign_id === 'string' ? entry.metadata.campaign_id : ''
+        return metadataCampaignId === selectedCampaign.id
+      })
+      .slice(0, 12)
+  }, [activityLogs, selectedCampaign, selectedCampaignContent])
+
+  const campaignDetailDateError = useMemo(() => {
+    if (!campaignDetailDraft.startDate || !campaignDetailDraft.endDate) return null
+    if (campaignDetailDraft.startDate <= campaignDetailDraft.endDate) return null
+    return 'Campaign start date must be on or before end date.'
+  }, [campaignDetailDraft.endDate, campaignDetailDraft.startDate])
+
+  const campaignDetailDirty = useMemo(() => {
+    if (!selectedCampaign) return false
+    const selectedKeywords = Array.isArray(selectedCampaign.keywords) ? selectedCampaign.keywords.join(', ').trim() : ''
+    const currentKeywords = campaignDetailDraft.keywords.trim()
+    return (
+      campaignDetailDraft.name.trim() !== (selectedCampaign.name || '')
+      || campaignDetailDraft.description.trim() !== (selectedCampaign.description || '')
+      || campaignDetailDraft.offerDefinition.trim() !== (selectedCampaign.offer_definition || '')
+      || campaignDetailDraft.targetAudience.trim() !== (selectedCampaign.target_audience || '')
+      || campaignDetailDraft.primaryCta.trim() !== (selectedCampaign.primary_cta || '')
+      || campaignDetailDraft.startDate !== (selectedCampaign.start_date || '')
+      || campaignDetailDraft.endDate !== (selectedCampaign.end_date || '')
+      || campaignDetailDraft.status !== selectedCampaign.status
+      || campaignDetailDraft.cadencePreset !== getCadencePresetFromRule(selectedCampaign.cadence_rule)
+      || currentKeywords !== selectedKeywords
+    )
+  }, [campaignDetailDraft, selectedCampaign])
+
   useEffect(() => {
     if (!focusedCampaignId) return
     if (campaigns.some(campaign => campaign.id === focusedCampaignId)) return
     setFocusedCampaignId('')
   }, [campaigns, focusedCampaignId])
+
+  useEffect(() => {
+    if (campaigns.length === 0) {
+      if (selectedCampaignId) setSelectedCampaignId('')
+      return
+    }
+    if (selectedCampaignId && campaigns.some(campaign => campaign.id === selectedCampaignId)) return
+    setSelectedCampaignId(campaigns[0].id)
+  }, [campaigns, selectedCampaignId])
+
+  useEffect(() => {
+    setCampaignDetailDraft(buildCampaignDetailDraft(selectedCampaign))
+  }, [selectedCampaign])
+
+  useEffect(() => {
+    if (!infoMessage) return
+    const timer = window.setTimeout(() => setInfoMessage(null), 2800)
+    return () => window.clearTimeout(timer)
+  }, [infoMessage])
 
   const queueNeedsReview = useMemo(
     () => contentItems.filter(item => item.status === 'needs_review'),
@@ -601,6 +832,11 @@ export default function CampaignsPage() {
     return map
   }, [campaigns, contentItems])
 
+  const selectedCampaignStats = useMemo(
+    () => (selectedCampaign ? campaignStatsById.get(selectedCampaign.id) || null : null),
+    [campaignStatsById, selectedCampaign],
+  )
+
   const focusedCampaignDensity = useMemo(() => {
     const focusedCampaign = campaigns.find(campaign => campaign.id === focusedCampaignId) || null
     if (!focusedCampaign) {
@@ -713,10 +949,98 @@ export default function CampaignsPage() {
       if (contentLibraryFilters.ownership === 'claimed-by-me' && item.posting_owner_id !== appUser?.user_id) return false
       if (contentLibraryFilters.ownership === 'unclaimed' && item.status !== 'unclaimed') return false
       if (!query) return true
-      const haystack = `${item.title} ${item.topic} ${item.body}`.toLowerCase()
+      const campaignLabel = item.campaign_id ? (campaignNameById.get(item.campaign_id) || '') : ''
+      const haystack = `${item.title} ${item.topic} ${item.body} ${campaignLabel}`.toLowerCase()
       return haystack.includes(query)
     })
-  }, [appUser?.user_id, contentItems, contentLibraryFilters.campaignId, contentLibraryFilters.contentType, contentLibraryFilters.ownership, contentLibraryFilters.query, contentLibraryFilters.status])
+  }, [appUser?.user_id, campaignNameById, contentItems, contentLibraryFilters.campaignId, contentLibraryFilters.contentType, contentLibraryFilters.ownership, contentLibraryFilters.query, contentLibraryFilters.status])
+
+  const contentActionSummary = useMemo(() => ({
+    unclaimed: filteredContentItems.filter(item => item.status === 'unclaimed').length,
+    myClaimed: filteredContentItems.filter(item => item.status === 'claimed' && item.posting_owner_id === appUser?.user_id).length,
+    myDrafts: filteredContentItems.filter(item => item.status === 'draft' && item.created_by === appUser?.user_id).length,
+    reviewQueue: filteredContentItems.filter(item => item.status === 'needs_review').length,
+  }), [appUser?.user_id, filteredContentItems])
+
+  const contentLibraryVisibleItems = useMemo(() => {
+    const rows = filteredContentItems.filter(item => {
+      if (contentLibraryViewMode === 'all') return true
+      if (item.status === 'posted') return false
+      if (item.status === 'unclaimed') return true
+      if (item.status === 'claimed' && item.posting_owner_id === appUser?.user_id) return true
+      if (item.status === 'draft' && item.created_by === appUser?.user_id) return true
+      if (item.status === 'needs_review' && isAdmin) return true
+      return false
+    })
+
+    const rank = (item: CampaignContentItem) => {
+      if (contentLibraryViewMode === 'all') return 50
+      if (item.status === 'unclaimed') return 0
+      if (item.status === 'claimed' && item.posting_owner_id === appUser?.user_id) return 1
+      if (item.status === 'needs_review' && isAdmin) return 2
+      if (item.status === 'draft' && item.created_by === appUser?.user_id) return 3
+      if (item.status === 'draft') return 4
+      if (item.status === 'claimed') return 5
+      return 6
+    }
+
+    return rows.sort((left, right) => {
+      const rankDelta = rank(left) - rank(right)
+      if (rankDelta !== 0) return rankDelta
+      const updatedDelta = new Date(right.updated_at || 0).getTime() - new Date(left.updated_at || 0).getTime()
+      if (updatedDelta !== 0) return updatedDelta
+      return left.title.localeCompare(right.title)
+    })
+  }, [appUser?.user_id, contentLibraryViewMode, filteredContentItems, isAdmin])
+
+  const activeContentFilterChips = useMemo(() => {
+    const chips: Array<{ id: string; label: string; onRemove: () => void }> = []
+
+    if (contentLibraryViewMode === 'action') {
+      chips.push({
+        id: 'view-mode-action',
+        label: 'View: Action Queue',
+        onRemove: () => setContentLibraryViewMode('all'),
+      })
+    }
+    if (contentLibraryFilters.query.trim()) {
+      chips.push({
+        id: 'query',
+        label: `Search: ${contentLibraryFilters.query.trim()}`,
+        onRemove: () => setContentLibraryFilters(prev => ({ ...prev, query: '' })),
+      })
+    }
+    if (contentLibraryFilters.status !== 'all') {
+      chips.push({
+        id: 'status',
+        label: `Status: ${contentLibraryFilters.status}`,
+        onRemove: () => setContentLibraryFilters(prev => ({ ...prev, status: 'all' })),
+      })
+    }
+    if (contentLibraryFilters.contentType !== 'all') {
+      chips.push({
+        id: 'content-type',
+        label: `Type: ${contentLibraryFilters.contentType}`,
+        onRemove: () => setContentLibraryFilters(prev => ({ ...prev, contentType: 'all' })),
+      })
+    }
+    if (contentLibraryFilters.campaignId) {
+      chips.push({
+        id: 'campaign',
+        label: `Campaign: ${campaignNameById.get(contentLibraryFilters.campaignId) || contentLibraryFilters.campaignId}`,
+        onRemove: () => setContentLibraryFilters(prev => ({ ...prev, campaignId: '' })),
+      })
+    }
+    if (contentLibraryFilters.ownership !== 'all') {
+      chips.push({
+        id: 'ownership',
+        label: `Ownership: ${contentLibraryFilters.ownership}`,
+        onRemove: () => setContentLibraryFilters(prev => ({ ...prev, ownership: 'all' })),
+      })
+    }
+
+    return chips
+  }, [campaignNameById, contentLibraryFilters.campaignId, contentLibraryFilters.contentType, contentLibraryFilters.ownership, contentLibraryFilters.query, contentLibraryFilters.status, contentLibraryViewMode])
 
   const filteredMyClaimed = useMemo(() => {
     const query = calendarFilters.query.trim().toLowerCase()
@@ -748,10 +1072,11 @@ export default function CampaignsPage() {
       }
 
       if (!query) return true
-      const haystack = `${item.title} ${item.topic} ${item.body}`.toLowerCase()
+      const campaignLabel = item.campaign_id ? (campaignNameById.get(item.campaign_id) || '') : ''
+      const haystack = `${item.title} ${item.topic} ${item.body} ${campaignLabel}`.toLowerCase()
       return haystack.includes(query)
     })
-  }, [calendarFilters.campaignId, calendarFilters.channel, calendarFilters.query, calendarFilters.timing, myClaimed])
+  }, [calendarFilters.campaignId, calendarFilters.channel, calendarFilters.query, calendarFilters.timing, campaignNameById, myClaimed])
 
   const calendarWindow = useMemo(() => {
     const parsedCursor = calendarCursorDate ? new Date(`${calendarCursorDate}T00:00:00`) : new Date()
@@ -812,6 +1137,7 @@ export default function CampaignsPage() {
       const isMissed = startsAt.getTime() < now
       entries.push({
         id: `claimed-${item.id}`,
+        contentId: item.id,
         startsAt,
         dateKey,
         title: item.title,
@@ -832,6 +1158,7 @@ export default function CampaignsPage() {
       const dateKey = startsAt.toISOString().slice(0, 10)
       entries.push({
         id: `posted-${item.id}`,
+        contentId: item.id,
         startsAt,
         dateKey,
         title: item.title,
@@ -873,6 +1200,7 @@ export default function CampaignsPage() {
           if (scheduledByDay.has(dateKey)) continue
           entries.push({
             id: `open-slot-${campaign.id}-${dateKey}`,
+            contentId: null,
             startsAt: new Date(cursor),
             dateKey,
             title: campaign.name,
@@ -909,6 +1237,7 @@ export default function CampaignsPage() {
         const dateKey = markerDate.toISOString().slice(0, 10)
         entries.push({
           id: `open-slot-${campaign.id}-week-${dateKey}`,
+          contentId: null,
           startsAt: markerDate,
           dateKey,
           title: campaign.name,
@@ -1047,23 +1376,40 @@ export default function CampaignsPage() {
     if (isCampaignsSchemaMissing(exception)) {
       setSchemaMissing(true)
       setPolicyBlocked(false)
+      setRefreshRecommended(false)
       setError('Campaign schema is not migrated yet. Run supabase/migrations/014_campaign_content_posting_foundation.sql.')
       return
     }
     if (isCampaignsAccessDenied(exception)) {
       setSchemaMissing(false)
       setPolicyBlocked(true)
+      setRefreshRecommended(false)
       setError(CAMPAIGNS_ACCESS_POLICY_MESSAGE)
+      return
+    }
+    if (isCampaignStaleStateError(exception)) {
+      setSchemaMissing(false)
+      setPolicyBlocked(false)
+      setRefreshRecommended(true)
+      setError('Campaign data changed while this action was running. Refresh and retry.')
       return
     }
     setSchemaMissing(false)
     setPolicyBlocked(false)
+    setRefreshRecommended(false)
     setError(exception instanceof Error ? exception.message : String(exception))
+  }, [])
+
+  const markMutationSuccess = useCallback((message?: string) => {
+    setSyncState('ok')
+    setRefreshRecommended(false)
+    if (message) setInfoMessage(message)
   }, [])
 
   const loadData = useCallback(async () => {
     setSyncState('syncing')
     setError(null)
+    setRefreshRecommended(false)
     setExportJobsLoading(true)
     try {
       const exportJobsPromise = appUser?.user_id
@@ -1076,18 +1422,22 @@ export default function CampaignsPage() {
         }).catch(() => [])
         : Promise.resolve([])
 
-      const [campaignRows, contentRows, assetRows, jobs] = await Promise.all([
+      const [campaignRows, contentRows, assetRows, jobs, assetsSupported] = await Promise.all([
         listCampaigns(),
         listCampaignContentItems(),
         listCampaignAssets(),
         exportJobsPromise,
+        isCampaignAssetsTableAvailable().catch(() => true),
       ])
       setCampaigns(campaignRows)
       setContentItems(contentRows)
       setAssets(assetRows)
       setExportJobs(jobs)
+      setCampaignAssetsAvailable(assetsSupported)
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
       setSchemaMissing(false)
       setPolicyBlocked(false)
+      setRefreshRecommended(false)
       setSyncState('ok')
     } catch (exception) {
       setSyncState('error')
@@ -1201,6 +1551,18 @@ export default function CampaignsPage() {
     }
   }, [contentItems, reasonModalState])
 
+  useEffect(() => {
+    if (!adminOverrideModalState) return
+    const row = contentItems.find(item => item.id === adminOverrideModalState.contentId)
+    if (!row) {
+      setAdminOverrideModalState(null)
+      setAdminOverrideAction('reset-draft')
+      setAdminOverrideReason('')
+      setAdminOverridePostUrl('')
+      setAdminOverrideError(null)
+    }
+  }, [adminOverrideModalState, contentItems])
+
   const upsertContentItem = useCallback((row: CampaignContentItem) => {
     setServerReportSummary(null)
     setServerReportGroupings(null)
@@ -1251,58 +1613,113 @@ export default function CampaignsPage() {
         created_by: appUser.user_id,
       })
       setCampaigns(previous => [created, ...previous])
-      setSyncState('ok')
+      setSelectedCampaignId(created.id)
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess(`Campaign created: ${created.name}.`)
       return created
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException])
+
+  const saveCampaignDetailFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    if (!campaignDetailDraft.name.trim()) {
+      setError('Campaign name is required.')
+      return
+    }
+    if (campaignDetailDateError) {
+      setError(campaignDetailDateError)
+      return
+    }
+
+    const keywords = campaignDetailDraft.keywords
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean)
+
+    setCampaignDetailSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        {
+          name: campaignDetailDraft.name,
+          description: campaignDetailDraft.description,
+          offer_definition: campaignDetailDraft.offerDefinition,
+          target_audience: campaignDetailDraft.targetAudience,
+          primary_cta: campaignDetailDraft.primaryCta,
+          keywords,
+          start_date: campaignDetailDraft.startDate || null,
+          end_date: campaignDetailDraft.endDate || null,
+          cadence_rule: buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset),
+          status: campaignDetailDraft.status,
+        },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setCampaignDetailDraft(buildCampaignDetailDraft(updated))
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess('Campaign details saved.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setCampaignDetailSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDateError,
+    campaignDetailDraft,
+    markMutationSuccess,
+    selectedCampaign,
+    setErrorFromException,
+  ])
 
   const createContentDraftFromInput = useCallback(async (payload: {
-    title: string
-    body: string
-    topic: string
+    title?: string
+    body?: string
+    topic?: string
     contentType: CampaignContentItem['content_type']
     campaignId?: string | null
   }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
+    const trimmedTitle = (payload.title || '').trim()
+    const trimmedBody = (payload.body || '').trim()
+    if (!trimmedTitle && !trimmedBody) {
+      throw new Error('Draft requires a title or body.')
+    }
+    const fallbackTitle = trimmedBody
+      ? trimmedBody.replace(/\s+/g, ' ').slice(0, 72)
+      : 'Untitled draft'
+    const normalizedTitle = trimmedTitle || fallbackTitle || 'Untitled draft'
+    const normalizedTopic = (payload.topic || '').trim() || 'general'
+
     setSyncState('syncing')
     setError(null)
     try {
       const created = await createCampaignContentDraft({
-        title: payload.title,
-        body: payload.body,
-        topic: payload.topic,
+        title: normalizedTitle,
+        body: trimmedBody,
+        topic: normalizedTopic,
         content_type: payload.contentType,
         campaign_id: payload.campaignId || null,
         created_by: appUser.user_id,
       })
       upsertContentItem(created)
-      setSyncState('ok')
+      markMutationSuccess(`Draft created: ${created.title}.`)
       return created
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
-
-  const updateContentState = useCallback(async (action: () => Promise<CampaignContentItem>) => {
-    setSyncState('syncing')
-    setError(null)
-    try {
-      const updated = await action()
-      upsertContentItem(updated)
-      setSyncState('ok')
-      return updated
-    } catch (exception) {
-      setSyncState('error')
-      setErrorFromException(exception)
-      throw exception
-    }
-  }, [setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const claimFromInput = useCallback(async (payload: {
     contentId: string
@@ -1318,14 +1735,14 @@ export default function CampaignsPage() {
         scheduled_for: payload.scheduledFor || new Date().toISOString(),
       })
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Claimed content: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const addAssetFromInput = useCallback(async (payload: {
     contentId: string
@@ -1334,6 +1751,7 @@ export default function CampaignsPage() {
     url: string
   }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
+    if (!campaignAssetsAvailable) throw new Error('Campaign assets are not available in this environment.')
     setSyncState('syncing')
     setError(null)
     try {
@@ -1345,29 +1763,42 @@ export default function CampaignsPage() {
         created_by: appUser.user_id,
       })
       upsertAsset(created)
-      setSyncState('ok')
+      markMutationSuccess(`Asset added: ${created.title || 'untitled asset'}.`)
       return created
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertAsset])
+  }, [
+    appUser?.user_id,
+    campaignAssetsAvailable,
+    markMutationSuccess,
+    setErrorFromException,
+    upsertAsset,
+  ])
 
   const removeAssetFromInput = useCallback(async (assetId: string) => {
     if (!appUser?.user_id) throw new Error('No active user.')
+    if (!campaignAssetsAvailable) throw new Error('Campaign assets are not available in this environment.')
     setSyncState('syncing')
     setError(null)
     try {
       await removeCampaignAsset(assetId, appUser.user_id)
       removeAssetFromState(assetId)
-      setSyncState('ok')
+      markMutationSuccess('Asset removed.')
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, removeAssetFromState, setErrorFromException])
+  }, [
+    appUser?.user_id,
+    campaignAssetsAvailable,
+    markMutationSuccess,
+    removeAssetFromState,
+    setErrorFromException,
+  ])
 
   const savePostUrlFromInput = useCallback(async (payload: { contentId: string; postUrl: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1376,14 +1807,14 @@ export default function CampaignsPage() {
     try {
       const updated = await updateCampaignContentPostUrl(payload.contentId, appUser.user_id, payload.postUrl)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess('Post URL saved.')
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const submitReviewFromInput = useCallback(async (payload: { contentId: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1392,14 +1823,14 @@ export default function CampaignsPage() {
     try {
       const updated = await submitCampaignContentForReview(payload.contentId, appUser.user_id)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Submitted for review: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const approveFromInput = useCallback(async (payload: { contentId: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1408,14 +1839,14 @@ export default function CampaignsPage() {
     try {
       const updated = await approveCampaignContent(payload.contentId, appUser.user_id)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Approved: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const rejectFromInput = useCallback(async (payload: { contentId: string; reason: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1424,14 +1855,14 @@ export default function CampaignsPage() {
     try {
       const updated = await rejectCampaignContent(payload.contentId, appUser.user_id, payload.reason)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Rejected: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const unclaimFromInput = useCallback(async (payload: { contentId: string; reason: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1440,14 +1871,14 @@ export default function CampaignsPage() {
     try {
       const updated = await unclaimCampaignContent(payload.contentId, appUser.user_id, payload.reason)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Unclaimed: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const addReminderFromInput = useCallback(async (payload: {
     contentId: string
@@ -1464,14 +1895,14 @@ export default function CampaignsPage() {
         reminder_type: payload.reminderType,
         scheduled_for: payload.scheduledFor,
       })
-      setSyncState('ok')
+      markMutationSuccess('Reminder added.')
       return created
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException])
 
   const markPostedFromInput = useCallback(async (payload: { contentId: string; postUrl?: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1480,14 +1911,40 @@ export default function CampaignsPage() {
     try {
       const updated = await markCampaignContentPosted(payload.contentId, appUser.user_id, payload.postUrl || undefined)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess(`Marked posted: ${updated.title}.`)
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
+
+  const adminOverrideFromInput = useCallback(async (payload: {
+    contentId: string
+    action: CampaignAdminOverrideAction
+    reason: string
+    postUrl?: string
+  }) => {
+    if (!appUser?.user_id) throw new Error('No active user.')
+    if (!isAdmin) throw new Error('Admin permissions required for override.')
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const updated = await campaignAdminOverrideContent(payload.contentId, appUser.user_id, {
+        action: payload.action,
+        reason: payload.reason,
+        post_url: payload.postUrl || null,
+      })
+      upsertContentItem(updated)
+      markMutationSuccess(`Admin override applied: ${updated.title} is now ${updated.status}.`)
+      return updated
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+      throw exception
+    }
+  }, [appUser?.user_id, isAdmin, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const addPerformanceMetricsFromInput = useCallback(async (payload: {
     contentId: string
@@ -1512,14 +1969,14 @@ export default function CampaignsPage() {
         clicks: payload.clicks ?? null,
         conversion_count: payload.conversionCount ?? null,
       })
-      setSyncState('ok')
+      markMutationSuccess('Performance metrics saved.')
       return created
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException])
 
   const updateScheduleFromInput = useCallback(async (payload: { contentId: string; scheduledFor: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -1528,14 +1985,14 @@ export default function CampaignsPage() {
     try {
       const updated = await updateCampaignContentSchedule(payload.contentId, appUser.user_id, payload.scheduledFor)
       upsertContentItem(updated)
-      setSyncState('ok')
+      markMutationSuccess('Schedule updated.')
       return updated
     } catch (exception) {
       setSyncState('error')
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, setErrorFromException, upsertContentItem])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const addMetricsFromInput = useCallback((payload: {
     contentId: string
@@ -1629,7 +2086,7 @@ export default function CampaignsPage() {
         limit: 10,
       }).catch(() => null)
       if (latestJobs) setExportJobs(latestJobs)
-      setSyncState('ok')
+      markMutationSuccess('Campaign summary exported.')
       return 'Campaign summary exported via campaign export job.'
     } catch {
       downloadContent(
@@ -1637,13 +2094,14 @@ export default function CampaignsPage() {
         `campaign-summary-${new Date().toISOString().slice(0, 10)}.md`,
         'text/markdown;charset=utf-8',
       )
-      setSyncState('ok')
+      markMutationSuccess('Campaign summary exported.')
       return 'Campaign summary exported to markdown.'
     }
   }, [
     appUser?.email,
     appUser?.user_id,
     campaigns,
+    markMutationSuccess,
     reportFiltersApplied.campaignId,
     reportFiltersApplied.contentType,
     reportFiltersApplied.endDate,
@@ -1698,6 +2156,7 @@ export default function CampaignsPage() {
   }, [appUser?.email, appUser?.user_id, loadData, loadReportSummary])
 
   const resetContentFiltersFromInput = useCallback(() => {
+    setContentLibraryViewMode('action')
     setContentLibraryFilters({
       query: '',
       status: 'all',
@@ -1796,6 +2255,59 @@ export default function CampaignsPage() {
     }
   }, [reasonModalInput, reasonModalState, rejectFromInput, unclaimFromInput])
 
+  const closeAdminOverrideModalFromInput = useCallback(() => {
+    if (adminOverrideRunning) return
+    setAdminOverrideModalState(null)
+    setAdminOverrideAction('reset-draft')
+    setAdminOverrideReason('')
+    setAdminOverridePostUrl('')
+    setAdminOverrideError(null)
+  }, [adminOverrideRunning])
+
+  const openAdminOverrideModalFromInput = useCallback((item: CampaignContentItem) => {
+    setAdminOverrideModalState({
+      contentId: item.id,
+      title: item.title,
+      currentStatus: item.status,
+    })
+    setAdminOverrideAction(item.status === 'posted' ? 'force-unclaimed' : 'reset-draft')
+    setAdminOverrideReason('')
+    setAdminOverridePostUrl(item.post_url || '')
+    setAdminOverrideError(null)
+  }, [])
+
+  const submitAdminOverrideModalFromInput = useCallback(async () => {
+    if (!adminOverrideModalState) return
+    const reason = adminOverrideReason.trim()
+    const postUrl = adminOverridePostUrl.trim()
+    if (!reason) {
+      setAdminOverrideError('Override reason is required.')
+      return
+    }
+    if (postUrl && !isHttpUrl(postUrl)) {
+      setAdminOverrideError('Post URL must start with `http://` or `https://`.')
+      return
+    }
+
+    setAdminOverrideRunning(true)
+    setAdminOverrideError(null)
+    try {
+      await adminOverrideFromInput({
+        contentId: adminOverrideModalState.contentId,
+        action: adminOverrideAction,
+        reason,
+        postUrl: adminOverrideAction === 'force-posted' ? postUrl : undefined,
+      })
+      setAdminOverrideModalState(null)
+      setAdminOverrideAction('reset-draft')
+      setAdminOverrideReason('')
+      setAdminOverridePostUrl('')
+      setAdminOverrideError(null)
+    } finally {
+      setAdminOverrideRunning(false)
+    }
+  }, [adminOverrideAction, adminOverrideModalState, adminOverridePostUrl, adminOverrideReason, adminOverrideFromInput])
+
   const runBulkReviewFromInput = useCallback(async (
     action: 'approve' | 'reject',
     rejectionReasonInput?: string,
@@ -1840,12 +2352,12 @@ export default function CampaignsPage() {
       setSyncState('error')
       setError(`Bulk ${action} completed with ${failed} failure(s).`)
     } else {
-      setSyncState('ok')
+      markMutationSuccess()
     }
     setReviewBulkMessage(`Bulk ${action} complete: ${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}.`)
     setReviewBulkRunning(false)
     return true
-  }, [appUser?.user_id, isAdmin, selectedReviewIds, upsertContentItem])
+  }, [appUser?.user_id, isAdmin, markMutationSuccess, selectedReviewIds, upsertContentItem])
 
   const applyReportPreset = useCallback((preset: CampaignReportPreset) => {
     const range = getPresetDateRange(preset)
@@ -1905,11 +2417,85 @@ export default function CampaignsPage() {
   }, [appUser?.email, appUser?.user_id])
 
   function toggleSidebar() { setSidebarOpen(open => !open) }
-  function closeSidebar() { setSidebarOpen(false) }
+  const closeSidebar = useCallback(() => { setSidebarOpen(false) }, [])
 
-  function jumpTo(section: CampaignSection) {
+  const jumpTo = useCallback((section: CampaignSection) => {
+    if (sectionPageMode) {
+      router.push(SECTION_TO_ROUTE[section])
+      closeSidebar()
+      return
+    }
     const anchorId = SECTION_TO_ANCHOR[section]
     document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [closeSidebar, router, sectionPageMode])
+
+  function shouldRenderSection(section: CampaignSection) {
+    return !sectionPageMode || routedSection === section
+  }
+
+  const openContentLibraryFromInput = useCallback((payload?: {
+    viewMode?: ContentLibraryViewMode
+    status?: ContentLibraryFilters['status']
+    ownership?: ContentLibraryFilters['ownership']
+  }) => {
+    setContentFocusId('')
+    setContentLibraryViewMode(payload?.viewMode || 'all')
+    setContentLibraryFilters(previous => ({
+      ...previous,
+      query: '',
+      status: payload?.status ?? 'all',
+      campaignId: '',
+      ownership: payload?.ownership ?? 'all',
+      contentType: 'all',
+    }))
+    jumpTo('content')
+  }, [jumpTo])
+
+  const openReviewQueueFromInput = useCallback(() => {
+    jumpTo('review')
+  }, [jumpTo])
+
+  const openCalendarFromInput = useCallback(() => {
+    setCalendarSort('overdue-first')
+    jumpTo('calendar')
+  }, [jumpTo])
+
+  const openReportsFromInput = useCallback(() => {
+    jumpTo('reports')
+  }, [jumpTo])
+
+  async function copyToClipboard(text: string) {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setInfoMessage('Copied content to clipboard.')
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setInfoMessage('Copied content to clipboard.')
+    }
+  }
+
+  function focusContentFromInput(contentId: string) {
+    const item = contentItems.find(row => row.id === contentId)
+    if (!item) return
+    setContentFocusId(contentId)
+    setContentLibraryViewMode('all')
+    setContentLibraryFilters(previous => ({
+      ...previous,
+      query: '',
+      status: 'all',
+      campaignId: item.campaign_id || previous.campaignId,
+      ownership: 'all',
+    }))
+    jumpTo('content')
   }
 
   function downloadIcs(item: CampaignContentItem) {
@@ -1927,7 +2513,9 @@ export default function CampaignsPage() {
 
   const flows = useMemo(
     () => buildCampaignFlows({
+      isAdmin,
       campaigns,
+      allContent: contentItems,
       draftContent: queueDraft,
       needsReviewContent: queueNeedsReview,
       unclaimedContent: queueUnclaimed,
@@ -1970,12 +2558,19 @@ export default function CampaignsPage() {
       addReminder: payload => addReminderFromInput(payload),
       markPosted: payload => markPostedFromInput(payload),
       addPostUrl: payload => savePostUrlFromInput(payload),
+      adminOverrideContent: payload => adminOverrideFromInput(payload),
       addPerformanceMetrics: payload => addMetricsFromInput(payload),
       exportSummary: () => exportSummaryFromInput(),
       getSummary: () => reportSummary,
+      openContentLibrary: payload => openContentLibraryFromInput(payload),
+      openReviewQueue: () => openReviewQueueFromInput(),
+      openCalendar: () => openCalendarFromInput(),
+      openReports: () => openReportsFromInput(),
     }),
     [
+      isAdmin,
       campaigns,
+      contentItems,
       queueDraft,
       queueNeedsReview,
       queueUnclaimed,
@@ -1984,7 +2579,6 @@ export default function CampaignsPage() {
       createCampaignFromInput,
       createContentDraftFromInput,
       claimFromInput,
-      contentItems,
       addAssetFromInput,
       submitReviewFromInput,
       approveFromInput,
@@ -1993,9 +2587,14 @@ export default function CampaignsPage() {
       addReminderFromInput,
       markPostedFromInput,
       savePostUrlFromInput,
+      adminOverrideFromInput,
       addMetricsFromInput,
       exportSummaryFromInput,
       reportSummary,
+      openContentLibraryFromInput,
+      openReviewQueueFromInput,
+      openCalendarFromInput,
+      openReportsFromInput,
     ],
   )
 
@@ -2004,25 +2603,31 @@ export default function CampaignsPage() {
       let run: () => void
       switch (command.id) {
         case 'open-content-library':
-          run = () => jumpTo('content')
+          run = () => openContentLibraryFromInput({ viewMode: 'all', status: 'all', ownership: 'all' })
           break
         case 'open-unclaimed-content':
-          run = () => jumpTo('content')
+          run = () => openContentLibraryFromInput({ viewMode: 'action', status: 'unclaimed', ownership: 'unclaimed' })
           break
         case 'open-my-claimed':
-          run = () => jumpTo('calendar')
+          run = () => openCalendarFromInput()
           break
         case 'open-review-queue':
-          run = () => jumpTo('review')
+          run = () => openReviewQueueFromInput()
           break
         case 'open-calendar':
-          run = () => jumpTo('calendar')
+          run = () => openCalendarFromInput()
           break
         case 'open-reports':
-          run = () => jumpTo('reports')
+          run = () => openReportsFromInput()
+          break
+        case 'show-campaign-summary':
+          run = () => openReportsFromInput()
           break
         case 'export-campaign-summary':
           run = () => { void exportSummaryFromInput() }
+          break
+        case 'admin-override-content':
+          run = () => openContentLibraryFromInput({ viewMode: 'all', status: 'all', ownership: 'all' })
           break
         default:
           run = () => {}
@@ -2050,7 +2655,21 @@ export default function CampaignsPage() {
         void loadReportSummary()
       },
     })
-  }, [campaigns.length, contentItems.length, flows, loadData, loadReportSummary, policyBlocked, reportSummary.waiting_review_count, schemaMissing])
+  }, [
+    campaigns.length,
+    contentItems.length,
+    flows,
+    loadData,
+    loadReportSummary,
+    openCalendarFromInput,
+    openContentLibraryFromInput,
+    openReportsFromInput,
+    openReviewQueueFromInput,
+    policyBlocked,
+    reportSummary.waiting_review_count,
+    schemaMissing,
+    exportSummaryFromInput,
+  ])
 
   useRegisterOliver(oliverConfig)
 
@@ -2066,11 +2685,41 @@ export default function CampaignsPage() {
       <nav className="app-sidebar" id="sidebar" aria-label="Campaign content navigation">
         <ModuleSidebarHeader title="Campaign Content & Posting" />
         <div className="app-sidebar-section">
-          <button type="button" className="app-sidebar-item" onClick={() => jumpTo('list')}>Campaigns</button>
-          <button type="button" className="app-sidebar-item" onClick={() => jumpTo('content')}>Content Library</button>
-          <button type="button" className="app-sidebar-item" onClick={() => jumpTo('review')}>Review Queue</button>
-          <button type="button" className="app-sidebar-item" onClick={() => jumpTo('calendar')}>Calendar</button>
-          <button type="button" className="app-sidebar-item" onClick={() => jumpTo('reports')}>Reports</button>
+          <Link
+            href={SECTION_TO_ROUTE.list}
+            className={'app-sidebar-item' + (activeSidebarSection === 'list' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Campaigns
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.content}
+            className={'app-sidebar-item' + (activeSidebarSection === 'content' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Content Library
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.review}
+            className={'app-sidebar-item' + (activeSidebarSection === 'review' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Review Queue
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.calendar}
+            className={'app-sidebar-item' + (activeSidebarSection === 'calendar' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Calendar
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.reports}
+            className={'app-sidebar-item' + (activeSidebarSection === 'reports' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Reports
+          </Link>
         </div>
       </nav>
 
@@ -2097,10 +2746,27 @@ export default function CampaignsPage() {
         </ModuleTopbar>
 
         <main className="page campaign-workspace" id="main-content">
-          <CampaignsLanding />
+          {shouldRenderSection('list') && <CampaignsLanding />}
 
           {error && (
-            <div className="status-banner" role="alert">{error}</div>
+            <div className="status-banner" role="alert">
+              <span>{error}</span>
+              {refreshRecommended && (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    void loadData()
+                    void loadReportSummary()
+                  }}
+                >
+                  Refresh Now
+                </button>
+              )}
+            </div>
+          )}
+          {infoMessage && (
+            <div className="status-banner status-banner-info" role="status">{infoMessage}</div>
           )}
           {reasonModalState && (
             <div
@@ -2161,8 +2827,93 @@ export default function CampaignsPage() {
               </div>
             </div>
           )}
+          {adminOverrideModalState && (
+            <div
+              className="app-modal-overlay"
+              onMouseDown={(event) => {
+                if (event.target !== event.currentTarget) return
+                closeAdminOverrideModalFromInput()
+              }}
+            >
+              <div
+                className="app-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="campaign-admin-override-modal-title"
+              >
+                <h3 className="app-modal-title" id="campaign-admin-override-modal-title">
+                  Admin Override Content
+                </h3>
+                <div className="app-modal-body">
+                  <p className="campaign-card-copy">
+                    Apply an admin lifecycle correction for "{adminOverrideModalState.title}" ({adminOverrideModalState.currentStatus}).
+                  </p>
+                  <label className="campaign-filter-control">
+                    <span className="campaign-card-copy">Override action</span>
+                    <select
+                      className="app-modal-input"
+                      aria-label="Admin override action"
+                      value={adminOverrideAction}
+                      onChange={(event) => {
+                        setAdminOverrideAction(event.target.value as CampaignAdminOverrideAction)
+                        if (adminOverrideError) setAdminOverrideError(null)
+                      }}
+                    >
+                      <option value="reset-draft">Reset to Draft</option>
+                      <option value="force-unclaimed">Force Unclaimed</option>
+                      <option value="force-posted">Force Posted</option>
+                    </select>
+                  </label>
+                  <textarea
+                    className="app-modal-input"
+                    aria-label="Admin override reason"
+                    rows={3}
+                    value={adminOverrideReason}
+                    onChange={(event) => {
+                      setAdminOverrideReason(event.target.value)
+                      if (adminOverrideError) setAdminOverrideError(null)
+                    }}
+                    placeholder="Explain why this override is required"
+                  />
+                  <input
+                    className="app-modal-input"
+                    aria-label="Admin override post URL"
+                    placeholder="https://linkedin.com/posts/... (optional)"
+                    value={adminOverridePostUrl}
+                    onChange={(event) => {
+                      setAdminOverridePostUrl(event.target.value)
+                      if (adminOverrideError) setAdminOverrideError(null)
+                    }}
+                    disabled={adminOverrideAction !== 'force-posted'}
+                  />
+                  {adminOverrideError && (
+                    <p className="campaign-card-rejection">{adminOverrideError}</p>
+                  )}
+                </div>
+                <div className="app-modal-actions">
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    onClick={closeAdminOverrideModalFromInput}
+                    disabled={adminOverrideRunning}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => { void submitAdminOverrideModalFromInput() }}
+                    disabled={adminOverrideRunning}
+                  >
+                    Apply Override
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <section id="campaigns-list" className="campaign-section">
+          {shouldRenderSection('list') && (
+            <section id="campaigns-list" className="campaign-section">
             <h2 className="campaign-section-title">Campaigns</h2>
             <p className="campaign-section-subtitle">Create and maintain campaign strategy records.</p>
             <form
@@ -2260,6 +3011,285 @@ export default function CampaignsPage() {
               <button className="btn btn--primary" type="submit" disabled={schemaMissing || policyBlocked || !!campaignDateError}>Save Campaign</button>
             </form>
 
+            {campaigns.length > 0 && (
+              <article className="card campaign-card campaign-detail-card">
+                <div className="campaign-row-head">
+                  <h3 className="campaign-card-title">Campaign Detail Workspace</h3>
+                  <span className="campaign-pill">{selectedCampaign?.status || 'draft'}</span>
+                </div>
+                <p className="campaign-card-copy">
+                  Edit campaign strategy fields, review lifecycle buckets, and scan recent campaign activity.
+                </p>
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Selected Campaign</span>
+                  <select
+                    className="input"
+                    value={selectedCampaignId}
+                    onChange={(event) => setSelectedCampaignId(event.target.value)}
+                  >
+                    {campaigns.map(campaign => (
+                      <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                    ))}
+                  </select>
+                </label>
+                {selectedCampaign && (
+                  <>
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Name</span>
+                        <input
+                          className="input"
+                          value={campaignDetailDraft.name}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, name: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Primary CTA</span>
+                        <input
+                          className="input"
+                          value={campaignDetailDraft.primaryCta}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, primaryCta: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Target Audience</span>
+                        <input
+                          className="input"
+                          value={campaignDetailDraft.targetAudience}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, targetAudience: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Offer Definition</span>
+                        <input
+                          className="input"
+                          value={campaignDetailDraft.offerDefinition}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, offerDefinition: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                    <label className="campaign-filter-control">
+                      <span className="campaign-card-copy">Description</span>
+                      <textarea
+                        className="ta"
+                        rows={3}
+                        value={campaignDetailDraft.description}
+                        onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, description: event.target.value }))}
+                      />
+                    </label>
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Keywords (comma separated)</span>
+                        <input
+                          className="input"
+                          placeholder="campaign execution, thought leadership"
+                          value={campaignDetailDraft.keywords}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, keywords: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Cadence</span>
+                        <select
+                          className="input"
+                          value={campaignDetailDraft.cadencePreset}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, cadencePreset: event.target.value as CampaignCadencePreset }))}
+                        >
+                          {CAMPAIGN_CADENCE_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Start Date</span>
+                        <input
+                          className="input"
+                          type="date"
+                          value={campaignDetailDraft.startDate}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, startDate: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">End Date</span>
+                        <input
+                          className="input"
+                          type="date"
+                          value={campaignDetailDraft.endDate}
+                          onChange={(event) => setCampaignDetailDraft(prev => ({ ...prev, endDate: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                    {campaignDetailDateError && (
+                      <p className="campaign-card-rejection">{campaignDetailDateError}</p>
+                    )}
+                    <div className="campaign-chip-row">
+                      {CAMPAIGN_STATUS_OPTIONS.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={'btn btn--secondary btn--sm' + (campaignDetailDraft.status === option.value ? ' campaign-chip-active' : '')}
+                          onClick={() => setCampaignDetailDraft(prev => ({ ...prev, status: option.value }))}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="campaign-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        onClick={() => { void saveCampaignDetailFromInput() }}
+                        disabled={schemaMissing || policyBlocked || campaignDetailSaving || !campaignDetailDirty || !!campaignDetailDateError}
+                      >
+                        {campaignDetailSaving ? 'Saving…' : 'Save Campaign Detail'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setCampaignDetailDraft(buildCampaignDetailDraft(selectedCampaign))}
+                        disabled={campaignDetailSaving || !campaignDetailDirty}
+                      >
+                        Reset Changes
+                      </button>
+                    </div>
+
+                    <div className="campaign-grid campaign-grid-wide campaign-detail-slices">
+                      <article className="card campaign-card">
+                        <h4 className="campaign-card-title">Lifecycle Groups</h4>
+                        <div className="campaign-status-grid">
+                          <span className="campaign-status-chip">Draft {selectedCampaignContentByStatus.draft.length}</span>
+                          <span className="campaign-status-chip">Review {selectedCampaignContentByStatus.needs_review.length}</span>
+                          <span className="campaign-status-chip">Unclaimed {selectedCampaignContentByStatus.unclaimed.length}</span>
+                          <span className="campaign-status-chip">Claimed {selectedCampaignContentByStatus.claimed.length}</span>
+                          <span className="campaign-status-chip">Posted {selectedCampaignContentByStatus.posted.length}</span>
+                        </div>
+                        <p className="campaign-card-copy">
+                          Use these groups to gauge queue health before running reminders or export.
+                        </p>
+                        {selectedCampaignStats?.openSlotsThisWeek != null && (
+                          <p className="campaign-card-copy">
+                            Cadence: {selectedCampaignStats.cadenceLabel}
+                            {' · '}
+                            Open slots this week: {selectedCampaignStats.openSlotsThisWeek}
+                            {' · '}
+                            Scheduled this week: {selectedCampaignStats.scheduledThisWeek}
+                            {selectedCampaignStats.nextOpenSlotDate ? ` · Next open slot: ${selectedCampaignStats.nextOpenSlotDate}` : ''}
+                          </p>
+                        )}
+                        <div className="campaign-lifecycle-groups">
+                          {selectedCampaignLifecycleGroups.map(group => (
+                            <section key={`group-${group.key}`} className="campaign-lifecycle-group">
+                              <div className="campaign-row-head">
+                                <h5 className="campaign-card-title">{group.label} ({group.items.length})</h5>
+                                {group.items.length > 3 && (
+                                  <button
+                                    type="button"
+                                    className="btn btn--secondary btn--sm"
+                                    onClick={() => {
+                                      setContentLibraryViewMode('all')
+                                      setContentLibraryFilters(prev => ({ ...prev, status: group.key as ContentLibraryFilters['status'], campaignId: selectedCampaign.id }))
+                                      jumpTo('content')
+                                    }}
+                                  >
+                                    View All
+                                  </button>
+                                )}
+                              </div>
+                              {group.items.length === 0 ? (
+                                <p className="campaign-card-copy">No content in this state.</p>
+                              ) : (
+                                <ul className="campaign-detail-list">
+                                  {group.items.slice(0, 3).map(item => (
+                                    <li key={`${group.key}-${item.id}`} className="campaign-detail-list-item">
+                                      <button
+                                        type="button"
+                                        className="btn btn--secondary btn--sm"
+                                        onClick={() => focusContentFromInput(item.id)}
+                                      >
+                                        {item.title}
+                                      </button>
+                                      <span>{new Date(item.updated_at || item.created_at).toLocaleDateString()}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </section>
+                          ))}
+                        </div>
+                      </article>
+                      <article className="card campaign-card">
+                        <h4 className="campaign-card-title">Upcoming Claimed</h4>
+                        {selectedCampaignUpcomingClaimed.length === 0 ? (
+                          <p className="campaign-card-copy">No upcoming claimed posts.</p>
+                        ) : (
+                          <ul className="campaign-detail-list">
+                            {selectedCampaignUpcomingClaimed.map(item => (
+                              <li key={`upcoming-${item.id}`} className="campaign-detail-list-item">
+                                <button
+                                  type="button"
+                                  className="btn btn--secondary btn--sm"
+                                  onClick={() => focusContentFromInput(item.id)}
+                                >
+                                  {item.title}
+                                </button>
+                                <span>{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString() : 'Not scheduled'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </article>
+                      <article className="card campaign-card">
+                        <h4 className="campaign-card-title">Recent Posted</h4>
+                        {selectedCampaignRecentPosted.length === 0 ? (
+                          <p className="campaign-card-copy">No posted items yet.</p>
+                        ) : (
+                          <ul className="campaign-detail-list">
+                            {selectedCampaignRecentPosted.map(item => (
+                              <li key={`posted-${item.id}`} className="campaign-detail-list-item">
+                                <button
+                                  type="button"
+                                  className="btn btn--secondary btn--sm"
+                                  onClick={() => focusContentFromInput(item.id)}
+                                >
+                                  {item.title}
+                                </button>
+                                <span>{item.posted_at ? new Date(item.posted_at).toLocaleString() : 'Posted'}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </article>
+                      <article className="card campaign-card">
+                        <h4 className="campaign-card-title">Activity Timeline</h4>
+                        {selectedCampaignActivity.length === 0 ? (
+                          <p className="campaign-card-copy">No activity logged yet for this campaign.</p>
+                        ) : (
+                          <ul className="campaign-detail-list">
+                            {selectedCampaignActivity.map(log => (
+                              <li key={log.id} className="campaign-detail-list-item">
+                                <div className="campaign-detail-activity-copy">
+                                  <span>{humanizeActionType(log.action_type)}</span>
+                                  <span className="campaign-card-copy">
+                                    By {log.performed_by || 'system'}
+                                    {log.entity_type ? ` · ${log.entity_type}` : ''}
+                                  </span>
+                                  {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                    <span className="campaign-card-copy">
+                                      {JSON.stringify(log.metadata)}
+                                    </span>
+                                  )}
+                                </div>
+                                <span>{new Date(log.timestamp).toLocaleString()}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </article>
+                    </div>
+                  </>
+                )}
+              </article>
+            )}
+
             {loading && <div className="card">Loading campaigns…</div>}
             {!loading && campaigns.length === 0 && <div className="card">No campaigns yet. Start with one campaign record.</div>}
             {campaigns.map(campaign => {
@@ -2268,7 +3298,7 @@ export default function CampaignsPage() {
                 ? `${campaign.start_date || 'Start TBD'} to ${campaign.end_date || 'End TBD'}`
                 : 'No date range set'
               return (
-                <article key={campaign.id} className="card campaign-card">
+                <article key={campaign.id} className={'card campaign-card' + (selectedCampaignId === campaign.id ? ' campaign-card-focus' : '')}>
                   <div className="campaign-row-head">
                     <h3 className="campaign-card-title">{campaign.name}</h3>
                     <span className="campaign-pill">{campaign.status}</span>
@@ -2292,6 +3322,13 @@ export default function CampaignsPage() {
                     <p className="campaign-cadence-note">Next open slot: {stats.nextOpenSlotDate}</p>
                   )}
                   <div className="campaign-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => setSelectedCampaignId(campaign.id)}
+                    >
+                      View Details
+                    </button>
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm"
@@ -2370,16 +3407,18 @@ export default function CampaignsPage() {
                 )}
               </article>
             )}
-          </section>
+            </section>
+          )}
 
-          <section id="campaigns-content" className="campaign-section">
+          {shouldRenderSection('content') && (
+            <section id="campaigns-content" className="campaign-section">
             <h2 className="campaign-section-title">Content Library</h2>
             <p className="campaign-section-subtitle">Create drafts, submit for review, claim unclaimed content, and mark posted.</p>
             <form
               className="card campaign-form"
               onSubmit={(event) => {
                 event.preventDefault()
-                if (!contentDraft.title.trim() || !contentDraft.body.trim() || !contentDraft.topic.trim()) return
+                if (!contentDraft.title.trim() && !contentDraft.body.trim()) return
                 void createContentDraftFromInput({
                   title: contentDraft.title,
                   body: contentDraft.body,
@@ -2437,6 +3476,30 @@ export default function CampaignsPage() {
 
             <article className="card campaign-card">
               <h3 className="campaign-card-title">Content Filters</h3>
+              <div className="campaign-card-actions">
+                <button
+                  type="button"
+                  className={'btn btn--secondary btn--sm' + (contentLibraryViewMode === 'action' ? ' campaign-chip-active' : '')}
+                  onClick={() => setContentLibraryViewMode('action')}
+                >
+                  Action Queue
+                </button>
+                <button
+                  type="button"
+                  className={'btn btn--secondary btn--sm' + (contentLibraryViewMode === 'all' ? ' campaign-chip-active' : '')}
+                  onClick={() => setContentLibraryViewMode('all')}
+                >
+                  All Content
+                </button>
+              </div>
+              <p className="campaign-card-copy">
+                Unclaimed: {contentActionSummary.unclaimed}
+                {' · '}
+                My Claimed: {contentActionSummary.myClaimed}
+                {' · '}
+                My Drafts: {contentActionSummary.myDrafts}
+                {isAdmin ? ` · Needs Review: ${contentActionSummary.reviewQueue}` : ''}
+              </p>
               <div className="campaign-form-grid">
                 <label className="campaign-filter-control">
                   <span className="campaign-card-copy">Search</span>
@@ -2507,25 +3570,46 @@ export default function CampaignsPage() {
                   </select>
                 </label>
               </div>
-              <div className="campaign-card-actions">
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--sm"
-                  onClick={resetContentFiltersFromInput}
+              {activeContentFilterChips.length > 0 && (
+                <div className="campaign-chip-row">
+                  {activeContentFilterChips.map(chip => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      className="btn btn--secondary btn--sm campaign-filter-chip"
+                      onClick={chip.onRemove}
+                    >
+                      {chip.label} ✕
+                    </button>
+                  ))}
+                </div>
+              )}
+                  <div className="campaign-card-actions">
+                    {!campaignAssetsAvailable && (
+                      <p className="campaign-card-rejection">Campaign assets are unavailable until campaign_assets is provisioned.</p>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={resetContentFiltersFromInput}
                 >
                   Reset Content Filters
                 </button>
               </div>
               <p className="campaign-card-copy">
-                Showing {filteredContentItems.length} of {contentItems.length} items.
+                Showing {contentLibraryVisibleItems.length} of {contentItems.length} items.
               </p>
             </article>
 
             {!loading && contentItems.length === 0 && <div className="card">No content items yet.</div>}
-            {!loading && contentItems.length > 0 && filteredContentItems.length === 0 && (
-              <div className="card">No content matches current filters.</div>
+            {!loading && contentItems.length > 0 && contentLibraryVisibleItems.length === 0 && (
+              <div className="card">
+                {contentLibraryViewMode === 'action'
+                  ? 'No items in the action queue. Switch to All Content to browse historical/posted items.'
+                  : 'No content matches current filters.'}
+              </div>
             )}
-            {filteredContentItems.map(item => {
+            {contentLibraryVisibleItems.map(item => {
               const itemAssets = assetsByContentId.get(item.id) || []
               const assetDraft = assetDraftByContentId[item.id] || { title: '', url: '' }
               const assetUrlValid = !assetDraft.url.trim() || isHttpUrl(assetDraft.url)
@@ -2536,7 +3620,7 @@ export default function CampaignsPage() {
               const canManageClaim = item.status === 'claimed' && (item.posting_owner_id === appUser?.user_id || isAdmin)
               const canUpdatePostUrl = (item.status === 'claimed' || item.status === 'posted') && (item.posting_owner_id === appUser?.user_id || isAdmin)
               return (
-                <article key={item.id} className="card campaign-card">
+                <article key={item.id} className={'card campaign-card' + (contentFocusId === item.id ? ' campaign-card-focus' : '')}>
                   <div className="campaign-row-head">
                     <h3 className="campaign-card-title">{item.title}</h3>
                     <span className="campaign-pill">{item.status}</span>
@@ -2545,6 +3629,17 @@ export default function CampaignsPage() {
                   <p className="campaign-card-copy">{item.body || 'No body content.'}</p>
                   {item.campaign_id && (
                     <p className="campaign-card-copy">Campaign: {campaignNameById.get(item.campaign_id) || item.campaign_id}</p>
+                  )}
+                  {item.status === 'claimed' && (
+                    <p className="campaign-card-copy">
+                      Owner: {item.posting_owner_id || 'Unassigned'}
+                      {item.scheduled_for ? ` · Scheduled: ${new Date(item.scheduled_for).toLocaleString()}` : ' · Unscheduled'}
+                    </p>
+                  )}
+                  {item.status === 'posted' && (
+                    <p className="campaign-card-copy">
+                      Posted: {item.posted_at ? new Date(item.posted_at).toLocaleString() : 'n/a'}
+                    </p>
                   )}
                   {item.rejection_reason && (
                     <p className="campaign-error-note">Rejected: {item.rejection_reason}</p>
@@ -2567,7 +3662,7 @@ export default function CampaignsPage() {
                             onClick={() => {
                               void removeAssetFromInput(asset.id).catch(() => {})
                             }}
-                            disabled={schemaMissing || policyBlocked}
+                            disabled={schemaMissing || policyBlocked || !campaignAssetsAvailable}
                           >
                             Remove Asset
                           </button>
@@ -2612,7 +3707,7 @@ export default function CampaignsPage() {
                           setAssetDraftByContentId(prev => ({ ...prev, [item.id]: { title: '', url: '' } }))
                         }).catch(() => {})
                       }}
-                      disabled={schemaMissing || policyBlocked || !assetDraft.title.trim() || !assetDraft.url.trim() || !assetUrlValid}
+                      disabled={schemaMissing || policyBlocked || !campaignAssetsAvailable || !assetDraft.title.trim() || !assetDraft.url.trim() || !assetUrlValid}
                     >
                       Add Asset
                     </button>
@@ -2672,12 +3767,19 @@ export default function CampaignsPage() {
                   )}
 
                   <div className="campaign-chip-row">
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => { void copyToClipboard(item.body || '') }}
+                    >
+                      Copy Body
+                    </button>
                     {item.status === 'draft' && item.created_by === appUser?.user_id && (
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
                         onClick={() => {
-                          void updateContentState(() => submitCampaignContentForReview(item.id, appUser.user_id))
+                          void submitReviewFromInput({ contentId: item.id }).catch(() => {})
                         }}
                         disabled={schemaMissing || policyBlocked}
                       >
@@ -2701,8 +3803,7 @@ export default function CampaignsPage() {
                         type="button"
                         className="btn btn--secondary btn--sm"
                         onClick={() => {
-                          if (!appUser?.user_id) return
-                          void updateContentState(() => markCampaignContentPosted(item.id, appUser.user_id))
+                          void markPostedFromInput({ contentId: item.id }).catch(() => {})
                         }}
                         disabled={schemaMissing || policyBlocked}
                       >
@@ -2721,13 +3822,25 @@ export default function CampaignsPage() {
                         Unclaim
                       </button>
                     )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => openAdminOverrideModalFromInput(item)}
+                        disabled={schemaMissing || policyBlocked || adminOverrideRunning}
+                      >
+                        Admin Override
+                      </button>
+                    )}
                   </div>
                 </article>
               )
             })}
-          </section>
+            </section>
+          )}
 
-          <section id="campaigns-review" className="campaign-section">
+          {shouldRenderSection('review') && (
+            <section id="campaigns-review" className="campaign-section">
             <h2 className="campaign-section-title">Review Queue</h2>
             <p className="campaign-section-subtitle">Approve or reject content that is waiting for review.</p>
             {!isAdmin && <div className="card">Review actions are admin-only.</div>}
@@ -2899,8 +4012,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => {
-                      if (!appUser?.user_id) return
-                      void updateContentState(() => approveCampaignContent(item.id, appUser.user_id))
+                      void approveFromInput({ contentId: item.id }).catch(() => {})
                     }}
                     disabled={!isAdmin || schemaMissing || policyBlocked || reviewBulkRunning}
                   >
@@ -2919,9 +4031,11 @@ export default function CampaignsPage() {
                 </div>
               </article>
             ))}
-          </section>
+            </section>
+          )}
 
-          <section id="campaigns-calendar" className="campaign-section">
+          {shouldRenderSection('calendar') && (
+            <section id="campaigns-calendar" className="campaign-section">
             <h2 className="campaign-section-title">Calendar and Reminders</h2>
             <p className="campaign-section-subtitle">Date-grouped visibility for claimed, posted, missed, and open-slot coverage.</p>
             <article className="card campaign-card">
@@ -3090,6 +4204,17 @@ export default function CampaignsPage() {
                               {entry.campaignLabel}
                               {entry.channel ? ` · ${entry.channel}` : ''}
                             </p>
+                            {entry.contentId && (
+                              <div className="campaign-card-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn--secondary btn--sm"
+                                  onClick={() => focusContentFromInput(entry.contentId || '')}
+                                >
+                                  Open Content
+                                </button>
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -3122,15 +4247,28 @@ export default function CampaignsPage() {
                   <p className="campaign-card-copy">Campaign: {campaignNameById.get(item.campaign_id) || item.campaign_id}</p>
                 )}
                 <div className="campaign-chip-row">
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => { void copyToClipboard(item.body || '') }}
+                  >
+                    Copy Body
+                  </button>
                   <button type="button" className="btn btn--secondary btn--sm" onClick={() => downloadIcs(item)}>
                     Download ICS
                   </button>
                   <button
                     type="button"
                     className="btn btn--secondary btn--sm"
+                    onClick={() => focusContentFromInput(item.id)}
+                  >
+                    Open in Library
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
                     onClick={() => {
-                      if (!appUser?.user_id) return
-                      void updateContentState(() => markCampaignContentPosted(item.id, appUser.user_id, item.post_url || undefined))
+                      void markPostedFromInput({ contentId: item.id, postUrl: item.post_url || undefined }).catch(() => {})
                     }}
                     disabled={schemaMissing || policyBlocked}
                   >
@@ -3139,9 +4277,11 @@ export default function CampaignsPage() {
                 </div>
               </article>
             ))}
-          </section>
+            </section>
+          )}
 
-          <section id="campaigns-reports" className="campaign-section">
+          {shouldRenderSection('reports') && (
+            <section id="campaigns-reports" className="campaign-section">
             <h2 className="campaign-section-title">Reports</h2>
             <p className="campaign-section-subtitle">Current execution summary across content lifecycle states.</p>
             <article className="card campaign-card">
@@ -3420,7 +4560,8 @@ export default function CampaignsPage() {
                 )}
               </article>
             )}
-          </section>
+            </section>
+          )}
         </main>
       </div>
     </div>

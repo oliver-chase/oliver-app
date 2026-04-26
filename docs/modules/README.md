@@ -10,6 +10,7 @@ Use this index to jump directly to module-specific context and execution guidanc
 - [SDR](./sdr.md)
 - [Slides](./slides.md)
 - [Campaigns](./campaigns.md)
+- [Campaigns Gap Analysis (2026-04-25)](./campaigns-gap-analysis-2026-04-25.md)
 - [Reviews](./reviews.md)
 - [CRM](./crm.md)
 
