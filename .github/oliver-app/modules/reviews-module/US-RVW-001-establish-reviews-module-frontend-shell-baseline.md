@@ -1,7 +1,7 @@
 ---
 ID: US-RVW-001
 Title: Establish Reviews Module Frontend Shell Baseline
-Status: Done
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 ---
@@ -31,3 +31,14 @@ QA Checkpoints:
   - [ ] Main content container remaps to full-width (`left=0`) and remains legible with tabs/forms/cards.
 - [ ] Data/error parity:
   - [ ] Schema-missing and policy-blocked states remain visible and actionable at both viewport sizes.
+
+QA / Evidence:
+- [x] `npm run lint` passed (`/tmp/reviews-lint-2026-04-26.log`, exit_code=0).
+- [x] `npm run build` passed (`/tmp/reviews-build-2026-04-26.log`, exit_code=0).
+- [x] `npm run typecheck` passed after build refresh (`/tmp/reviews-typecheck-2026-04-26.log`, exit_code=0).
+- [ ] `npm run test:smoke` blocked by environment: Playwright webserver cannot bind (`/tmp/reviews-smoke-desktop-2026-04-26.log`, exit_code=1, EPERM on `0.0.0.0:3001`).
+- [ ] `npm run test:smoke:mobile` blocked by environment: Playwright webserver cannot bind (`/tmp/reviews-smoke-mobile-2026-04-26.log`, exit_code=1, EPERM on `0.0.0.0:3002`).
+
+Outstanding Gate Notes:
+- [ ] Manual/automated QA evidence not yet attached; keep this story `In Progress` until shell parity, mobile checks, and scroll/command checks are executed and logged.
+- Shell parity and command-anchor checks remain blocked until QA environment can run Playwright webserver locally.

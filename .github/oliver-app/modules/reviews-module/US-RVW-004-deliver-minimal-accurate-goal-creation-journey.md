@@ -1,7 +1,7 @@
 ---
 ID: US-RVW-004
 Title: Deliver Minimal and Accurate Goal Creation Journey
-Status: Not Started
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 ---
@@ -19,3 +19,12 @@ Acceptance Criteria:
 - [ ] Goal cards show status, progress, and update count in a scannable format with no redundant metadata.
 - [ ] Progress/status controls are explicit and reversible, with state transitions logged in module data.
 
+QA / Evidence:
+- [x] `npm run lint` passed (`/tmp/reviews-lint-2026-04-26.log`, exit_code=0).
+- [x] `npm run typecheck` passed (`/tmp/reviews-typecheck-2026-04-26.log`, exit_code=0).
+- [x] `npm run build` passed (`/tmp/reviews-build-2026-04-26.log`, exit_code=0).
+- [ ] Browser flow checks for goal create/validation/save/retry are pending.
+- [ ] Playwright smoke execution blocked in this environment (`/tmp/reviews-smoke-desktop-2026-04-26.log`, EPERM bind).
+
+Outstanding Gate Notes:
+- Keep `In Progress` until goal create/edit/validation states are executed in browser QA and artifacts are attached.

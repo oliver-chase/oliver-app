@@ -1,7 +1,7 @@
 ---
 ID: US-IDN-006
 Title: Design Person 360 Frontend Journey for Admin and Management
-Status: Not Started
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 ---
@@ -19,3 +19,12 @@ Acceptance Criteria:
 - [ ] Loading/empty/error states are section-scoped so one failing module does not collapse the full profile.
 - [ ] Mobile and desktop layouts keep key identity and review status visible without excessive scrolling.
 
+QA / Evidence:
+- [x] `npm run lint` passed (`/tmp/reviews-lint-2026-04-26.log`, exit_code=0).
+- [x] `npm run typecheck` passed (`/tmp/reviews-typecheck-2026-04-26.log`, exit_code=0).
+- [x] `npm run build` passed (`/tmp/reviews-build-2026-04-26.log`, exit_code=0).
+- [ ] Frontend journey validation for role gating, section ordering, and source-module deep links is pending.
+- [ ] Mobile/desktop visual QA remains blocked on Playwright webserver bind in this environment (`/tmp/reviews-smoke-desktop-2026-04-26.log`).
+
+Outstanding Gate Notes:
+- Keep `In Progress` until person-360 UI path and responsive state behavior are executed in browser QA with artifacts.
