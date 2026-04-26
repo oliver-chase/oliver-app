@@ -86,6 +86,13 @@ function parseStylesheetHref(styleSheet: HTMLLinkElement, baseUrl: string): stri
   return resolved
 }
 
+interface InlinedStyleChunk {
+  cssText: string
+  source: 'inline' | 'external'
+  order: number
+  linkHref?: string
+}
+
 async function fetchWithTimeout(url: string, timeoutMs = 1500): Promise<string | null> {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => {
@@ -111,34 +118,60 @@ async function fetchWithTimeout(url: string, timeoutMs = 1500): Promise<string |
   }
 }
 
-async function inlineExternalStylesheets(doc: Document, warnings: string[]): Promise<string> {
-  const stylesheets = Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"][href]'))
-  if (stylesheets.length === 0) return ''
+async function inlineExternalStylesheets(doc: Document, warnings: string[]): Promise<InlinedStyleChunk[]> {
+  const styleNodes = Array.from(
+    doc.querySelectorAll('style,link[rel~="stylesheet"][href]'),
+  ) as Array<HTMLStyleElement | HTMLLinkElement>
+  if (styleNodes.length === 0) return []
 
   warnings.push(
     'Detected ' +
-    stylesheets.length +
-    ' linked stylesheet reference' +
-    (stylesheets.length === 1 ? '' : 's') +
-    '; attempting to inline linked CSS for fidelity.',
+    styleNodes.length +
+    ' style definition block' +
+    (styleNodes.length === 1 ? '' : 's') +
+    '; attempting to inline stylesheet resources for fidelity.',
   )
 
-  const baseUrl = doc.baseURI || window.location.href
-  const fetched = await Promise.allSettled(
-    stylesheets.map((stylesheet) => {
-      const href = parseStylesheetHref(stylesheet, baseUrl)
-      if (!href) return Promise.resolve(null)
-      return fetchWithTimeout(href).then((cssText) => ({ href, cssText }))
-    }),
+  const baseUrl = doc.baseURI && !doc.baseURI.startsWith('about:') ? doc.baseURI : window.location.href
+  const stylesheetNodes = styleNodes.filter(
+    (styleNode): styleNode is HTMLLinkElement => styleNode.tagName.toLowerCase() === 'link',
   )
+  const linkByNode = new Map<HTMLLinkElement, Promise<string | null>>()
+  for (const stylesheet of stylesheetNodes) {
+    const href = parseStylesheetHref(stylesheet, baseUrl)
+    linkByNode.set(stylesheet, href ? fetchWithTimeout(href).then((cssText) => cssText) : Promise.resolve(null))
+  }
+  const fetched = await Promise.allSettled(Array.from(linkByNode.values()))
 
-  const inlinedStyles: string[] = []
-  fetched.forEach((entry) => {
-    if (entry.status !== 'fulfilled' || !entry.value?.cssText) return
-    inlinedStyles.push(entry.value.cssText)
-  })
+  const inlinedStyles: InlinedStyleChunk[] = []
+  let linkResultCursor = 0
+  let unresolvedCount = 0
 
-  const unresolvedCount = stylesheets.length - inlinedStyles.length
+  for (let index = 0; index < styleNodes.length; index += 1) {
+    const node = styleNodes[index]
+    if (node.tagName.toLowerCase() === 'style') {
+      const cssText = node.textContent || ''
+      if (cssText.trim()) {
+        inlinedStyles.push({ cssText, source: 'inline', order: index })
+      }
+      continue
+    }
+
+    const result = fetched[linkResultCursor]
+    linkResultCursor += 1
+    if (result?.status === 'fulfilled' && result.value) {
+      inlinedStyles.push({
+        cssText: result.value,
+        source: 'external',
+        order: index,
+        linkHref: node.getAttribute('href') || undefined,
+      })
+      continue
+    }
+
+    unresolvedCount += 1
+  }
+
   if (unresolvedCount > 0) {
     warnings.push(
       'Could not inline ' +
@@ -149,7 +182,7 @@ async function inlineExternalStylesheets(doc: Document, warnings: string[]): Pro
     )
   }
 
-  return inlinedStyles.join('\n')
+  return inlinedStyles.sort((a, b) => a.order - b.order)
 }
 
 function parseInlineStyle(styleValue: string): Record<string, string> {
@@ -612,7 +645,7 @@ function measureContentBounds(
   }
 }
 
-function buildRenderSnapshot(doc: Document, root: HTMLElement, additionalCss: string): RenderSnapshot {
+function buildRenderSnapshot(doc: Document, root: HTMLElement, styleChunks: InlinedStyleChunk[]): RenderSnapshot {
   if (typeof document === 'undefined' || !document.body) {
     return {
       root: null,
@@ -632,15 +665,12 @@ function buildRenderSnapshot(doc: Document, root: HTMLElement, additionalCss: st
   sandbox.style.zIndex = '-1'
   sandbox.style.overflow = 'hidden'
 
-  const styleChunks = Array.from(doc.querySelectorAll('style'))
-    .map((styleEl) => styleEl.textContent || '')
-    .filter(Boolean)
-  if (additionalCss) {
-    styleChunks.push(additionalCss)
-  }
   if (styleChunks.length > 0) {
     const styleEl = document.createElement('style')
-    styleEl.textContent = styleChunks.join('\n')
+    styleEl.textContent = styleChunks
+      .map(({ cssText }) => cssText)
+      .filter(Boolean)
+      .join('\n')
     sandbox.appendChild(styleEl)
   }
 
@@ -745,10 +775,9 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
   }
 
   const warnings: string[] = []
-  const inlinedStyles = await inlineExternalStylesheets(doc, warnings)
-  const styleSources = Array.from(doc.querySelectorAll('style'))
-    .map((styleNode) => styleNode.textContent || '')
-    .filter(Boolean)
+  const inlinedStyleChunks = await inlineExternalStylesheets(doc, warnings)
+  const styleSources = inlinedStyleChunks
+    .map(({ cssText }) => cssText)
     .join('\n')
     .toLowerCase()
   if (styleSources.includes('::before') || styleSources.includes('::after')) {
@@ -763,7 +792,7 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
   if (root.querySelector('video')) {
     warnings.push('Detected video elements; video playback layers are not imported as editable slide components.')
   }
-  const renderSnapshot = buildRenderSnapshot(doc, root, inlinedStyles)
+  const renderSnapshot = buildRenderSnapshot(doc, root, inlinedStyleChunks)
 
   try {
     const rootStyle = parseInlineStyle(root.getAttribute('style') || '')
