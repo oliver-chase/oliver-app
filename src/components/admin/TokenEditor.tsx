@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { listTokenOverrides, upsertToken, type DesignToken } from '@/lib/tokens'
+import { AppNotice } from '@/components/shared/AppNotice'
 import styles from './admin.module.css'
 
 // Token categories surfaced from tokens.css
@@ -92,11 +93,11 @@ export function TokenEditor() {
 
   return (
     <div className={styles.tokenEditor}>
-      {error && <div className={styles.errorBanner} role="alert">Token save failed: {error}</div>}
+      {error && <AppNotice tone="error">Token save failed: {error}</AppNotice>}
       {editing && (
-        <div className={styles.previewBanner}>
+        <AppNotice tone="info">
           Live preview active — changes apply to this page in real time. Save to persist or Cancel to revert.
-        </div>
+        </AppNotice>
       )}
       {categories.map(cat => (
         <div key={cat} className={styles.tokenGroup}>

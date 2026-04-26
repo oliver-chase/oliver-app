@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-210
 Title: Content and asset schema foundation
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-210

@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-CHAT-811
 Title: Guided claim/create/summary flows
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-CHAT-811

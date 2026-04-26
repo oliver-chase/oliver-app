@@ -31,6 +31,23 @@ Implementation execution started on 2026-04-25 with the following delivered foun
 21. Replaced remaining prompt-based review/content actions (single reject and unclaim) with reusable reason modal UX and added campaign e2e coverage for modal validation and reject payload propagation.
 22. Added calendar timeline workspace controls (weekly/monthly/list windows + window navigation) with date-grouped claimed/posted/missed/open-slot visibility backed by cadence-aware open-slot computation and campaign e2e coverage.
 23. Added campaign schedule density heatmap (next 14 days) with campaign focus selector, cadence-vs-scheduled coverage metrics, and one-click "Focus Schedule" action to sync calendar campaign filters.
+24. Added campaign detail workspace with campaign selector, editable strategy/cadence fields, save/reset controls, and lifecycle summaries tied to the selected campaign context.
+25. Added campaign detail slices for upcoming claimed posts, recent posted posts, and activity timeline with one-click “Open Content” navigation into the content library.
+26. Added copy-first FE actions (`Copy Body`) to content-library and claimed-queue cards plus inline success feedback banner for clipboard and save confirmations.
+27. Extended content-library and claimed-calendar search matching to include campaign names (not just title/topic/body) to align with PRD search coverage.
+28. Added role-aware content-library default mode (`Action Queue`) that emphasizes unclaimed, my-claimed, my-draft, and admin review work while hiding posted items until users switch to `All Content`.
+29. Added content-library active filter chips with one-click per-filter removal (including view-mode chip), plus campaign e2e coverage for default action-queue behavior and chip-driven filter reset.
+30. Hardened mutation feedback with consistent success messaging across campaign actions (create/update/claim/review/post/schedule/assets/reminders/metrics/export) using module-standard status banners.
+31. Added stale-transition conflict handling with explicit `Refresh Now` recovery prompt (for invalid-state/not-found race conditions) and campaign e2e coverage for refresh-and-retry workflow.
+32. Expanded campaign detail workspace with lifecycle group sections (Draft/Needs Review/Unclaimed/Claimed/Posted) showing top items + deep links into the content library, plus cadence open-slot context in detail view.
+33. Enriched campaign activity timeline rows with humanized action labels, actor/entity context, and metadata snapshot text for faster audit scanning.
+34. Hardened campaign asset read-path for partially migrated environments by treating missing `campaign_assets` schema-cache errors (`PGRST205`) as empty-state reads, and added e2e coverage proving workspace load continuity when assets table is absent.
+35. Removed remaining hardcoded campaign spacing/radius layout values in module CSS (topbar z-index, page-bottom padding, chip radii, micro gaps) to keep campaign layout on required design-system tokens.
+36. Added admin-override lifecycle contract (`campaign_admin_override`) with required reason metadata, transactional state correction, and audit logging path for corrective admin actions.
+37. Added campaign export dedupe using filter-signature fingerprinting in `/api/campaigns` to reuse duplicate export jobs within a bounded window and avoid duplicate write spam during retries.
+38. Added chatbot parity upgrades for campaign quick-open commands (content/review/calendar/reports routing) and admin-override flow coverage so chat-triggered navigation mirrors click-path behavior.
+39. Synced campaign user-story statuses from `Not Started` to `Done`/`In Progress` to align backlog metadata with delivered campaign implementation.
+40. Added campaign query/rollout/DoD gate documentation (`campaign-rollout-and-dod-gates.md`) with explain-plan procedure, slow-query thresholds, rollout controls, and manual signoff checklist coverage.
 
 Remaining tickets below continue to be source-of-truth for completion and hardening.
 

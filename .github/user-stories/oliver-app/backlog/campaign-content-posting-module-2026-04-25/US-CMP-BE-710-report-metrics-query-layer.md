@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-710
 Title: Report metrics query layer
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-710

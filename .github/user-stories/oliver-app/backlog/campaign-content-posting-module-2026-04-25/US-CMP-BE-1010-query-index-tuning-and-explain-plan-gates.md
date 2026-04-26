@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-1010
 Title: Query/index tuning and explain-plan gates
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-1010

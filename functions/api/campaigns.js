@@ -7,6 +7,7 @@ import { jsonResponse, errorResponse } from './_shared/ai.js';
 
 const MAX_EXPORT_LIMIT = 200;
 const MAX_REPORT_ROWS = 10000;
+const EXPORT_DEDUPE_WINDOW_MS = 10 * 60 * 1000;
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -200,6 +201,25 @@ function parseFilters(input) {
   };
 }
 
+function canonicalizeForJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalizeForJson);
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => [key, canonicalizeForJson(nested)]);
+    return Object.fromEntries(entries);
+  }
+  return value;
+}
+
+function buildExportFingerprint(input) {
+  const canonicalFilters = canonicalizeForJson(input && typeof input === 'object' ? input : {});
+  return JSON.stringify({
+    format: asString(input.format || 'markdown') || 'markdown',
+    filters: canonicalFilters,
+  });
+}
+
 function dateToIsoOrNull(value, endOfDay = false) {
   if (!value) return null;
   const trimmed = value.trim();
@@ -385,7 +405,88 @@ async function insertCampaignActivity(env, payload) {
   });
 }
 
+function normalizeExportRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    id: row.id,
+    requested_by_user_id: row.requested_by_user_id,
+    format: row.format,
+    filters: row.filters || {},
+    status: row.status,
+    file_name: row.file_name || null,
+    file_payload: row.file_payload || null,
+    error_message: row.error_message || null,
+    requested_at: row.requested_at || null,
+    completed_at: row.completed_at || null,
+  };
+}
+
+function isFingerprintColumnMissing(result) {
+  const message = String(result?.text || '').toLowerCase();
+  return (
+    message.includes('request_fingerprint')
+    && (
+      message.includes('column')
+      || message.includes('schema cache')
+      || message.includes('does not exist')
+      || message.includes('pgrst')
+    )
+  );
+}
+
+async function findExistingExportByFingerprint(env, input) {
+  const now = Date.now();
+  const cutoffIso = new Date(now - EXPORT_DEDUPE_WINDOW_MS).toISOString();
+  const path = [
+    '/rest/v1/campaign_report_exports?select=id,requested_by_user_id,format,filters,status,file_name,file_payload,error_message,requested_at,completed_at',
+    '&requested_by_user_id=eq.' + encodeURIComponent(input.requestedBy),
+    '&request_fingerprint=eq.' + encodeURIComponent(input.fingerprint),
+    '&status=in.(queued,running,completed)',
+    '&requested_at=gte.' + encodeURIComponent(cutoffIso),
+    '&order=requested_at.desc',
+    '&limit=1',
+  ].join('');
+
+  const existing = await supabaseJson(env, path);
+  if (!existing.ok) {
+    if (isFingerprintColumnMissing(existing)) {
+      return { ok: true, row: null, fingerprintSupported: false };
+    }
+    return {
+      ok: false,
+      status: existing.status,
+      error: 'Failed to load existing campaign export dedupe rows: ' + existing.text,
+      row: null,
+      fingerprintSupported: true,
+    };
+  }
+
+  const rows = Array.isArray(existing.data) ? existing.data : [];
+  return { ok: true, row: normalizeExportRow(rows[0] || null), fingerprintSupported: true };
+}
+
 async function createExportJob(env, input) {
+  const existing = await findExistingExportByFingerprint(env, {
+    requestedBy: input.requestedBy,
+    fingerprint: input.fingerprint,
+  });
+  if (!existing.ok) {
+    return {
+      ok: false,
+      status: existing.status,
+      error: existing.error,
+      row: null,
+      deduped: false,
+    };
+  }
+  if (existing.row) {
+    return {
+      ok: true,
+      row: existing.row,
+      deduped: true,
+    };
+  }
+
   const insert = await supabaseJson(env, '/rest/v1/campaign_report_exports', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -393,6 +494,7 @@ async function createExportJob(env, input) {
       requested_by_user_id: input.requestedBy,
       format: input.format,
       filters: input.filters,
+      request_fingerprint: existing.fingerprintSupported ? input.fingerprint : null,
       status: 'completed',
       file_name: input.fileName,
       file_payload: input.payload,
@@ -406,11 +508,12 @@ async function createExportJob(env, input) {
       status: insert.status,
       error: 'Failed to store campaign export job: ' + insert.text,
       row: null,
+      deduped: false,
     };
   }
 
   const rows = Array.isArray(insert.data) ? insert.data : [];
-  return { ok: true, row: rows[0] || null };
+  return { ok: true, row: normalizeExportRow(rows[0] || null), deduped: false };
 }
 
 function parseFormat(raw) {
@@ -560,6 +663,7 @@ export async function onRequestPost(context) {
   if (action === 'request-report-export') {
     const filters = parseFilters(body.filters || {});
     const format = parseFormat(body.format || 'markdown');
+    const fingerprint = buildExportFingerprint({ format, filters });
 
     const result = await generateSummaryAndGroupings(env, filters);
     if (!result.ok) return errorResponse(result.error, result.status || 500);
@@ -576,6 +680,7 @@ export async function onRequestPost(context) {
       requestedBy: authz.actor.user_id,
       format,
       filters,
+      fingerprint,
       fileName,
       payload,
     });
@@ -584,20 +689,22 @@ export async function onRequestPost(context) {
     await insertCampaignActivity(env, {
       entity_type: 'campaign-report',
       entity_id: created.row?.id || 'unknown',
-      action_type: 'report-export-generated',
+      action_type: created.deduped ? 'report-export-deduped' : 'report-export-generated',
       performed_by: authz.actor.user_id,
       metadata: {
         format,
         filters,
+        deduped: !!created.deduped,
       },
     });
 
     return jsonResponse({
       ok: true,
       job: created.row,
+      deduped: !!created.deduped,
       summary: result.summary,
       groupings: result.groupings,
-    }, 201);
+    }, created.deduped ? 200 : 201);
   }
 
   if (action === 'download-report-export') {

@@ -1,6 +1,6 @@
 # Mobile Responsive Baseline (Cross-App)
 
-Last updated: April 25, 2026
+Last updated: April 26, 2026
 
 ## Purpose
 
@@ -32,9 +32,13 @@ No PR is considered complete unless mobile behavior is production-usable for cha
 - Dedicated mobile click-path audit spec exists (`tests/e2e/mobile-clickpaths.spec.ts`).
 - CI now runs desktop + mobile smoke in `.github/workflows/ci.yml`.
 - README now states mobile-first baseline and required smoke coverage.
+- Accounts detail tap-target contention around the floating Oliver trigger was remediated for phone viewports:
+  - trigger now anchors left on `/accounts` mobile route,
+  - accounts shell has additional bottom clearance on mobile,
+  - mobile click-path E2E now asserts the trigger is in the left half of the viewport on account detail.
 - Latest verified run in this session:
   - `npm run test:smoke` passed (82 tests).
-  - `npm run test:smoke:mobile` passed (3 tests).
+  - `npm run test:smoke:mobile` passed (4 tests).
   - `npm run test:smoke:all` passed (desktop + mobile).
 
 ### Tesknota
@@ -51,8 +55,6 @@ No PR is considered complete unless mobile behavior is production-usable for cha
 - Full manual mobile UX remediation of every screen/state in every module is not complete.
 - Full click-path coverage for every possible edge branch is not complete (coverage is strong for current smoke paths, not exhaustive).
 - Full mobile visual regression coverage across all modules is not complete.
-- Known risk to revisit in Oliver App:
-  - Accounts detail view can still produce tap-target contention around the floating Oliver trigger in some mobile states; this needs direct UI remediation, not only test coverage.
 
 ## Required Definition of Done for Future Work
 

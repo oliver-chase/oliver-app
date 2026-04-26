@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-911
 Title: Backend transition validator and error taxonomy
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-911

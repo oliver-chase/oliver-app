@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-912
 Title: Loading, success, and failure state standardization
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-912

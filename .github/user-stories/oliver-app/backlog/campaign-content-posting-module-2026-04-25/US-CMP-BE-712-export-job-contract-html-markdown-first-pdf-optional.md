@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-712
 Title: Export job contract (HTML/markdown first, PDF optional)
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-712

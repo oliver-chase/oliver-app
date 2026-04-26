@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { PublicClientApplication, AccountInfo } from '@azure/msal-browser'
+import { recordStartupTiming } from '@/lib/startup-telemetry'
 
 type AuthContextType = {
   account: AccountInfo | null
@@ -54,9 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false
 
     async function init() {
+      const authBootStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
       if (E2E_AUTH_BYPASS) {
         setAccount(getBypassAccount())
         setIsReady(true)
+        const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - authBootStartedAt
+        recordStartupTiming('auth_bootstrap_ms', elapsed, '/')
         return
       }
 
@@ -81,6 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setIsReady(true)
+      const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - authBootStartedAt
+      recordStartupTiming('auth_bootstrap_ms', elapsed, '/')
     }
 
     init().catch(console.error)

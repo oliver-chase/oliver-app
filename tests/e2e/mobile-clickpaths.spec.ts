@@ -98,6 +98,13 @@ async function mockCampaignSupabaseReads(page: Page) {
   })
 }
 
+async function openCampaignSidebar(page: Page) {
+  const toggle = page.getByRole('button', { name: /toggle navigation/i })
+  await expect(toggle).toBeVisible()
+  await toggle.click()
+  await expect(page.locator('nav#sidebar.app-sidebar.open')).toBeVisible()
+}
+
 test.describe('mobile click-path audit', () => {
   test.beforeEach(async ({ page }) => {
     await seedQaAuth(page)
@@ -216,5 +223,29 @@ test.describe('mobile click-path audit', () => {
     }
 
     await expect(page.getByText('Report Filters')).toBeVisible()
+  })
+
+  test('campaign mobile sidebar links are tappable and route correctly', async ({ page }) => {
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page).toHaveURL(/\/campaigns\/?$/)
+
+    const navLinks = [
+      { name: 'Campaigns', expectedUrl: /\/campaigns\/campaigns\/?$/ },
+      { name: 'Content Library', expectedUrl: /\/campaigns\/content\/?$/ },
+      { name: 'Review Queue', expectedUrl: /\/campaigns\/review-queue\/?$/ },
+      { name: 'Calendar', expectedUrl: /\/campaigns\/calendar\/?$/ },
+      { name: 'Reports', expectedUrl: /\/campaigns\/reports\/?$/ },
+    ]
+
+    for (const navLink of navLinks) {
+      await openCampaignSidebar(page)
+      await page
+        .getByRole('navigation', { name: 'Campaign content navigation' })
+        .getByRole('link', { name: navLink.name })
+        .first()
+        .click()
+      await expect(page).toHaveURL(navLink.expectedUrl)
+      await expectNoHorizontalOverflow(page, `/campaigns nav ${navLink.name}`)
+    }
   })
 })

@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-312
 Title: Reviewer decision modals and creator feedback display
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-312

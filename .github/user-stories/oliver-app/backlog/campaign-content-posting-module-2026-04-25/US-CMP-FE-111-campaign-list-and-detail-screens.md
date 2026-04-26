@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-111
 Title: Campaign list and detail screens
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-111

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 /* NOTE: visibleModules MUST be memoized. oliverConfig depends on it, and
    useRegisterOliver writes config into OliverProvider state on every change.
    An unstable array ref here = infinite render loop = Links stop working.
@@ -8,8 +8,10 @@ import { useMemo } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useUser } from '@/context/UserContext'
+import { AppNotice } from '@/components/shared/AppNotice'
 import { HubModuleList } from '@/components/hub/HubModuleList'
 import { getHubModules } from '@/modules/registry'
+import { recordStartupTiming } from '@/lib/startup-telemetry'
 import styles from './hub.module.css'
 
 const HUB_MODULES = getHubModules()
@@ -19,7 +21,9 @@ type PermissionState = 'loading' | 'error' | 'ready' | 'unassigned'
 
 export default function HubPage() {
   const { appUser, isAdmin, hasPermission, isLoading, loadError, refreshUser } = useUser()
-  const { account, logout } = useAuth()
+  const { account, logout, isReady } = useAuth()
+  const startupMarksRef = useRef({ permissionFilter: false, firstInteractive: false })
+  const hubStartMsRef = useRef<number>(typeof performance !== 'undefined' ? performance.now() : Date.now())
 
   const permissionState: PermissionState = isLoading
     ? 'loading'
@@ -29,18 +33,45 @@ export default function HubPage() {
         ? 'ready'
         : 'unassigned'
 
-  const visibleModules = useMemo(
-    () => HUB_MODULES.filter(m => {
-      if (permissionState !== 'ready') return false
-      if (m.comingSoon) return false
-      return hasPermission(m.id)
-    }),
+  const visibleModulesMeasure = useMemo(
+    () => {
+      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      const modules = HUB_MODULES.filter(m => {
+        if (permissionState !== 'ready') return false
+        if (m.comingSoon) return false
+        return hasPermission(m.id)
+      })
+      const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt
+      return { modules, durationMs: elapsed }
+    },
     [hasPermission, permissionState],
   )
+  const visibleModules = visibleModulesMeasure.modules
+
+  useEffect(() => {
+    if (permissionState !== 'ready') return
+    if (startupMarksRef.current.permissionFilter) return
+    startupMarksRef.current.permissionFilter = true
+    recordStartupTiming('permission_filter_ms', visibleModulesMeasure.durationMs, '/')
+  }, [permissionState, visibleModulesMeasure.durationMs])
+
+  useEffect(() => {
+    if (!isReady || permissionState === 'loading') return
+    if (startupMarksRef.current.firstInteractive) return
+    startupMarksRef.current.firstInteractive = true
+    const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - hubStartMsRef.current
+    recordStartupTiming('hub_interactive_ms', elapsed, '/')
+  }, [isReady, permissionState])
 
   // Hub intentionally does not register an Oliver config. The dock only
   // lives inside each module (Accounts, HR, SDR, …). The hub is pure nav.
   void visibleModules
+  const isStartupLoading = !isReady || permissionState === 'loading'
+  const subtitle = !isReady
+    ? 'Checking sign-in…'
+    : permissionState === 'loading'
+      ? 'Loading permissions…'
+      : 'Internal Operations Hub'
 
   return (
     <>
@@ -65,30 +96,30 @@ export default function HubPage() {
       <div className={styles.hub}>
         {loadError && (
           <div className={styles.statusRegion}>
-            <p className={styles.statusBanner}>
+            <AppNotice
+              tone="error"
+              actions={(
+                <button
+                  type="button"
+                  className={styles.statusBtn}
+                  onClick={() => { void refreshUser() }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Retrying…' : 'Retry Permissions'}
+                </button>
+              )}
+            >
               Permissions service unavailable. Module access is temporarily restricted until permissions can be verified.
-            </p>
-            <div className={styles.statusActions}>
-              <button
-                type="button"
-                className={styles.statusBtn}
-                onClick={() => { void refreshUser() }}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Retrying…' : 'Retry Permissions'}
-              </button>
-            </div>
+            </AppNotice>
           </div>
         )}
 
         <div className={styles.brand}>
           <div className={styles.wordmark}>V.Two Ops</div>
-          <div className={styles.subtitle}>
-            {permissionState === 'loading' ? 'Loading module access…' : 'Internal Operations Hub'}
-          </div>
+          <div className={styles.subtitle}>{subtitle}</div>
         </div>
 
-        {permissionState === 'loading' && (
+        {isStartupLoading && (
           <div className={styles.skeletonWrap} aria-hidden="true">
             {Array.from({ length: HUB_SKELETON_ROWS }).map((_, idx) => (
               <div key={idx} className={styles.skeletonCard} />
@@ -96,7 +127,7 @@ export default function HubPage() {
           </div>
         )}
 
-        {permissionState !== 'loading' && (
+        {!isStartupLoading && (
           permissionState === 'error'
             ? <p className={styles.empty}>Permissions are unavailable. Retry once service access is restored.</p>
             : visibleModules.length > 0

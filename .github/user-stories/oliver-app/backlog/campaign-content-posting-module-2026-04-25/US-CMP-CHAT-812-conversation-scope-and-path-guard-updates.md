@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-CHAT-812
 Title: Conversation scope and path guard updates
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-CHAT-812

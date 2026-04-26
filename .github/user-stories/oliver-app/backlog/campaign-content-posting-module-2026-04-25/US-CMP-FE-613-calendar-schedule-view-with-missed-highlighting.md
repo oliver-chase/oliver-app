@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-613
 Title: Calendar/schedule view with missed highlighting
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-613

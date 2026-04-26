@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-410
 Title: Role-aware default library views
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-410

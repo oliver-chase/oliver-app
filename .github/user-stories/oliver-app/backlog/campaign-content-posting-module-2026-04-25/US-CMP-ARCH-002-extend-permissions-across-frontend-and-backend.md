@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-ARCH-002
 Title: Extend permissions across frontend and backend
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-ARCH-002

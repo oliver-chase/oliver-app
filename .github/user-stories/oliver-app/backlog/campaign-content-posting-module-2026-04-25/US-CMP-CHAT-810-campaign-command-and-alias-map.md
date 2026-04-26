@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-CHAT-810
 Title: Campaign command and alias map
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-CHAT-810

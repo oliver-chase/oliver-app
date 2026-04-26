@@ -197,7 +197,7 @@ export function buildAdminFlows(ctx: Ctx): OliverFlow[] {
           id: 'token_name', prompt: 'Which token?', kind: 'choice',
           choices: TOKEN_NAMES.map(name => ({ label: name, value: name })),
         },
-        { id: 'token_value', prompt: 'New token value?', kind: 'text', placeholder: '#d43cff or 10px' },
+        { id: 'token_value', prompt: 'New token value?', kind: 'text', placeholder: 'var(--color-brand-pink) or var(--spacing-10)' },
       ],
       run: async (answers) => {
         const tokenName = asString(answers.token_name)

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "npm run check-tokens && npm run check-stories && npm run check-module-boundaries",
+    "lint": "npm run check-tokens && npm run check-guarded-token-drift && npm run check-stories && npm run check-module-boundaries",
     "test:contracts": "node --test tests/contracts/*.test.mjs",
     "test:smoke": "playwright test",
     "test:smoke:mobile": "playwright test --config=playwright.mobile.config.ts",
@@ -13,6 +13,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check-tokens": "node scripts/check-tokens.mjs",
+    "check-guarded-token-drift": "node scripts/check-guarded-token-drift.mjs",
     "check-stories": "node scripts/check-user-stories.mjs",
     "check-module-boundaries": "node scripts/check-module-boundaries.mjs",
     "check-epic-size": "node scripts/check-epic-size.mjs",

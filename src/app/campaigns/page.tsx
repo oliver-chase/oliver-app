@@ -14,6 +14,7 @@ import { CampaignsLanding } from '@/components/campaigns/CampaignsLanding'
 import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
 import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
 import { useUser } from '@/context/UserContext'
+import { buildCampaignIcsPayload } from '@/lib/campaign-ics'
 import {
   addCampaignPerformanceMetrics,
   approveCampaignContent,
@@ -206,29 +207,12 @@ const CAMPAIGN_CADENCE_OPTIONS: Array<{ value: CampaignCadencePreset; label: str
   { value: 'weekly-5', label: '5 Posts per Week' },
 ]
 
-function toIcsTimestamp(input: string) {
-  return input.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
-}
-
 function buildIcsPayload(item: CampaignContentItem, scheduledIso: string) {
-  const startIso = new Date(scheduledIso).toISOString()
-  const endIso = new Date(new Date(scheduledIso).getTime() + 30 * 60 * 1000).toISOString()
-  const title = item.title.replace(/[\r\n]+/g, ' ').trim()
-  const description = item.body.replace(/[\r\n]+/g, ' ').trim()
-  return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//V.Two//Campaign Content Posting//EN',
-    'BEGIN:VEVENT',
-    `UID:${item.id}@vtwo-campaigns`,
-    `DTSTAMP:${toIcsTimestamp(new Date().toISOString())}`,
-    `DTSTART:${toIcsTimestamp(startIso)}`,
-    `DTEND:${toIcsTimestamp(endIso)}`,
-    `SUMMARY:${title || 'Campaign posting reminder'}`,
-    `DESCRIPTION:${description || 'Review and post claimed campaign content.'}`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].join('\r\n')
+  return buildCampaignIcsPayload({
+    item,
+    scheduledIso,
+    modulePath: '/campaigns',
+  })
 }
 
 function isHttpUrl(value: string) {
@@ -1525,7 +1509,7 @@ export default function CampaignsPage() {
         listCampaignContentItems(),
         listCampaignAssets(),
         exportJobsPromise,
-        isCampaignAssetsTableAvailable().catch(() => true),
+        isCampaignAssetsTableAvailable().catch(() => false),
       ])
       setCampaigns(campaignRows)
       setContentItems(contentRows)
@@ -2792,7 +2776,7 @@ export default function CampaignsPage() {
         onClick={closeSidebar}
         aria-hidden="true"
       />
-      <nav className="app-sidebar" id="sidebar" aria-label="Campaign content navigation">
+      <nav className={'app-sidebar' + (sidebarOpen ? ' open' : '')} id="sidebar" aria-label="Campaign content navigation">
         <ModuleSidebarHeader title="Campaign Content & Posting" />
         <div className="app-sidebar-section">
           <Link

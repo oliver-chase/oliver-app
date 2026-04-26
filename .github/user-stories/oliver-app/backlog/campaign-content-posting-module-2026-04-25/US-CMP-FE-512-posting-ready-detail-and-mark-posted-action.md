@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-512
 Title: Posting-ready detail and mark-posted action
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-512

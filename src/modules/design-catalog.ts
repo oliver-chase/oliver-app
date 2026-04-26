@@ -41,6 +41,14 @@ export const DESIGN_COMPONENT_CATALOG: DesignComponentRecord[] = [
     notes: 'Shared module topbar shell with hamburger and right-slot actions.',
   },
   {
+    id: 'app-notice',
+    name: 'AppNotice',
+    group: 'Feedback',
+    source: 'src/components/shared/AppNotice.tsx',
+    status: 'active',
+    notes: 'Shared status/alert banner used across hub, admin, and slides surfaces.',
+  },
+  {
     id: 'admin-shell',
     name: 'AdminShell',
     group: 'Admin',

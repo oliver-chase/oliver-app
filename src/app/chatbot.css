@@ -507,6 +507,10 @@
     right: var(--spacing-md);
     bottom: 72px;
   }
+  .chatbot-trigger.chatbot-trigger--accounts-mobile-safe {
+    left: var(--spacing-md);
+    right: auto;
+  }
   .chatbot-panel {
     right: 0;
     bottom: 0;

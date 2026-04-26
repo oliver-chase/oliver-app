@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-910
 Title: Unified activity logging model
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-910

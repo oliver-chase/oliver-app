@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import AppBadge from '@/components/shared/AppBadge'
 import AppChip from '@/components/shared/AppChip'
+import { AppNotice } from '@/components/shared/AppNotice'
 import { ModuleCard } from '@/components/shared/ModuleCard'
 import styles from './admin.module.css'
 
@@ -48,6 +49,13 @@ export function ComponentLibrary() {
           <button className="btn btn--danger">Danger</button>
           <button className="btn btn--primary btn--sm">Small</button>
           <button className="btn btn--primary" disabled>Disabled</button>
+        </div>
+      </Section>
+
+      <Section title="Notices">
+        <div>
+          <AppNotice tone="info">Informational notice for non-destructive status updates.</AppNotice>
+          <AppNotice tone="error">Error notice for save/load failures with retry guidance.</AppNotice>
         </div>
       </Section>
 

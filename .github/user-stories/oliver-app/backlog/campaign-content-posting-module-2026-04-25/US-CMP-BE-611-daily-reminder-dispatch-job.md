@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-611
 Title: Daily reminder dispatch job
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-611

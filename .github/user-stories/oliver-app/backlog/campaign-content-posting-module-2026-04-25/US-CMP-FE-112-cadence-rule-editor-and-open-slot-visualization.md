@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-112
 Title: Cadence rule editor and open-slot visualization
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-112

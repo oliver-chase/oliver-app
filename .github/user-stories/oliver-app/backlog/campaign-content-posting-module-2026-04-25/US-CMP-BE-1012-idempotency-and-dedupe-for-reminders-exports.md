@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-1012
 Title: Idempotency and dedupe for reminders/exports
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-1012

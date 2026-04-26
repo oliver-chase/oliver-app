@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-QA-1110
 Title: Story and test coverage baseline
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-QA-1110

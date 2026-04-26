@@ -1,5 +1,6 @@
 import type { OliverFlow } from '@/components/shared/OliverContext'
 import type {
+  CampaignAdminOverrideAction,
   CampaignAsset,
   CampaignContentItem,
   CampaignContentMetrics,
@@ -22,7 +23,9 @@ function normalizeScheduleInput(raw: string): string {
 }
 
 type BuildCampaignFlowsContext = {
+  isAdmin: boolean
   campaigns: CampaignRecord[]
+  allContent: CampaignContentItem[]
   draftContent: CampaignContentItem[]
   needsReviewContent: CampaignContentItem[]
   unclaimedContent: CampaignContentItem[]
@@ -38,10 +41,10 @@ type BuildCampaignFlowsContext = {
     status: CampaignRecord['status']
   }) => Promise<CampaignRecord>
   createContentDraft: (payload: {
-    title: string
-    body: string
+    title?: string
+    body?: string
     contentType: CampaignContentItem['content_type']
-    topic: string
+    topic?: string
     campaignId?: string | null
   }) => Promise<CampaignContentItem>
   addContentAsset: (payload: {
@@ -63,6 +66,12 @@ type BuildCampaignFlowsContext = {
   addReminder: (payload: { contentId: string; scheduledFor: string; reminderType: 'ics' | 'slack' | 'email' | 'in-app' }) => Promise<CampaignReminder>
   markPosted: (payload: { contentId: string; postUrl?: string }) => Promise<CampaignContentItem>
   addPostUrl: (payload: { contentId: string; postUrl: string }) => Promise<CampaignContentItem>
+  adminOverrideContent: (payload: {
+    contentId: string
+    action: CampaignAdminOverrideAction
+    reason: string
+    postUrl?: string
+  }) => Promise<CampaignContentItem>
   addPerformanceMetrics: (payload: {
     contentId: string
     impressions?: number | null
@@ -74,6 +83,13 @@ type BuildCampaignFlowsContext = {
   }) => Promise<CampaignContentMetrics>
   exportSummary: () => string | Promise<string>
   getSummary: () => CampaignReportSummary
+  openContentLibrary: (payload?: { viewMode?: 'action' | 'all'; status?: CampaignContentItem['status'] | 'all'; ownership?: 'all' | 'created-by-me' | 'claimed-by-me' | 'unclaimed' }) => void
+  openReviewQueue: () => void
+  openCalendar: (payload?: {
+    ownership?: 'all' | 'mine'
+    timing?: 'all' | 'overdue' | 'today' | 'next-7' | 'unscheduled'
+  }) => void
+  openReports: () => void
 }
 
 export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[] {
@@ -222,7 +238,7 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
         const title = asText(answers.title)
         const body = asText(answers.body)
         const topic = asText(answers.topic)
-        if (!title || !body || !topic) return 'Title, body, and topic are required.'
+        if (!title && !body) return 'Title or body is required.'
 
         const created = await ctx.createContentDraft({
           title,
@@ -557,6 +573,63 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
       },
     },
     {
+      id: 'admin-override-content',
+      label: 'Admin Override Content',
+      aliases: ['admin override', 'force status', 'override content'],
+      steps: [
+        {
+          id: 'content_id',
+          prompt: 'Which content item needs an admin override?',
+          kind: 'entity',
+          options: () => ctx.allContent.map(content => ({
+            value: content.id,
+            label: content.title + ' (' + content.status + ')',
+          })),
+        },
+        {
+          id: 'override_action',
+          prompt: 'Which override action should be applied?',
+          kind: 'choice',
+          choices: [
+            { label: 'Reset to Draft', value: 'reset-draft' },
+            { label: 'Force Unclaimed', value: 'force-unclaimed' },
+            { label: 'Force Posted', value: 'force-posted' },
+          ],
+        },
+        {
+          id: 'reason',
+          prompt: 'Reason for override?',
+          kind: 'text',
+          placeholder: 'Operational correction after invalid transition',
+        },
+        {
+          id: 'post_url',
+          prompt: 'Post URL (optional; applies to Force Posted)',
+          kind: 'text',
+          placeholder: 'https://www.linkedin.com/posts/...',
+          optional: true,
+        },
+      ],
+      run: async (answers) => {
+        if (!ctx.isAdmin) return 'Admin override is only available to admin users.'
+
+        const contentId = asText(answers.content_id)
+        const overrideAction = asText(answers.override_action) as CampaignAdminOverrideAction
+        const reason = asText(answers.reason)
+        const postUrl = asText(answers.post_url)
+        if (!contentId || !overrideAction || !reason) return 'Content, override action, and reason are required.'
+        if (postUrl && !/^https?:\/\//i.test(postUrl)) return 'Post URL must start with http:// or https://.'
+
+        const updated = await ctx.adminOverrideContent({
+          contentId,
+          action: overrideAction,
+          reason,
+          postUrl,
+        })
+        return 'Admin override applied: ' + updated.title + ' is now ' + updated.status + '.'
+      },
+    },
+    {
       id: 'add-performance-metrics',
       label: 'Add Performance Metrics',
       aliases: ['log metrics', 'add analytics', 'record performance'],
@@ -642,6 +715,8 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
           'Missed: ' + summary.missed_count,
           'Unclaimed: ' + summary.unclaimed_count,
           'Waiting review: ' + summary.waiting_review_count,
+          '',
+          'Use "Open Reports" to review filters and export history.',
         ].join('\n')
       },
     },
@@ -651,6 +726,66 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
       aliases: ['export summary', 'download summary', 'campaign export'],
       steps: [],
       run: async () => ctx.exportSummary(),
+    },
+    {
+      id: 'open-content-library',
+      label: 'Open Content Library',
+      aliases: ['content library', 'available content', 'open unclaimed content'],
+      steps: [],
+      run: async () => {
+        ctx.openContentLibrary({ viewMode: 'all', status: 'all', ownership: 'all' })
+        return 'Opened Campaign Content Library.'
+      },
+    },
+    {
+      id: 'open-unclaimed-content',
+      label: 'Open Unclaimed Content',
+      aliases: ['unclaimed content', 'available claims', 'open claim queue'],
+      steps: [],
+      run: async () => {
+        ctx.openContentLibrary({ viewMode: 'action', status: 'unclaimed', ownership: 'unclaimed' })
+        return 'Opened unclaimed content queue.'
+      },
+    },
+    {
+      id: 'open-my-claimed',
+      label: 'Open My Claimed',
+      aliases: ['my claimed', 'my schedule', 'my posting queue'],
+      steps: [],
+      run: async () => {
+        ctx.openCalendar({ ownership: 'mine' })
+        return 'Opened claimed posting calendar.'
+      },
+    },
+    {
+      id: 'open-review-queue',
+      label: 'Open Review Queue',
+      aliases: ['review queue', 'needs review', 'pending approvals'],
+      steps: [],
+      run: async () => {
+        ctx.openReviewQueue()
+        return 'Opened review queue.'
+      },
+    },
+    {
+      id: 'open-calendar',
+      label: 'Open Calendar',
+      aliases: ['posting calendar', 'schedule view', 'open slots'],
+      steps: [],
+      run: async () => {
+        ctx.openCalendar({ ownership: 'all' })
+        return 'Opened posting calendar.'
+      },
+    },
+    {
+      id: 'open-reports',
+      label: 'Open Reports',
+      aliases: ['campaign reports', 'report dashboard', 'reporting section'],
+      steps: [],
+      run: async () => {
+        ctx.openReports()
+        return 'Opened campaign reports.'
+      },
     },
   ]
 }

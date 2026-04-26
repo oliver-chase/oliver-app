@@ -239,7 +239,7 @@ th.sorted .sort-arrow{opacity:1;color:var(--pink)}
 }
 
 @media(max-width:500px){
-  .topbar,.filterbar{left:0}.main{margin-left:0;padding-left:var(--spacing-md);padding-right:var(--spacing-md)}
+  .topbar,.filterbar{left:0}.main{margin-left:0;padding-left:var(--spacing-md);padding-right:var(--spacing-md);padding-bottom:140px}
   .topbar-account{white-space:normal;overflow:visible;text-overflow:clip;flex:1;max-width:none}
   .sidebar-backdrop{display:block}
   .sidebar-backdrop.open{opacity:1;pointer-events:auto}

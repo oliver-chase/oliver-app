@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-510
 Title: Claim/unclaim transactional logic
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-510

@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-ARCH-001
 Title: Register campaigns module and route shell
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-ARCH-001

@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-QA-1111
 Title: Rollout controls and migration safety
-Status: Not Started
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-QA-1111

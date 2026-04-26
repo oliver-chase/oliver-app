@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-711
 Title: Report dashboard UI and filter controls
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-711

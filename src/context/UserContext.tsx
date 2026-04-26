@@ -1,10 +1,11 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { AccountInfo } from '@azure/msal-browser'
 import { useAuth } from '@/context/AuthContext'
 import { getUserByIdentity, upsertUser } from '@/lib/users'
 import { getAccountMicrosoftIdentity } from '@/lib/microsoft-identity'
+import { recordStartupTiming } from '@/lib/startup-telemetry'
 import type { AppUser, PagePermission } from '@/types/auth'
 
 type UserContextType = {
@@ -27,8 +28,17 @@ const UserContext = createContext<UserContextType>({
 
 const E2E_AUTH_BYPASS = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
 const USER_LOAD_RETRY_DELAYS_MS = [0, 1200, 3000]
+const USER_WARM_CACHE_TTL_MS = 60_000
 const BUILTIN_OWNER_EMAILS = new Set(['kiana.micari@vtwo.co'])
 const OWNER_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns']
+
+type UserWarmCacheEntry = {
+  appUser: AppUser | null
+  loadError: string | null
+  atMs: number
+}
+
+const userWarmCache = new Map<string, UserWarmCacheEntry>()
 
 function getAccountOid(account: AccountInfo | null) {
   const identity = getAccountMicrosoftIdentity(account)
@@ -97,13 +107,41 @@ function delay(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
+function buildUserWarmCacheKey(account: AccountInfo | null, userId: string | null) {
+  const id = (userId || '').trim() || 'unknown'
+  const email = normalizeEmail(account?.username) || 'unknown'
+  return `${id}|${email}`
+}
+
+function readWarmCache(cacheKey: string): UserWarmCacheEntry | null {
+  const cached = userWarmCache.get(cacheKey)
+  if (!cached) return null
+  if (Date.now() - cached.atMs > USER_WARM_CACHE_TTL_MS) {
+    userWarmCache.delete(cacheKey)
+    return null
+  }
+  return cached
+}
+
+function writeWarmCache(cacheKey: string, appUser: AppUser | null, loadError: string | null) {
+  userWarmCache.set(cacheKey, {
+    appUser,
+    loadError,
+    atMs: Date.now(),
+  })
+}
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { account, isReady } = useAuth()
   const [appUser, setAppUser] = useState<AppUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const inFlightRef = useRef<Promise<void> | null>(null)
+  const inFlightKeyRef = useRef<string | null>(null)
 
-  const loadUser = useCallback(async () => {
+  const loadUser = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force === true
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
     if (!isReady) return
     if (!account) {
       setAppUser(null)
@@ -116,20 +154,43 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setAppUser(getBypassUser(account))
       setLoadError(null)
       setIsLoading(false)
+      const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt
+      recordStartupTiming('user_fetch_ms', elapsed, '/')
       return
     }
 
     const userId = getAccountOid(account)
+    const cacheKey = buildUserWarmCacheKey(account, userId)
+
+    if (!force) {
+      const cached = readWarmCache(cacheKey)
+      if (cached) {
+        setAppUser(cached.appUser)
+        setLoadError(cached.loadError)
+        setIsLoading(false)
+        return
+      }
+    }
+
+    if (!force && inFlightRef.current && inFlightKeyRef.current === cacheKey) {
+      await inFlightRef.current
+      return
+    }
+
+    const run = async () => {
     if (!userId) {
       if (isBuiltinOwnerAccount(account)) {
-        setAppUser(getBuiltinOwnerUser(account))
+        const ownerUser = getBuiltinOwnerUser(account)
+        setAppUser(ownerUser)
         setLoadError(null)
         setIsLoading(false)
+        writeWarmCache(cacheKey, ownerUser, null)
         return
       }
       setAppUser(null)
       setLoadError('Missing Azure user identifier')
       setIsLoading(false)
+      writeWarmCache(cacheKey, null, 'Missing Azure user identifier')
       return
     }
 
@@ -156,6 +217,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
           setAppUser(row)
           setLoadError(null)
+          writeWarmCache(cacheKey, row, null)
           return
         } catch (err) {
           lastError = err
@@ -163,17 +225,40 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (isBuiltinOwnerAccount(account)) {
-        setAppUser(getBuiltinOwnerUser(account, userId))
+        const ownerUser = getBuiltinOwnerUser(account, userId)
+        setAppUser(ownerUser)
         setLoadError(null)
+        writeWarmCache(cacheKey, ownerUser, null)
         return
       }
 
       setAppUser(null)
-      setLoadError(lastError instanceof Error ? lastError.message : String(lastError))
+      const message = lastError instanceof Error ? lastError.message : String(lastError)
+      setLoadError(message)
+      writeWarmCache(cacheKey, null, message)
     } finally {
       setIsLoading(false)
+      const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt
+      recordStartupTiming('user_fetch_ms', elapsed, '/')
+    }
+    }
+
+    const runPromise = run()
+    inFlightRef.current = runPromise
+    inFlightKeyRef.current = cacheKey
+    try {
+      await runPromise
+    } finally {
+      if (inFlightRef.current === runPromise) {
+        inFlightRef.current = null
+        inFlightKeyRef.current = null
+      }
     }
   }, [account, isReady])
+
+  const refreshUser = useCallback(async () => {
+    await loadUser({ force: true })
+  }, [loadUser])
 
   useEffect(() => {
     void loadUser()
@@ -181,7 +266,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loadError || !account || E2E_AUTH_BYPASS) return
-    const onFocus = () => { void loadUser() }
+    const onFocus = () => { void loadUser({ force: true }) }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [account, loadError, loadUser])
@@ -192,11 +277,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       appUser,
       isAdmin,
       hasPermission: (page) => isAdmin || !!appUser?.page_permissions.includes(page),
-      refreshUser: loadUser,
+      refreshUser,
       isLoading,
       loadError,
     }
-  }, [appUser, isLoading, loadError, loadUser])
+  }, [appUser, isLoading, loadError, refreshUser])
 
   return (
     <UserContext.Provider value={value}>

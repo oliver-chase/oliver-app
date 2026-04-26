@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useOliverContext } from './OliverContext'
 import type { OliverAction, OliverFlow } from './OliverContext'
 import { fuzzyFilter, fuzzyScore } from '@/lib/fuzzy'
@@ -43,6 +43,7 @@ export default function OliverDock() {
   const { appUser } = useUser()
   const { account } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [items, setItems] = useState<ChatItem[]>([])
@@ -238,6 +239,8 @@ export default function OliverDock() {
       .slice(0, 3)
       .map(h => h.item)
   }, [commandPool, config, input])
+
+  const prefersMobileLeftTrigger = pathname === '/accounts' || pathname?.startsWith('/accounts/')
 
   function normalize(text: string) {
     return text.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -529,7 +532,7 @@ export default function OliverDock() {
   return (
     <>
       <button
-        className="chatbot-trigger"
+        className={'chatbot-trigger' + (prefersMobileLeftTrigger ? ' chatbot-trigger--accounts-mobile-safe' : '')}
         aria-expanded={open}
         aria-controls="oliver-dock-panel"
         aria-label={open ? 'Close Oliver' : 'Open Oliver'}

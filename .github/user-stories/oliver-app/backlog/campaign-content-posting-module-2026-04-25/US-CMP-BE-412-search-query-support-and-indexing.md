@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-412
 Title: Search query support and indexing
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-412

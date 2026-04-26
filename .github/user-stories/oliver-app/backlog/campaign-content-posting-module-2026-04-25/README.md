@@ -2,7 +2,7 @@
 
 Date: 2026-04-25
 Source: `src/tech-debt/campaign-content-posting-backlog.md`
-Story Count: 38
+Story Count: 41
 
 Related parity follow-up backlog:
 - `.github/user-stories/oliver-app/backlog/campaigns-spec-parity-prioritization-2026-04-25/README.md`
@@ -19,7 +19,7 @@ Related parity follow-up backlog:
 - CMP-E8: Chatbot Parity and Guided Workflows — 3 tickets
 - CMP-E9: Auditability, Validation, and Error Recovery — 3 tickets
 - CMP-E10: Performance and Scale Hardening — 3 tickets
-- CMP-E11: QA, Rollout, and Definition of Done Gates — 3 tickets
+- CMP-E11: QA, Rollout, and Definition of Done Gates — 6 tickets
 
 ## Ticket Story Files
 - [US-CMP-ARCH-001-register-campaigns-module-and-route-shell.md](US-CMP-ARCH-001-register-campaigns-module-and-route-shell.md)
@@ -60,3 +60,6 @@ Related parity follow-up backlog:
 - [US-CMP-QA-1110-story-and-test-coverage-baseline.md](US-CMP-QA-1110-story-and-test-coverage-baseline.md)
 - [US-CMP-QA-1111-rollout-controls-and-migration-safety.md](US-CMP-QA-1111-rollout-controls-and-migration-safety.md)
 - [US-CMP-QA-1112-mvp-dod-verification-checklist.md](US-CMP-QA-1112-mvp-dod-verification-checklist.md)
+- [US-CMP-QA-1113-ics-import-platform-verification.md](US-CMP-QA-1113-ics-import-platform-verification.md)
+- [US-CMP-QA-1114-staging-signoff-evidence-package.md](US-CMP-QA-1114-staging-signoff-evidence-package.md)
+- [US-CMP-QA-1115-tokenized-ui-hardening-and-mobile-verification.md](US-CMP-QA-1115-tokenized-ui-hardening-and-mobile-verification.md)

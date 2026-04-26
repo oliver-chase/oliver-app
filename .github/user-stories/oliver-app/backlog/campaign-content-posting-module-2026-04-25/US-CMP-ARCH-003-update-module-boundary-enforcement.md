@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-ARCH-003
 Title: Update module-boundary enforcement
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-ARCH-003

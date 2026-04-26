@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-511
 Title: Claim and schedule interaction model
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-511

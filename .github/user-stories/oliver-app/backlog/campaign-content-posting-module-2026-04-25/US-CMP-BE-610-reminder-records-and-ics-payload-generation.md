@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-610
 Title: Reminder records and ICS payload generation
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-610

@@ -112,3 +112,22 @@ A deep QA pass is only complete when the result names:
 - whether Playwright passed
 - any manual-only or env-backed gaps left open
 - any generated artifacts intentionally left uncommitted
+
+## 7. Staging-to-main promotion gate
+
+Before any staging-to-main promotion for cross-module work, complete:
+
+- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/cross-module-journey-matrix-US-O33.md`
+- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/staging-to-main-release-checklist-US-O33.md`
+
+Promotion is blocked unless every required command in that checklist is green and results are logged in `src/tech-debt/release-traceability.md`.
+
+## 8. Startup performance gate
+
+For Hub startup and permission warm-path regressions, include the startup budget smoke gate:
+
+- `npx playwright test tests/e2e/frontend-smoke.spec.ts --grep "hub startup telemetry records budgeted auth and permission warm-path timings"`
+
+Budget source and metric definitions:
+
+- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/startup-budget-and-gate-US-O32.md`

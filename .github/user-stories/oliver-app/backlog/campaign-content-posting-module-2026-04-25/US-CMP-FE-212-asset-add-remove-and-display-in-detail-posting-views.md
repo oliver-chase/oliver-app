@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-FE-212
 Title: Asset add/remove and display in detail/posting views
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-FE-212

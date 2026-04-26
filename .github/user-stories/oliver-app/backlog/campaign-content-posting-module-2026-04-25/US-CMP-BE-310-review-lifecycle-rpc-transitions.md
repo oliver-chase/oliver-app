@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-310
 Title: Review lifecycle RPC transitions
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-310

@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { UsersApiError, listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
 import { getAccountMicrosoftIdentity } from '@/lib/microsoft-identity'
 import { getPermissionModules } from '@/modules/registry'
+import { AppNotice } from '@/components/shared/AppNotice'
 import styles from './admin.module.css'
 
 const ALL_PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
@@ -84,9 +85,7 @@ export function UserManager() {
   return (
     <div className={styles.tableWrap}>
       {error && (
-        <div className={styles.errorBanner} role="alert">
-          Save failed: {error}
-        </div>
+        <AppNotice tone="error">Save failed: {error}</AppNotice>
       )}
       <table className={styles.table}>
         <thead>

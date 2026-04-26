@@ -81,6 +81,13 @@ export const CAMPAIGNS_COMMANDS: CommandMeta[] = [
     aliases: ['update post url', 'attach post link', 'final url'],
   },
   {
+    id: 'admin-override-content',
+    label: 'Admin Override Content',
+    group: 'Edit',
+    hint: 'Admin-only lifecycle override with required reason tracking',
+    aliases: ['admin override', 'force status', 'override content'],
+  },
+  {
     id: 'add-performance-metrics',
     label: 'Add Performance Metrics',
     group: 'Create',

@@ -1,7 +1,7 @@
 ---
 ID: US-CMP-BE-110
 Title: Campaign schema and CRUD data access
-Status: Not Started
+Status: Done
 Verified: false
 Backdated: 2026-04-25
 Ticket: CMP-BE-110
