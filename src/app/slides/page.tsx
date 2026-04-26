@@ -50,8 +50,12 @@ import {
   runTemplateApprovalEscalationSweep,
   renameSlide,
   saveSlide,
+  SlideApiError,
   SlideConflictError,
+  getSlidesRuntimeHealth,
+  subscribeSlidesRuntimeHealth,
   submitTemplateApproval,
+  type SlidesRuntimeHealthState,
   transferTemplateOwnership,
   upsertAuditPreset,
   upsertTemplateCollaborator,
@@ -66,6 +70,7 @@ import { useModuleAccess } from '@/modules/use-module-access'
 const AUTOSAVE_DELAY_MS = 5000
 const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
 const AUTOSAVE_RETRY_MAX_DELAY_MS = 60000
+const AUTOSAVE_RETRY_MAX_ATTEMPTS = 5
 const LEGACY_DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
 const DRAFT_RECOVERY_KEY_PREFIX = 'oliver-slide-draft-v2'
 const UNSAVED_CHANGES_CONFIRM_TEXT = 'You have unsaved slide changes. Discard them and continue?'
@@ -88,6 +93,14 @@ interface AutosaveRetryState {
   delayMs: number
   nextAttemptAt: number
   lastError: string
+}
+
+interface SlidesDegradedState {
+  mode: 'local-draft'
+  message: string
+  correlationId: string | null
+  rayId: string | null
+  endpoint: string
 }
 
 interface CanvasDragState {
@@ -176,6 +189,35 @@ function formatAuditExportFilters(filters: SlideAuditExportJob['filters']): stri
   }
   if (segments.length === 0) return 'All activity filters'
   return segments.join(' · ')
+}
+
+function isAutosaveRetryableError(error: unknown): boolean {
+  if (error instanceof SlideConflictError) return false
+  if (error instanceof SlideApiError) return error.retryable
+  if (error instanceof TypeError) return true
+  return true
+}
+
+function getSlideErrorSummary(error: unknown): {
+  message: string
+  correlationId: string | null
+  rayId: string | null
+  endpoint: string
+} {
+  if (error instanceof SlideApiError) {
+    return {
+      message: error.message,
+      correlationId: error.correlationId,
+      rayId: error.rayId,
+      endpoint: error.path || '/api/slides',
+    }
+  }
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    correlationId: null,
+    rayId: null,
+    endpoint: '/api/slides',
+  }
 }
 
 function formatTemplateApprovalType(type: SlideTemplateApproval['approval_type']): string {
@@ -519,6 +561,8 @@ export default function SlidesPage() {
   const [autosaveEnabled, setAutosaveEnabled] = useState(true)
   const [autosaveRetryState, setAutosaveRetryState] = useState<AutosaveRetryState | null>(null)
   const [conflictServerSlide, setConflictServerSlide] = useState<SlideRecord | null>(null)
+  const [degradedState, setDegradedState] = useState<SlidesDegradedState | null>(null)
+  const [runtimeHealth, setRuntimeHealth] = useState<SlidesRuntimeHealthState>(() => getSlidesRuntimeHealth())
 
   const [slides, setSlides] = useState<SlideRecord[]>([])
   const [templates, setTemplates] = useState<SlideTemplateRecord[]>([])
@@ -786,8 +830,7 @@ export default function SlidesPage() {
     })
   }, [])
 
-  const queueAutosaveRetry = useCallback((errorMessage: string) => {
-    const attempt = (autosaveRetryState?.attempt || 0) + 1
+  const queueAutosaveRetry = useCallback((errorMessage: string, attempt: number) => {
     const delayMs = Math.min(
       AUTOSAVE_RETRY_MAX_DELAY_MS,
       AUTOSAVE_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)),
@@ -801,7 +844,7 @@ export default function SlidesPage() {
     })
     setSaveStatus('queued')
     setSaveError(`Autosave failed (${errorMessage}). Retrying in ${retryInSeconds}s.`)
-  }, [autosaveRetryState])
+  }, [])
 
   const scheduleAutosaveRetryNow = useCallback(() => {
     setAutosaveRetryState((previous) => {
@@ -818,6 +861,10 @@ export default function SlidesPage() {
     setSaveError(null)
     setSaveStatus(result ? 'dirty' : 'clean')
   }, [result])
+
+  const clearDegradedMode = useCallback(() => {
+    setDegradedState(null)
+  }, [])
 
   const updateCanvasComponentContent = useCallback((componentId: string, content: string) => {
     if (!result) return
@@ -1480,6 +1527,7 @@ export default function SlidesPage() {
       ])
 
       const blockingErrors: string[] = []
+      const nonBlockingWarnings: string[] = []
 
       if (slideRowsResult.status === 'fulfilled') {
         setSlides(slideRowsResult.value)
@@ -1496,31 +1544,32 @@ export default function SlidesPage() {
       if (approvalRowsResult.status === 'fulfilled') {
         setTemplateApprovals(approvalRowsResult.value)
       } else {
-        setTemplateApprovals([])
+        nonBlockingWarnings.push('Template approvals are temporarily unavailable.')
       }
 
       if (auditRowsResult.status === 'fulfilled') {
         setAudits(auditRowsResult.value.items)
         setAuditHasMore(auditRowsResult.value.pagination.has_more)
       } else {
-        setAudits([])
-        setAuditHasMore(false)
+        nonBlockingWarnings.push('Activity audit feed is temporarily unavailable.')
       }
 
       if (auditPresetRowsResult.status === 'fulfilled') {
         setAuditPresets(auditPresetRowsResult.value)
       } else {
-        setAuditPresets([])
+        nonBlockingWarnings.push('Activity presets are temporarily unavailable.')
       }
 
       if (auditExportJobRowsResult.status === 'fulfilled') {
         setAuditExportJobs(auditExportJobRowsResult.value)
       } else {
-        setAuditExportJobs([])
+        nonBlockingWarnings.push('Audit export jobs are temporarily unavailable.')
       }
 
       if (blockingErrors.length > 0) {
         setLibraryError(blockingErrors[0])
+      } else if (nonBlockingWarnings.length > 0) {
+        setLibraryError(nonBlockingWarnings[0])
       }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
@@ -1542,6 +1591,23 @@ export default function SlidesPage() {
   useEffect(() => {
     setAuditOffset(0)
   }, [searchValue, auditActionFilter, auditOutcomeFilter, auditEntityTypeFilter, auditDateFrom, auditDateTo])
+
+  useEffect(() => {
+    return subscribeSlidesRuntimeHealth((state) => {
+      setRuntimeHealth(state)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (runtimeHealth.mode !== 'degraded' || !runtimeHealth.lastFailure) return
+    setDegradedState({
+      mode: 'local-draft',
+      message: 'Slides service degraded. Local draft mode is active for unavailable endpoints.',
+      correlationId: runtimeHealth.lastFailure.correlationId,
+      rayId: runtimeHealth.lastFailure.rayId,
+      endpoint: runtimeHealth.lastFailure.endpoint || '/api/slides',
+    })
+  }, [runtimeHealth])
 
   useEffect(() => {
     if (!allowRender) return
@@ -1718,6 +1784,7 @@ export default function SlidesPage() {
       setAutosaveRetryState(null)
       setConflictServerSlide(null)
       setSaveError(null)
+      setDegradedState(null)
 
       await refreshLibraryData()
       return response.slide
@@ -1731,15 +1798,61 @@ export default function SlidesPage() {
       }
 
       if (options?.autosave) {
-        queueAutosaveRetry(error instanceof Error ? error.message : String(error))
+        const summary = getSlideErrorSummary(error)
+        const nextAttempt = (autosaveRetryState?.attempt || 0) + 1
+        if (isAutosaveRetryableError(error) && nextAttempt <= AUTOSAVE_RETRY_MAX_ATTEMPTS) {
+          queueAutosaveRetry(summary.message, nextAttempt)
+          return null
+        }
+
+        const retryExhausted = nextAttempt > AUTOSAVE_RETRY_MAX_ATTEMPTS
+        const baseMessage = retryExhausted
+          ? `Autosave paused after ${AUTOSAVE_RETRY_MAX_ATTEMPTS} failed attempts.`
+          : 'Autosave stopped due to a terminal save error.'
+        const recoveryMessage = `${baseMessage} Local draft mode is active until Slides service recovers.`
+        setAutosaveEnabled(false)
+        setAutosaveRetryState(null)
+        setSaveStatus('error')
+        setSaveError(`${recoveryMessage} ${summary.message}`)
+        setDegradedState({
+          mode: 'local-draft',
+          message: recoveryMessage,
+          correlationId: summary.correlationId,
+          rayId: summary.rayId,
+          endpoint: summary.endpoint,
+        })
         return null
       }
 
       setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : String(error))
+      const summary = getSlideErrorSummary(error)
+      setSaveError(summary.message)
       return null
     }
-  }, [activeRevision, activeSlideId, actor, normalizeComponentsForPersistence, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
+  }, [
+    activeRevision,
+    activeSlideId,
+    actor,
+    autosaveRetryState,
+    normalizeComponentsForPersistence,
+    queueAutosaveRetry,
+    rawHtml.length,
+    refreshLibraryData,
+    result,
+    slideTitle,
+  ])
+
+  const retrySlidesService = useCallback(async () => {
+    setLibraryError(null)
+    setSaveError(null)
+    setAutosaveRetryState(null)
+    setAutosaveEnabled(true)
+    setDegradedState(null)
+    await refreshLibraryData()
+    if (result && saveStatus === 'dirty') {
+      await handleSave({ autosave: true })
+    }
+  }, [handleSave, refreshLibraryData, result, saveStatus])
 
   useEffect(() => {
     if (!autosaveEnabled || saveStatus !== 'dirty' || !result) return
@@ -3211,6 +3324,28 @@ export default function SlidesPage() {
                 <div className="slides-inline-actions">
                   <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={restoreDraft}>Restore Draft</button>
                   <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={discardDraft}>Discard</button>
+                </div>
+              </div>
+            )}
+
+            {degradedState && (
+              <div className="slides-degraded" role="status">
+                <div>
+                  <strong>Degraded Mode: Local Draft</strong>
+                </div>
+                <div>{degradedState.message}</div>
+                <div className="slides-degraded-meta">
+                  Endpoint: {degradedState.endpoint}
+                  {degradedState.correlationId ? ` · Correlation ${degradedState.correlationId}` : ''}
+                  {degradedState.rayId ? ` · Ray ${degradedState.rayId}` : ''}
+                </div>
+                <div className="slides-inline-actions">
+                  <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={() => void retrySlidesService()}>
+                    Retry Slides Service
+                  </button>
+                  <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={clearDegradedMode}>
+                    Dismiss
+                  </button>
                 </div>
               </div>
             )}

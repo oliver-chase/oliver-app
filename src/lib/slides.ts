@@ -119,42 +119,190 @@ export interface SlideAuditExportJobRequest {
   dateTo?: string
 }
 
-class SlideApiError extends Error {
-  status: number
+type SlideFailureClass =
+  | 'validation_error'
+  | 'unauthenticated'
+  | 'unauthorized'
+  | 'not_found'
+  | 'timeout'
+  | 'conflict'
+  | 'rate_limited'
+  | 'upstream_unavailable'
+  | 'upstream_runtime'
+  | 'server_error'
+  | 'request_error'
+  | 'network_error'
 
-  constructor(message: string, status: number) {
+interface SlideApiErrorDetail {
+  status: number
+  method: string
+  path: string
+  failureClass: SlideFailureClass
+  retryable: boolean
+  correlationId: string | null
+  rayId: string | null
+}
+
+export class SlideApiError extends Error {
+  status: number
+  method: string
+  path: string
+  failureClass: SlideFailureClass
+  retryable: boolean
+  correlationId: string | null
+  rayId: string | null
+
+  constructor(message: string, detail: SlideApiErrorDetail | number) {
     super(message)
     this.name = 'SlideApiError'
-    this.status = status
+    const resolvedDetail: SlideApiErrorDetail = typeof detail === 'number'
+      ? {
+          status: detail,
+          method: 'GET',
+          path: '/api/slides',
+          failureClass: classifySlideFailure(detail, message),
+          retryable: isRetryableSlideFailure(detail, classifySlideFailure(detail, message)),
+          correlationId: null,
+          rayId: null,
+        }
+      : detail
+    this.status = resolvedDetail.status
+    this.method = resolvedDetail.method
+    this.path = resolvedDetail.path
+    this.failureClass = resolvedDetail.failureClass
+    this.retryable = resolvedDetail.retryable
+    this.correlationId = resolvedDetail.correlationId
+    this.rayId = resolvedDetail.rayId
   }
 }
 
 function extractCloudflareRayId(payload: string): string | null {
-  const match = payload.match(/Ray ID:\s*([A-Za-z0-9]+)/i)
+  const match = payload.match(/Ray ID[:\s-]*([A-Za-z0-9]+)/i)
   return match && match[1] ? match[1] : null
 }
 
-function summarizeHttpFailurePayload(payload: string): string {
+function summarizeHttpFailurePayload(payload: string): { message: string; rayId: string | null } {
   const trimmed = payload.trim()
-  if (!trimmed) return ''
+  if (!trimmed) return { message: '', rayId: null }
 
   if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
     const rayId = extractCloudflareRayId(trimmed)
-    return rayId
-      ? `Upstream runtime exception (Cloudflare Ray ID ${rayId}).`
-      : 'Upstream runtime exception.'
+    return {
+      message: rayId
+        ? `Upstream runtime exception (Cloudflare Ray ID ${rayId}).`
+        : 'Upstream runtime exception.',
+      rayId: rayId || null,
+    }
   }
 
   try {
-    const parsed = JSON.parse(trimmed) as { error?: unknown; message?: unknown }
-    if (typeof parsed.error === 'string' && parsed.error.trim()) return parsed.error.trim()
-    if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message.trim()
+    const parsed = JSON.parse(trimmed) as {
+      error?: unknown
+      message?: unknown
+      error_detail?: {
+        ray_id?: unknown
+      }
+    }
+    const rayId =
+      (typeof parsed.error_detail?.ray_id === 'string' && parsed.error_detail.ray_id.trim()) ||
+      extractCloudflareRayId(trimmed)
+    if (typeof parsed.error === 'string' && parsed.error.trim()) return { message: parsed.error.trim(), rayId: rayId || null }
+    if (typeof parsed.message === 'string' && parsed.message.trim()) return { message: parsed.message.trim(), rayId: rayId || null }
   } catch {
     // Non-JSON payload.
   }
 
   const compact = trimmed.replace(/\s+/g, ' ')
-  return compact.length > 320 ? `${compact.slice(0, 320)}...` : compact
+  return {
+    message: compact.length > 320 ? `${compact.slice(0, 320)}...` : compact,
+    rayId: extractCloudflareRayId(trimmed),
+  }
+}
+
+function classifySlideFailure(status: number, summaryMessage: string): SlideFailureClass {
+  if (status === 400) return 'validation_error'
+  if (status === 401) return 'unauthenticated'
+  if (status === 403) return 'unauthorized'
+  if (status === 404) return 'not_found'
+  if (status === 408) return 'timeout'
+  if (status === 409) return 'conflict'
+  if (status === 429) return 'rate_limited'
+  if (status === 502 || status === 503 || status === 504) return 'upstream_unavailable'
+  if (status >= 500) return 'server_error'
+  if (/runtime exception/i.test(summaryMessage)) return 'upstream_runtime'
+  return 'request_error'
+}
+
+function isRetryableSlideFailure(status: number, failureClass: SlideFailureClass): boolean {
+  if (status === 408 || status === 429) return true
+  if (status >= 500) return true
+  return failureClass === 'upstream_unavailable' || failureClass === 'upstream_runtime' || failureClass === 'timeout'
+}
+
+function parseSlideErrorPayload(method: string, path: string, status: number, payload: string): SlideApiError {
+  const trimmed = payload.trim()
+  let correlationId: string | null = null
+  let explicitRayId: string | null = null
+  let explicitFailureClass: SlideFailureClass | null = null
+  let explicitRetryable: boolean | null = null
+
+  if (trimmed) {
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        error?: unknown
+        message?: unknown
+        error_detail?: {
+          correlation_id?: unknown
+          ray_id?: unknown
+          failure_class?: unknown
+          retryable?: unknown
+        }
+      }
+      if (typeof parsed.error_detail?.correlation_id === 'string' && parsed.error_detail.correlation_id.trim()) {
+        correlationId = parsed.error_detail.correlation_id.trim()
+      }
+      if (typeof parsed.error_detail?.ray_id === 'string' && parsed.error_detail.ray_id.trim()) {
+        explicitRayId = parsed.error_detail.ray_id.trim()
+      }
+      if (typeof parsed.error_detail?.failure_class === 'string' && parsed.error_detail.failure_class.trim()) {
+        explicitFailureClass = parsed.error_detail.failure_class.trim() as SlideFailureClass
+      }
+      if (typeof parsed.error_detail?.retryable === 'boolean') {
+        explicitRetryable = parsed.error_detail.retryable
+      }
+    } catch {
+      // Ignore JSON parse errors for non-JSON payloads.
+    }
+  }
+
+  const summary = summarizeHttpFailurePayload(trimmed)
+  const summaryMessage = summary.message
+  const failureClass = explicitFailureClass || classifySlideFailure(status, summaryMessage)
+  const retryable = explicitRetryable ?? isRetryableSlideFailure(status, failureClass)
+  const rayId = explicitRayId || summary.rayId || null
+
+  const detailSuffix = [
+    correlationId ? `Correlation ${correlationId}` : '',
+    rayId ? `Ray ${rayId}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+  const decoratedSummary = detailSuffix
+    ? `${summaryMessage || 'Request failed.'} (${detailSuffix})`
+    : summaryMessage || 'Request failed.'
+
+  return new SlideApiError(
+    `${method} ${path} failed: ${status}${decoratedSummary ? ` ${decoratedSummary}` : ''}`,
+    {
+      status,
+      method,
+      path,
+      failureClass,
+      retryable,
+      correlationId,
+      rayId,
+    },
+  )
 }
 
 export class SlideConflictError extends Error {
@@ -164,6 +312,108 @@ export class SlideConflictError extends Error {
     super(message)
     this.name = 'SlideConflictError'
     this.serverSlide = serverSlide
+  }
+}
+
+export interface SlidesRuntimeFailure {
+  message: string
+  method: string
+  endpoint: string
+  status: number | null
+  failureClass: SlideFailureClass
+  retryable: boolean
+  correlationId: string | null
+  rayId: string | null
+  occurredAt: string
+}
+
+export interface SlidesRuntimeHealthState {
+  mode: 'normal' | 'degraded'
+  lastFailure: SlidesRuntimeFailure | null
+}
+
+let runtimeHealthState: SlidesRuntimeHealthState = {
+  mode: 'normal',
+  lastFailure: null,
+}
+
+const runtimeHealthListeners = new Set<(state: SlidesRuntimeHealthState) => void>()
+
+function emitRuntimeHealthState() {
+  const snapshot: SlidesRuntimeHealthState = {
+    mode: runtimeHealthState.mode,
+    lastFailure: runtimeHealthState.lastFailure ? { ...runtimeHealthState.lastFailure } : null,
+  }
+  for (const listener of runtimeHealthListeners) {
+    listener(snapshot)
+  }
+}
+
+function markRuntimeDegraded(error: unknown, fallbackMethod = 'GET', fallbackPath = '/api/slides') {
+  const failure: SlidesRuntimeFailure = error instanceof SlideApiError
+    ? {
+        message: error.message,
+        method: error.method,
+        endpoint: error.path,
+        status: error.status,
+        failureClass: error.failureClass,
+        retryable: error.retryable,
+        correlationId: error.correlationId,
+        rayId: error.rayId,
+        occurredAt: nowIso(),
+      }
+    : error instanceof TypeError
+      ? {
+          message: error.message || 'Network error',
+          method: fallbackMethod,
+          endpoint: fallbackPath,
+          status: null,
+          failureClass: 'network_error',
+          retryable: true,
+          correlationId: null,
+          rayId: null,
+          occurredAt: nowIso(),
+        }
+      : {
+          message: error instanceof Error ? error.message : String(error),
+          method: fallbackMethod,
+          endpoint: fallbackPath,
+          status: null,
+          failureClass: 'request_error',
+          retryable: true,
+          correlationId: null,
+          rayId: null,
+          occurredAt: nowIso(),
+        }
+
+  runtimeHealthState = {
+    mode: 'degraded',
+    lastFailure: failure,
+  }
+  emitRuntimeHealthState()
+}
+
+function markRuntimeRecovered() {
+  if (runtimeHealthState.mode === 'normal' && runtimeHealthState.lastFailure === null) return
+  runtimeHealthState = {
+    mode: 'normal',
+    lastFailure: null,
+  }
+  emitRuntimeHealthState()
+}
+
+export function getSlidesRuntimeHealth(): SlidesRuntimeHealthState {
+  return {
+    mode: runtimeHealthState.mode,
+    lastFailure: runtimeHealthState.lastFailure ? { ...runtimeHealthState.lastFailure } : null,
+  }
+}
+
+export function subscribeSlidesRuntimeHealth(listener: (state: SlidesRuntimeHealthState) => void): () => void {
+  runtimeHealthListeners.add(listener)
+  listener(getSlidesRuntimeHealth())
+  return () => {
+    runtimeHealthListeners.delete(listener)
   }
 }
 
@@ -513,6 +763,7 @@ function makeLocalTemplateApproval(
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase()
   const response = await fetch(path, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
@@ -527,11 +778,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    const summary = summarizeHttpFailurePayload(text)
-    throw new SlideApiError(
-      `${init?.method || 'GET'} ${path} failed: ${response.status}${summary ? ` ${summary}` : ''}`,
-      response.status,
-    )
+    throw parseSlideErrorPayload(method, path, response.status, text)
   }
 
   return response.json() as Promise<T>
@@ -540,7 +787,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 function shouldFallbackToLocal(error: unknown): boolean {
   if (FORCE_LOCAL_MODE) return true
   if (error instanceof SlideConflictError) return false
-  if (error instanceof SlideApiError) return [404, 405, 500, 501, 502, 503, 504].includes(error.status)
+  if (error instanceof SlideApiError) {
+    if (error.status === 404 || error.status === 405) return true
+    return error.retryable
+  }
   if (error instanceof TypeError) return true
   return false
 }
@@ -551,9 +801,12 @@ async function withLocalFallback<T>(remoteCall: () => Promise<T>, localCall: () 
   }
 
   try {
-    return await remoteCall()
+    const response = await remoteCall()
+    markRuntimeRecovered()
+    return response
   } catch (error) {
     if (shouldFallbackToLocal(error)) {
+      markRuntimeDegraded(error)
       return Promise.resolve(localCall())
     }
     throw error

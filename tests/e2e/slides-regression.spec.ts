@@ -1842,4 +1842,33 @@ test.describe('slides regression', () => {
     await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
     await expect(page.getByText(/Save status: saved/i)).toBeVisible({ timeout: 10000 })
   })
+
+  test('US-O31 autosave enters degraded local-draft mode after retry budget is exhausted', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem
+      Storage.prototype.setItem = function setItemWithFailure(key: string, value: string) {
+        if (key === 'oliver-slides-store-v1') {
+          throw new Error('forced autosave failure')
+        }
+        return originalSetItem.call(this, key, value)
+      }
+    })
+
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Degraded Mode</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await expect(page.getByText(/Autosave retry queued/i)).toBeVisible({ timeout: 15000 })
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
+    }
+
+    await expect(page.getByRole('alert').filter({ hasText: /Autosave paused after 5 failed attempts/i })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(/Degraded Mode: Local Draft/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry Slides Service' })).toBeVisible()
+  })
 })
