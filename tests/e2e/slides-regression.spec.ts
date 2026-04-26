@@ -378,6 +378,51 @@ test.describe('slides regression', () => {
     await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).fontFamily.toLowerCase())).toContain('times')
   })
 
+  test('SLD-FE-310 preserves style declaration order across inline and linked CSS', async ({ page }) => {
+    await page.route('**/ordered-theme.css', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'text/css',
+        body: `
+          .ordered-title {
+            color: #2563eb;
+            font-size: 30px;
+          }
+        `,
+      })
+    })
+
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="/ordered-theme.css">
+        <style>
+          .ordered-title {
+            color: #dc2626;
+            font-size: 48px;
+            position: absolute;
+            left: 100px;
+            top: 100px;
+            width: 840px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="slide-canvas" style="width:1600px;height:900px;">
+          <h1 class="ordered-title">Order Validation</h1>
+        </div>
+      </body>
+    </html>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('220, 38, 38')
+    await expect.poll(async () => headingLayer.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(57)
+  })
+
   test('SLD-FE-302 toolbar controls use icon glyphs with tooltips and compact button modifier', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
