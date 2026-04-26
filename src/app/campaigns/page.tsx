@@ -143,6 +143,7 @@ type CalendarFilters = {
   campaignId: string
   channel: string
   timing: CalendarTimingFilter
+  ownership: 'all' | 'mine'
 }
 
 type CampaignReasonModalState = {
@@ -557,6 +558,7 @@ export default function CampaignsPage() {
     campaignId: '',
     channel: 'all',
     timing: 'all',
+    ownership: 'all',
   })
   const [focusedCampaignId, setFocusedCampaignId] = useState('')
   const [calendarView, setCalendarView] = useState<CalendarView>('weekly')
@@ -754,15 +756,21 @@ export default function CampaignsPage() {
     [appUser?.user_id, contentItems],
   )
 
+  const allClaimed = useMemo(
+    () => contentItems.filter(item => item.status === 'claimed'),
+    [contentItems],
+  )
+
   const calendarChannelOptions = useMemo(() => {
     const channels = new Set<string>()
-    for (const item of myClaimed) {
+    const source = calendarFilters.ownership === 'mine' ? myClaimed : allClaimed
+    for (const item of source) {
       const channel = (item.intended_channel || '').trim()
       if (!channel) continue
       channels.add(channel)
     }
     return [...channels].sort((left, right) => left.localeCompare(right))
-  }, [myClaimed])
+  }, [allClaimed, calendarFilters.ownership, myClaimed])
 
   const postedContent = useMemo(
     () => contentItems.filter(item => item.status === 'posted'),
@@ -1051,8 +1059,9 @@ export default function CampaignsPage() {
     endOfToday.setHours(23, 59, 59, 999)
     const next7 = new Date(endOfToday)
     next7.setDate(next7.getDate() + 7)
+    const source = calendarFilters.ownership === 'mine' ? myClaimed : allClaimed
 
-    return myClaimed.filter(item => {
+    return source.filter(item => {
       if (calendarFilters.campaignId && item.campaign_id !== calendarFilters.campaignId) return false
       if (calendarFilters.channel !== 'all' && (item.intended_channel || '') !== calendarFilters.channel) return false
 
@@ -1076,7 +1085,16 @@ export default function CampaignsPage() {
       const haystack = `${item.title} ${item.topic} ${item.body} ${campaignLabel}`.toLowerCase()
       return haystack.includes(query)
     })
-  }, [calendarFilters.campaignId, calendarFilters.channel, calendarFilters.query, calendarFilters.timing, campaignNameById, myClaimed])
+  }, [
+    allClaimed,
+    calendarFilters.campaignId,
+    calendarFilters.channel,
+    calendarFilters.ownership,
+    calendarFilters.query,
+    calendarFilters.timing,
+    campaignNameById,
+    myClaimed,
+  ])
 
   const calendarWindow = useMemo(() => {
     const parsedCursor = calendarCursorDate ? new Date(`${calendarCursorDate}T00:00:00`) : new Date()
@@ -1123,6 +1141,7 @@ export default function CampaignsPage() {
     const matchesCalendarBase = (item: CampaignContentItem) => {
       if (calendarFilters.campaignId && item.campaign_id !== calendarFilters.campaignId) return false
       if (calendarFilters.channel !== 'all' && (item.intended_channel || '') !== calendarFilters.channel) return false
+      if (calendarFilters.ownership === 'mine' && item.posting_owner_id !== appUser?.user_id) return false
       if (!query) return true
       const haystack = `${item.title} ${item.topic} ${item.body}`.toLowerCase()
       return haystack.includes(query)
@@ -1263,6 +1282,7 @@ export default function CampaignsPage() {
   }, [
     calendarFilters.campaignId,
     calendarFilters.channel,
+    calendarFilters.ownership,
     calendarFilters.query,
     calendarWindow.end,
     calendarWindow.start,
@@ -1271,6 +1291,7 @@ export default function CampaignsPage() {
     contentItems,
     filteredMyClaimed,
     postedContent,
+    appUser?.user_id,
   ])
 
   const calendarTimelineGroups = useMemo(() => {
@@ -2175,6 +2196,7 @@ export default function CampaignsPage() {
       campaignId: '',
       channel: 'all',
       timing: 'all',
+      ownership: 'all',
     })
   }, [])
 
@@ -2455,8 +2477,19 @@ export default function CampaignsPage() {
     jumpTo('review')
   }, [jumpTo])
 
-  const openCalendarFromInput = useCallback(() => {
+  const openCalendarFromInput = useCallback((payload?: {
+    ownership?: CalendarFilters['ownership']
+    timing?: CalendarFilters['timing']
+  }) => {
     setCalendarSort('overdue-first')
+    setCalendarFilters(previous => ({
+      ...previous,
+      query: '',
+      campaignId: '',
+      channel: 'all',
+      ownership: payload?.ownership ?? 'mine',
+      timing: payload?.timing ?? 'all',
+    }))
     jumpTo('calendar')
   }, [jumpTo])
 
@@ -2564,7 +2597,7 @@ export default function CampaignsPage() {
       getSummary: () => reportSummary,
       openContentLibrary: payload => openContentLibraryFromInput(payload),
       openReviewQueue: () => openReviewQueueFromInput(),
-      openCalendar: () => openCalendarFromInput(),
+      openCalendar: payload => openCalendarFromInput(payload),
       openReports: () => openReportsFromInput(),
     }),
     [
@@ -2609,13 +2642,13 @@ export default function CampaignsPage() {
           run = () => openContentLibraryFromInput({ viewMode: 'action', status: 'unclaimed', ownership: 'unclaimed' })
           break
         case 'open-my-claimed':
-          run = () => openCalendarFromInput()
+          run = () => openCalendarFromInput({ ownership: 'mine' })
           break
         case 'open-review-queue':
           run = () => openReviewQueueFromInput()
           break
         case 'open-calendar':
-          run = () => openCalendarFromInput()
+          run = () => openCalendarFromInput({ ownership: 'all' })
           break
         case 'open-reports':
           run = () => openReportsFromInput()
@@ -4109,6 +4142,18 @@ export default function CampaignsPage() {
                   </select>
                 </label>
                 <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Ownership</span>
+                  <select
+                    className="input"
+                    aria-label="Filter claimed ownership"
+                    value={calendarFilters.ownership}
+                    onChange={(event) => setCalendarFilters(prev => ({ ...prev, ownership: event.target.value as CalendarFilters['ownership'] }))}
+                  >
+                    <option value="all">All Claimed</option>
+                    <option value="mine">My Claimed</option>
+                  </select>
+                </label>
+                <label className="campaign-filter-control">
                   <span className="campaign-card-copy">Calendar view</span>
                   <select
                     className="input"
@@ -4166,7 +4211,7 @@ export default function CampaignsPage() {
                 Window: {calendarWindow.label}
               </p>
               <p className="campaign-card-copy">
-                Showing {sortedMyClaimed.length} of {myClaimed.length} claimed items.
+                Showing {sortedMyClaimed.length} of {calendarFilters.ownership === 'mine' ? myClaimed.length : allClaimed.length} claimed items.
               </p>
             </article>
 

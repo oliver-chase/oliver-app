@@ -472,6 +472,179 @@ test.describe('campaign module report and automation flows', () => {
     await expect(contentSection.getByRole('heading', { name: 'Claimed LinkedIn Item' })).toBeVisible()
   })
 
+  test('campaign chatbot open-my-claimed and open-calendar set focused calendar ownership', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-ownership-1',
+            name: 'Ownership Campaign One',
+            description: '',
+            offer_definition: '',
+            target_audience: 'Ops teams',
+            primary_cta: 'Book a call',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+          {
+            id: 'campaign-ownership-2',
+            name: 'Ownership Campaign Two',
+            description: '',
+            offer_definition: '',
+            target_audience: 'Sales',
+            primary_cta: 'Sign up',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-02T00:00:00.000Z',
+            updated_at: '2026-04-02T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'ownership-mine',
+            title: 'Mine Claimed Item',
+            body: 'Mine body',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-ownership-1',
+            status: 'claimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: null,
+            scheduled_for: '2026-04-26T10:00:00.000Z',
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T10:00:00.000Z',
+            updated_at: '2026-04-01T10:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'ownership-other',
+            title: 'Other Claimed Item',
+            body: 'Other body',
+            content_type: 'linkedin-post',
+            topic: 'Marketing',
+            campaign_id: 'campaign-ownership-2',
+            status: 'claimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'other-user-id',
+            reviewer_id: null,
+            scheduled_for: '2026-04-27T11:00:00.000Z',
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'other-user-id',
+            created_at: '2026-04-02T10:00:00.000Z',
+            updated_at: '2026-04-02T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const chat = page.getByRole('button', { name: 'Open My Claimed' })
+    await expect(chat).toBeVisible()
+    await chat.click()
+
+    const calendarSection = page.locator('#campaigns-calendar')
+    await expect(page).toHaveURL(/\/campaigns\/calendar\/?$/)
+    await expect(calendarSection.getByRole('heading', { name: 'My Claimed Queue' })).toBeVisible()
+    await expect(calendarSection.getByRole('heading', { name: 'Mine Claimed Item' })).toBeVisible()
+    await expect(calendarSection.getByRole('heading', { name: 'Other Claimed Item' })).toHaveCount(0)
+    await expect(calendarSection.getByText('Showing 1 of 1 claimed items.')).toBeVisible()
+    await expect(calendarSection.getByLabel('Filter claimed ownership')).toHaveValue('mine')
+
+    const channelSelect = calendarSection.getByRole('combobox', { name: 'Filter claimed channel' })
+    await channelSelect.selectOption('linkedin')
+
+    await page.getByRole('button', { name: 'Open Calendar', exact: true }).click()
+    await expect(page).toHaveURL(/\/campaigns\/calendar\/?$/)
+    await expect(calendarSection.getByRole('heading', { name: 'Mine Claimed Item' })).toBeVisible()
+    await expect(calendarSection.getByRole('heading', { name: 'Other Claimed Item' })).toBeVisible()
+    await expect(calendarSection.getByLabel('Filter claimed ownership')).toHaveValue('all')
+    await expect(calendarSection.getByText('Showing 2 of 2 claimed items.')).toBeVisible()
+
+    const ownershipSelect = calendarSection.getByLabel('Filter claimed ownership')
+    await ownershipSelect.selectOption('mine')
+    await expect(calendarSection.getByText('Showing 1 of 1 claimed items.')).toBeVisible()
+    await expect(calendarSection.getByRole('heading', { name: 'Other Claimed Item' })).toHaveCount(0)
+    await expect(calendarSection.getByRole('heading', { name: 'Mine Claimed Item' })).toBeVisible()
+  })
+
   test('draft creation allows partial input with body only', async ({ page }) => {
     await page.route('**/rest/v1/campaigns*', async route => {
       await route.fulfill({
