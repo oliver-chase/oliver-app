@@ -44,7 +44,7 @@ Objective:
 ## Notes
 
 - This bundle extends, but does not replace, existing bundles:
-  - `slides-module-ux-be-backlog-2026-04-24`
-  - `admin-design-system-parity-2026-04-25`
-  - `auth-permissions-incident-backlog-2026-04-25.md`
+  - `slides-module`
+  - `platform-governance/admin-design-system-parity`
+  - `platform-governance/auth-permissions-incident-backlog/US-AUTH-incident-backlog.md`
 - Theme colors should be governed through token/config sources, not module-level hardcoded values.

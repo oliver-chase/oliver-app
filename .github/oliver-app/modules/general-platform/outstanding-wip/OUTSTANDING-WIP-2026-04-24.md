@@ -16,7 +16,6 @@
 ### epic-slides-platform-hardening
 
 - Stories targeted:
-  - `US-SLD-010` import preflight validation and guardrails
   - `US-SLD-030` slide and template data model with RLS
   - `US-SLD-031` save API and autosave state contract
   - `US-SLD-033` HTML and PDF export service contract
@@ -31,15 +30,18 @@
 ### epic-slides-reliability-guardrails
 
 - Stories targeted:
+  - `US-SLD-034` revision conflict and crash recovery
+  - `US-SLD-035` slide operation audit log and telemetry
+  - `US-SLD-036` slides FE/BE integration and regression suite
   - `US-SLD-037` unsaved change guardrails for workspace navigation
   - `US-SLD-038` scoped draft recovery lifecycle for unsaved edits
   - `US-SLD-039` autosave retry queue and backoff controls
-- Current state: `Assigned` with implementation present in current worktree.
+- Current state: `Completed` in this pass; verified in [QA snapshot](/.github/oliver-app/modules/slides-module/QA-2026-04-24.md).
 - File scope currently in worktree:
   - `src/app/slides/page.tsx`
   - `tests/e2e/slides-regression.spec.ts`
-  - `.github/user-stories/oliver-app/backlog/slides-module-ux-be-backlog-2026-04-24/US-SLD-037-*.md`
-  - `.github/user-stories/oliver-app/backlog/slides-module-ux-be-backlog-2026-04-24/US-SLD-038-*.md`
+- `/.github/oliver-app/modules/slides-module/US-SLD-037-*.md`
+- `/.github/oliver-app/modules/slides-module/US-SLD-038-*.md`
 
 ### epic-account-export-contracts
 

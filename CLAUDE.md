@@ -73,6 +73,14 @@ When a module changes (route, permission, visibility, commands, flows, or data c
   - do not execute without that backlog/story record
 - Backlog lifecycle is mandatory before closure: use the global [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md) for all docs reviews so in-progress stories with complete AC + evidence are moved to `Done`, marked `Verified`, and removed from active planning queues.
 
+Documentation and module backlog rules:
+- If a requirements doc includes executable user stories, convert to module backlog source and keep PRD as pointer only.
+- Keep module work separated by backlog folder under `/.github/oliver-app/modules/*` with its own README.
+- Avoid duplicate story text across modules and planning files; cross-link to canonical files instead.
+
+Session startup reminder:
+- Before any execution decision, apply the [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md): backlog-first intake, test/evidence planning, no duplicated PRD story maps, and module-specific backlog discipline.
+
 ## Commit Rules
 - Do not auto-commit after every change.
 - Only commit when explicitly asked, or when a named milestone is complete.

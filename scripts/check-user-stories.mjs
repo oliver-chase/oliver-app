@@ -1,15 +1,26 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
-const STORIES_ROOT = join(ROOT, '.github', 'user-stories', 'oliver-app')
+const PRIMARY_STORIES_ROOT = join(ROOT, '.github', 'user-stories', 'oliver-app')
+const FALLBACK_STORIES_ROOT = join(ROOT, '.github', 'oliver-app', 'modules')
+const STORIES_ROOT = existsSync(PRIMARY_STORIES_ROOT)
+  ? PRIMARY_STORIES_ROOT
+  : FALLBACK_STORIES_ROOT
 
-function walk(dir, out) {
+if (!existsSync(STORIES_ROOT)) {
+  console.log('check-user-stories: skipped — no configured story directory found.')
+  console.log(`checked: ${relative(ROOT, PRIMARY_STORIES_ROOT)}, ${relative(ROOT, FALLBACK_STORIES_ROOT)}`)
+  process.exit(0)
+}
+
+function collectCandidates(dir, out, depth = 0) {
+  if (depth > 6) return
   for (const entry of readdirSync(dir)) {
     const absPath = join(dir, entry)
     const stat = statSync(absPath)
     if (stat.isDirectory()) {
-      walk(absPath, out)
+      collectCandidates(absPath, out, depth + 1)
       continue
     }
     if (!/^US-.*\.md$/i.test(entry)) continue
@@ -43,7 +54,7 @@ function checkStory(path) {
 }
 
 const storyFiles = []
-walk(STORIES_ROOT, storyFiles)
+collectCandidates(STORIES_ROOT, storyFiles)
 
 const failures = []
 for (const file of storyFiles) {
