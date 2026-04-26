@@ -213,6 +213,86 @@ test.describe('slides regression', () => {
     expect(String(panel?.style?.backgroundColor || '')).toContain('30, 41, 59')
   })
 
+  test('SLD-FE-304 marks fallback-rendered imports as locked and clearly labeled', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1280px;height:720px;">
+      <span><span>Fallback only inline text</span></span>
+    </div>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText(/imported top-level nodes as fallback/i)).toBeVisible()
+    await expect(page.getByText(/fallback node.*locked layers/i)).toBeVisible()
+
+    const layer = page.locator('.slides-canvas-component').first()
+    await expect(layer).toHaveAttribute('data-component-locked', 'true')
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      sourceLabel?: string
+      locked?: boolean
+    }>
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0]?.locked).toBe(true)
+    expect(String(parsed[0]?.sourceLabel || '')).toContain('(fallback)')
+  })
+
+  test('SLD-FE-305 prioritizes .page root detection over lower-priority slide containers', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      .slide-canvas { position: relative; width: 4000px; height: 2250px; background: #0f172a; }
+      .slide-canvas .title { position: absolute; left: 500px; top: 360px; width: 1600px; font-size: 48px; color: #ef4444; }
+      .page { position: relative; width: 1600px; height: 900px; background: #e2e8f0; }
+      .page .title { position: absolute; left: 160px; top: 120px; width: 920px; font-size: 60px; color: #0f172a; }
+    </style>
+    <section class="slide-canvas">
+      <h1 class="title">Decoy Slide Root</h1>
+    </section>
+    <section class="page">
+      <h1 class="title">Priority Page Root</h1>
+    </section>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      content?: string
+      x?: number
+      style?: { color?: string }
+    }>
+
+    expect(parsed).toHaveLength(1)
+    expect(String(parsed[0]?.content || '')).toContain('Priority Page Root')
+    expect(String(parsed[0]?.content || '')).not.toContain('Decoy Slide Root')
+    expect(Number(parsed[0]?.x || 0)).toBeGreaterThanOrEqual(190)
+    expect(String(parsed[0]?.style?.color || '')).toContain('15, 23, 42')
+  })
+
+  test('SLD-FE-306 avoids tiny-text scaling when body bounds are much larger than imported layer bounds', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      body { position: relative; width: 6400px; height: 3600px; margin: 0; }
+      .hero { position: absolute; left: 320px; top: 260px; width: 1200px; font-size: 96px; line-height: 104px; color: #0f172a; }
+    </style>
+    <h1 class="hero">Body Oversized Root</h1>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText(/oversized root width/i)).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect(headingLayer).toHaveAttribute('data-component-x', '320')
+    await expect.poll(async () => {
+      const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
+      return Number.parseFloat(value)
+    }).toBeGreaterThan(90)
+  })
+
   test('SLD-FE-303 imports HTML with companion CSS files selected together', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
