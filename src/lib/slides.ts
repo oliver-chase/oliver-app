@@ -877,6 +877,30 @@ export async function listTemplates(actorInput: SlideActor, search = ''): Promis
   )
 }
 
+export async function listArchivedTemplates(actorInput: SlideActor, search = ''): Promise<SlideTemplateRecord[]> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'archived-templates',
+        search,
+        user_id: actor.user_id,
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      const response = await requestJson<{ items: SlideTemplateRecord[] }>(`/api/slides?${params.toString()}`)
+      return response.items || []
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const rows = actor.role === 'admin'
+        ? store.archivedTemplates
+        : store.archivedTemplates.filter((template) => template.owner_user_id === actor.user_id)
+      return applySearch(rows, search).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    },
+  )
+}
+
 export async function listSlideAudits(
   actorInput: SlideActor,
   optionsInput: SlideAuditQueryOptions = {},
@@ -1648,6 +1672,39 @@ export async function restoreTemplate(actorInput: SlideActor, templateId: string
       makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'restore-template' })
       writeLocalStore(store)
       return restored
+    },
+  )
+}
+
+export async function permanentlyDeleteTemplate(actorInput: SlideActor, templateId: string): Promise<void> {
+  const actor = normalizeActor(actorInput)
+
+  return withLocalFallback(
+    async () => {
+      await requestJson<{ ok: true }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'permanent-delete-template',
+          actor,
+          template_id: templateId,
+        }),
+      })
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const existing = store.archivedTemplates.find((template) => template.id === templateId)
+      if (!existing) throw new SlideApiError('Template not found for permanent delete', 404)
+      const isOwner = existing.owner_user_id === actor.user_id
+      const isAdmin = actor.role === 'admin'
+      if (!isOwner && !isAdmin) {
+        throw new SlideApiError('Forbidden. You do not own this template.', 403)
+      }
+
+      store.archivedTemplates = store.archivedTemplates.filter((template) => template.id !== templateId)
+      store.collaborators = store.collaborators.filter((entry) => entry.template_id !== templateId)
+      store.approvals = store.approvals.filter((approval) => approval.template_id !== templateId)
+      makeAuditEvent(store, actor, 'delete', 'success', 'template', templateId, { operation: 'permanent-delete-template' })
+      writeLocalStore(store)
     },
   )
 }

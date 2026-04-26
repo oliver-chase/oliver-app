@@ -77,6 +77,35 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/design-system\/?$/)
   })
 
+  test('hub startup telemetry records budgeted auth and permission warm-path timings', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.removeItem('oliver-startup-telemetry-v1')
+      window.sessionStorage.removeItem('oliver-startup-session-start-ms')
+    })
+
+    await gotoAndSettle(page, '/')
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const summary = window.__oliverStartupTelemetry
+        if (!summary) return false
+        return (
+          summary.budgets.auth_bootstrap_ms.count > 0
+          && summary.budgets.user_fetch_ms.count > 0
+          && summary.budgets.permission_filter_ms.count > 0
+          && summary.budgets.hub_interactive_ms.count > 0
+        )
+      })
+    }).toBe(true)
+
+    const summary = await page.evaluate(() => window.__oliverStartupTelemetry)
+    expect(summary?.budgets.auth_bootstrap_ms.pass).toBeTruthy()
+    expect(summary?.budgets.user_fetch_ms.pass).toBeTruthy()
+    expect(summary?.budgets.permission_filter_ms.pass).toBeTruthy()
+    expect(summary?.budgets.hub_interactive_ms.pass).toBeTruthy()
+  })
+
   test('major routes render a non-empty shell', async ({ page }) => {
     const routes = [
       { path: '/', text: 'Internal Operations Hub', expectedUrl: /\/$/ },
@@ -773,6 +802,56 @@ test.describe('frontend smoke', () => {
     await expect(memberRow.getByRole('combobox')).toBeEnabled()
   })
 
+  test('admin user manager surfaces backend failures and recovers after refresh', async ({ page }) => {
+    let userListRequestCount = 0
+    await page.route('**/api/users**', async route => {
+      const request = route.request()
+      if (request.method().toUpperCase() !== 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true }),
+        })
+        return
+      }
+
+      userListRequestCount += 1
+      if (userListRequestCount === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'temporary outage' }),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            user_id: 'recovered-admin-1',
+            email: 'admin-recovered@example.com',
+            name: 'Recovered Admin',
+            role: 'admin',
+            page_permissions: ['accounts', 'hr', 'sdr', 'slides'],
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await gotoAndSettle(page, '/admin')
+    await expect(page.getByText('Save failed: Transient service failure (503). Retry in a moment.')).toBeVisible()
+
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: 'User Access' })).toBeVisible()
+    await expect(page.getByText('Save failed: Transient service failure (503). Retry in a moment.')).toHaveCount(0)
+    await expect(page.locator('tbody tr').filter({ hasText: 'admin-recovered@example.com' })).toHaveCount(1)
+  })
+
   test('design system interactive controls behave consistently', async ({ page }) => {
     await gotoAndSettle(page, '/design-system')
 
@@ -806,6 +885,8 @@ test.describe('frontend smoke', () => {
 
     await page.getByRole('tab', { name: 'Chips & Badges' }).click()
     await expect(page.getByText('All variants — static')).toBeVisible()
+    await expect(page.getByText('Notices')).toBeVisible()
+    await expect(page.getByText('Informational notice for non-destructive status updates.')).toBeVisible()
 
     await page.getByRole('link', { name: 'Admin Edit Workspace' }).click()
     const editWorkspace = page.locator('#sec-admin-edit')

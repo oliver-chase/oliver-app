@@ -3,7 +3,9 @@ import type { SlideComponent, SlideComponentStyle, SlideComponentType, SlideImpo
 const DEFAULT_CANVAS_WIDTH = 1920
 const DEFAULT_CANVAS_HEIGHT = 1080
 const CANVAS_TARGET_ASPECT_RATIO = DEFAULT_CANVAS_WIDTH / DEFAULT_CANVAS_HEIGHT
+const CANVAS_AUTO_SCALE_RATIO_THRESHOLD = 1.4
 const MIN_FLOW_NODE_SIZE = 12
+const IMPORT_AUTO_CANVAS_SCALE_MAX = 2.5
 const IMPORT_ROOT_MARKER_ATTR = 'data-import-root-id'
 const IMPORT_ROOT_MARKER_VALUE = 'import-root'
 const FLOW_TEXT_TAGS = new Set([
@@ -67,6 +69,55 @@ interface RenderSnapshot {
   root: HTMLElement | null
   nodesById: Map<string, HTMLElement>
   dispose: () => void
+}
+
+function createSettlingTimeout(timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    window.setTimeout(() => {
+      reject(new Error(`Timeout waiting for import render settle after ${timeoutMs}ms.`))
+    }, timeoutMs)
+  })
+}
+
+async function waitForImageLoad(image: HTMLImageElement): Promise<void> {
+  if (image.complete) return
+  await new Promise((resolve) => {
+    const done = () => {
+      image.removeEventListener('load', done)
+      image.removeEventListener('error', done)
+      resolve()
+    }
+    image.addEventListener('load', done, { once: true })
+    image.addEventListener('error', done, { once: true })
+  })
+}
+
+async function settleRenderSnapshot(sandbox: HTMLElement): Promise<void> {
+  if (typeof sandbox.ownerDocument === 'undefined') return
+  const doc = sandbox.ownerDocument
+  const settleWait = new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+
+  const pending: Array<Promise<unknown>> = [settleWait]
+  const documentFonts = (doc as Document & { fonts?: FontFaceSet }).fonts
+  if (documentFonts?.ready) {
+    pending.push(documentFonts.ready)
+  }
+
+  const images = Array.from(doc.querySelectorAll('img'))
+  for (const image of images) {
+    pending.push(waitForImageLoad(image))
+  }
+
+  try {
+    await Promise.race([
+      Promise.all(pending),
+      createSettlingTimeout(1500),
+    ])
+  } catch {
+    // Best-effort render settling for import fidelity.
+  }
 }
 
 function makeSafeResolvedUrl(rawUrl: string, baseUrl: string): string | null {
@@ -645,7 +696,18 @@ function measureContentBounds(
   }
 }
 
-function buildRenderSnapshot(doc: Document, root: HTMLElement, styleChunks: InlinedStyleChunk[]): RenderSnapshot {
+function clampAutoImportCanvasAxis(axisValue: number, label: 'width' | 'height', warnings: string[]): number {
+  const defaultAxis = label === 'width' ? DEFAULT_CANVAS_WIDTH : DEFAULT_CANVAS_HEIGHT
+  const maxAxis = Math.round(defaultAxis * IMPORT_AUTO_CANVAS_SCALE_MAX)
+  if (axisValue <= maxAxis) return axisValue
+
+  warnings.push(
+    `Source ${label} ${axisValue}px exceeds auto-import safety cap ${maxAxis}px; clamped to avoid compressed output.`,
+  )
+  return maxAxis
+}
+
+async function buildRenderSnapshot(doc: Document, root: HTMLElement, styleChunks: InlinedStyleChunk[]): Promise<RenderSnapshot> {
   if (typeof document === 'undefined' || !document.body) {
     return {
       root: null,
@@ -702,6 +764,8 @@ function buildRenderSnapshot(doc: Document, root: HTMLElement, styleChunks: Inli
     sandbox.appendChild(rootClone)
   }
   document.body.appendChild(sandbox)
+
+  await settleRenderSnapshot(sandbox)
 
   const nodesById = new Map<string, HTMLElement>()
   for (const node of Array.from(sandbox.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
@@ -792,7 +856,7 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
   if (root.querySelector('video')) {
     warnings.push('Detected video elements; video playback layers are not imported as editable slide components.')
   }
-  const renderSnapshot = buildRenderSnapshot(doc, root, inlinedStyleChunks)
+  const renderSnapshot = await buildRenderSnapshot(doc, root, inlinedStyleChunks)
 
   try {
     const rootStyle = parseInlineStyle(root.getAttribute('style') || '')
@@ -831,13 +895,16 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
       ?? measuredRootRect.height
       ?? DEFAULT_CANVAS_HEIGHT
 
-    if (explicitCanvasWidth === undefined && contentBounds.width && sourceCanvasWidth > contentBounds.width * 1.75) {
+    sourceCanvasWidth = clampAutoImportCanvasAxis(sourceCanvasWidth, 'width', warnings)
+    sourceCanvasHeight = clampAutoImportCanvasAxis(sourceCanvasHeight, 'height', warnings)
+
+    if (explicitCanvasWidth === undefined && contentBounds.width && sourceCanvasWidth > contentBounds.width * CANVAS_AUTO_SCALE_RATIO_THRESHOLD) {
       sourceCanvasWidth = Math.max(contentBounds.width, DEFAULT_CANVAS_WIDTH)
       warnings.push(
         'Detected oversized root width during import; normalized canvas width using layer bounds to avoid compressed output.',
       )
     }
-    if (explicitCanvasHeight === undefined && contentBounds.height && sourceCanvasHeight > contentBounds.height * 1.75) {
+    if (explicitCanvasHeight === undefined && contentBounds.height && sourceCanvasHeight > contentBounds.height * CANVAS_AUTO_SCALE_RATIO_THRESHOLD) {
       sourceCanvasHeight = Math.max(contentBounds.height, DEFAULT_CANVAS_HEIGHT)
       warnings.push(
         'Detected oversized root height during import; normalized canvas height using layer bounds to avoid compressed output.',

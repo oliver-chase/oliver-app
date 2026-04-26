@@ -163,6 +163,175 @@ test('slides API contract: save write returns normalized slide payload for autho
   })
 })
 
+test('slides API contract: restore-template returns normalized template payload and audit metadata', { concurrency: false }, async () => {
+  let auditInserted = false
+
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['slides'],
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_templates' && method === 'GET') {
+      if (url.searchParams.get('id') === 'eq.template-restore-1' && url.searchParams.get('is_archived') === 'eq.true') {
+        return jsonResponse([{
+          id: 'template-restore-1',
+          owner_user_id: 'admin-1',
+          name: 'Archived Template',
+          description: 'Template in archive',
+          is_shared: false,
+          is_archived: true,
+          canvas: { width: 1920, height: 1080 },
+          components_json: [],
+          metadata: {},
+          created_at: '2026-04-25T00:00:00.000Z',
+          updated_at: '2026-04-25T00:00:00.000Z',
+        }])
+      }
+    }
+
+    if (url.pathname === '/rest/v1/slide_templates' && method === 'PATCH') {
+      return jsonResponse([{
+        id: 'template-restore-1',
+        owner_user_id: 'admin-1',
+        name: 'Archived Template',
+        description: 'Template in archive',
+        is_shared: false,
+        is_archived: false,
+        canvas: { width: 1920, height: 1080 },
+        components_json: [],
+        metadata: {},
+        created_at: '2026-04-25T00:00:00.000Z',
+        updated_at: '2026-04-26T00:00:00.000Z',
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_audit_events' && method === 'POST') {
+      auditInserted = true
+      return jsonResponse([], 201)
+    }
+
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/slides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'restore-template',
+        actor: { user_id: 'admin-1', user_email: 'admin@example.com' },
+        template_id: 'template-restore-1',
+      }),
+    })
+
+    const response = await onRequestPost({
+      request,
+      env: {
+        ...BASE_ENV,
+        SLIDES_TRUST_CLIENT_IDENTITY: '1',
+      },
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(body.template?.id, 'template-restore-1')
+    assert.equal(body.template?.is_archived, false)
+    assert.equal(auditInserted, true)
+  })
+})
+
+test('slides API contract: permanent-delete-template enforces archived prerequisite and writes audit trail', { concurrency: false }, async () => {
+  let collaboratorDeleteCalled = false
+  let templateDeleteCalled = false
+  let auditInserted = false
+
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['slides'],
+      }])
+    }
+
+    if (url.pathname === '/rest/v1/slide_templates' && method === 'GET') {
+      if (url.searchParams.get('id') === 'eq.template-delete-1') {
+        return jsonResponse([{
+          id: 'template-delete-1',
+          owner_user_id: 'admin-1',
+          name: 'Archived Template',
+          description: 'Template in archive',
+          is_shared: false,
+          is_archived: true,
+          canvas: { width: 1920, height: 1080 },
+          components_json: [],
+          metadata: {},
+          created_at: '2026-04-25T00:00:00.000Z',
+          updated_at: '2026-04-25T00:00:00.000Z',
+        }])
+      }
+    }
+
+    if (url.pathname === '/rest/v1/slide_template_collaborators' && method === 'DELETE') {
+      collaboratorDeleteCalled = true
+      return new Response(null, { status: 204 })
+    }
+
+    if (url.pathname === '/rest/v1/slide_templates' && method === 'DELETE') {
+      templateDeleteCalled = true
+      return new Response(null, { status: 204 })
+    }
+
+    if (url.pathname === '/rest/v1/slide_audit_events' && method === 'POST') {
+      auditInserted = true
+      return jsonResponse([], 201)
+    }
+
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/slides', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'permanent-delete-template',
+        actor: { user_id: 'admin-1', user_email: 'admin@example.com' },
+        template_id: 'template-delete-1',
+      }),
+    })
+
+    const response = await onRequestPost({
+      request,
+      env: {
+        ...BASE_ENV,
+        SLIDES_TRUST_CLIENT_IDENTITY: '1',
+      },
+    })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(body.ok, true)
+    assert.equal(collaboratorDeleteCalled, true)
+    assert.equal(templateDeleteCalled, true)
+    assert.equal(auditInserted, true)
+  })
+})
+
 test('slides API contract: audits read supports high-volume pagination envelope', { concurrency: false }, async () => {
   await withMockedFetch(async (input, init = {}) => {
     const url = new URL(String(input))

@@ -69,6 +69,33 @@ async function mockCampaignSupabaseReads(page: Page) {
       body: JSON.stringify([]),
     })
   })
+  await page.route('**/api/campaigns**', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          campaigns: [],
+          contentItems: [],
+          items: [],
+          metrics: null,
+          groupedByUser: [],
+          groupedByCampaign: [],
+          groupedByContentType: [],
+          groupedByTopic: [],
+          exports: [],
+        }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true }),
+    })
+  })
 }
 
 test.describe('mobile click-path audit', () => {
@@ -124,6 +151,19 @@ test.describe('mobile click-path audit', () => {
     await page.locator('.account-card').first().click()
     await expect(page.locator('#account-name-heading')).toBeVisible()
     await expectNoHorizontalOverflow(page, '/accounts detail')
+    const accountsTrigger = page.getByRole('button', { name: 'Open Oliver' })
+    await expect(accountsTrigger).toBeVisible()
+    const triggerBox = await accountsTrigger.boundingBox()
+    const viewport = page.viewportSize()
+    expect(triggerBox, 'Accounts mobile trigger should be measurable').not.toBeNull()
+    expect(viewport, 'Accounts mobile viewport should be available').not.toBeNull()
+    if (triggerBox && viewport) {
+      const triggerCenterX = triggerBox.x + triggerBox.width / 2
+      expect(
+        triggerCenterX,
+        'Accounts mobile trigger should stay on the left half to avoid right-side tap contention',
+      ).toBeLessThan(viewport.width / 2)
+    }
 
     await gotoAndSettle(page, '/hr')
     await page.getByRole('button', { name: 'Open Oliver' }).click()
@@ -153,5 +193,28 @@ test.describe('mobile click-path audit', () => {
     await page.getByRole('button', { name: 'Open Oliver' }).click()
     await expect(page.getByLabel('Message or command')).toBeVisible()
     await expectNoHorizontalOverflow(page, '/admin')
+  })
+
+  test('campaign subviews stay mobile-safe from module entry', async ({ page }) => {
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page).toHaveURL(/\/campaigns\/?$/)
+    await expect(page.getByRole('link', { name: 'Campaigns' })).toBeVisible()
+    await expectNoHorizontalOverflow(page, '/campaigns')
+
+    const routes = [
+      { path: '/campaigns/campaigns', expectedUrl: /\/campaigns\/campaigns\/?$/ },
+      { path: '/campaigns/content', expectedUrl: /\/campaigns\/content\/?$/ },
+      { path: '/campaigns/review-queue', expectedUrl: /\/campaigns\/review-queue\/?$/ },
+      { path: '/campaigns/calendar', expectedUrl: /\/campaigns\/calendar\/?$/ },
+      { path: '/campaigns/reports', expectedUrl: /\/campaigns\/reports\/?$/ },
+    ]
+
+    for (const route of routes) {
+      await gotoAndSettle(page, route.path)
+      await expect(page).toHaveURL(route.expectedUrl)
+      await expectNoHorizontalOverflow(page, route.path)
+    }
+
+    await expect(page.getByText('Report Filters')).toBeVisible()
   })
 })
