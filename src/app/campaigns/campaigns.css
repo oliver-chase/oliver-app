@@ -39,6 +39,7 @@ body{font-family:var(--font);background:var(--surface2);color:var(--text)}
 .campaign-tab-row{display:flex;flex-wrap:wrap;gap:var(--spacing-xs)}
 .campaign-card-focus{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue-light)}
 .campaign-card-highlighted{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue-light);background:linear-gradient(180deg,var(--blue-light),var(--surface))}
+.campaign-focus-mobile-preview{max-width:320px;justify-self:start}
 .campaign-detail-card{gap:var(--spacing-md)}
 .campaign-detail-slices{grid-template-columns:repeat(2,minmax(0,1fr))}
 .campaign-detail-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--spacing-2xs)}

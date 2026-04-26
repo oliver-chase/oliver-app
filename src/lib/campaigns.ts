@@ -167,6 +167,10 @@ async function logCampaignActivity(input: CampaignActivityInput) {
   throwDbError('logCampaignActivity', error)
 }
 
+export async function logCampaignActivityEvent(input: CampaignActivityInput) {
+  await logCampaignActivity(input)
+}
+
 function normalizeRpcResult<T>(label: string, data: T | T[] | null): T {
   if (Array.isArray(data)) {
     if (data.length === 0) throw new Error(`${label}: empty RPC response`)

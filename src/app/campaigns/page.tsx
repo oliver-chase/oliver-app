@@ -34,6 +34,7 @@ import {
   listCampaigns,
   isCampaignAssetsTableAvailable,
   markCampaignContentPosted,
+  logCampaignActivityEvent,
   publishCampaignJourneyGraph,
   removeCampaignAsset,
   rejectCampaignContent,
@@ -245,6 +246,50 @@ type CampaignJourneyTimelineFilters = {
   branchOutcome: CampaignJourneyBranchOutcome | ''
 }
 
+type CampaignPlanningBoardStatus = 'draft' | 'ready' | 'live' | 'paused'
+
+type CampaignPlanningBoardDraft = {
+  objective: string
+  targetAudience: string
+  channelMix: string
+  cta: string
+  successMetrics: string
+  status: CampaignPlanningBoardStatus
+}
+
+type CampaignFocusItemType = 'collect_data' | 'display_notice' | 'emphasize_link'
+
+type CampaignFocusItemStatus = 'draft' | 'active' | 'paused' | 'archived'
+
+type CampaignFocusItem = {
+  id: string
+  type: CampaignFocusItemType
+  title: string
+  message: string
+  target_url: string
+  campaign_node_id: string
+  start_at: string
+  end_at: string
+  domain_allowlist: string[]
+  status: CampaignFocusItemStatus
+  impressions: number
+  conversions: number
+  updated_at: string
+  updated_by: string
+}
+
+type CampaignFocusItemDraft = {
+  type: CampaignFocusItemType
+  title: string
+  message: string
+  targetUrl: string
+  campaignNodeId: string
+  startAt: string
+  endAt: string
+  domainAllowlist: string
+  status: CampaignFocusItemStatus
+}
+
 const CAMPAIGN_CADENCE_OPTIONS: Array<{ value: CampaignCadencePreset; label: string }> = [
   { value: 'none', label: 'No Cadence' },
   { value: 'weekdays', label: 'Every Weekday (Mon-Fri)' },
@@ -422,30 +467,54 @@ function getPresetDateRange(preset: CampaignReportPreset): { startDate: string; 
   return { startDate: '', endDate: '' }
 }
 
-function buildCadenceRuleFromPreset(preset: CampaignCadencePreset): Record<string, unknown> | null {
-  if (preset === 'none') return null
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return { ...(value as Record<string, unknown>) }
+}
+
+function buildCadenceRuleFromPreset(
+  preset: CampaignCadencePreset,
+  existingRule?: CampaignRecord['cadence_rule'],
+): Record<string, unknown> | null {
+  const preserved = asRecord(existingRule)
+  delete preserved.preset
+  delete preserved.posts_per_week
+  delete preserved.postsPerWeek
+  delete preserved.days_of_week
+  delete preserved.weekly_target
+  delete preserved.weeklyTarget
+
+  if (preset === 'none') {
+    return Object.keys(preserved).length > 0 ? preserved : null
+  }
+
+  const scheduled: Record<string, unknown> = {}
   if (preset === 'weekdays') {
-    return {
+    Object.assign(scheduled, {
       preset: 'every-weekday',
       posts_per_week: 5,
       days_of_week: [1, 2, 3, 4, 5],
-    }
-  }
-  if (preset === 'every-other-day') {
-    return {
+    })
+  } else if (preset === 'every-other-day') {
+    Object.assign(scheduled, {
       preset: 'every-other-day',
       posts_per_week: 4,
-    }
-  }
-  if (preset === 'weekly-3') {
-    return {
+    })
+  } else if (preset === 'weekly-3') {
+    Object.assign(scheduled, {
       preset: 'weekly',
       posts_per_week: 3,
-    }
+    })
+  } else {
+    Object.assign(scheduled, {
+      preset: 'weekly',
+      posts_per_week: 5,
+    })
   }
+
   return {
-    preset: 'weekly',
-    posts_per_week: 5,
+    ...preserved,
+    ...scheduled,
   }
 }
 
@@ -677,6 +746,90 @@ function createDefaultJourneyNodeDraft(type: CampaignJourneyNodeType = 'action')
   }
 }
 
+function parsePlanningBoardDraft(campaign: CampaignRecord | null): CampaignPlanningBoardDraft {
+  const cadenceRule = asRecord(campaign?.cadence_rule)
+  const planning = asRecord(cadenceRule.planning_board)
+  const status = planning.status === 'ready' || planning.status === 'live' || planning.status === 'paused'
+    ? planning.status
+    : 'draft'
+  return {
+    objective: typeof planning.objective === 'string' ? planning.objective : '',
+    targetAudience: typeof planning.target_audience === 'string' ? planning.target_audience : '',
+    channelMix: typeof planning.channel_mix === 'string' ? planning.channel_mix : '',
+    cta: typeof planning.cta === 'string' ? planning.cta : '',
+    successMetrics: typeof planning.success_metrics === 'string' ? planning.success_metrics : '',
+    status,
+  }
+}
+
+function parseFocusItems(campaign: CampaignRecord | null): CampaignFocusItem[] {
+  const cadenceRule = asRecord(campaign?.cadence_rule)
+  const rawItems = Array.isArray(cadenceRule.focus_items) ? cadenceRule.focus_items : []
+  return rawItems
+    .map((row): CampaignFocusItem | null => {
+      if (!row || typeof row !== 'object') return null
+      const source = row as Record<string, unknown>
+      const id = typeof source.id === 'string' && source.id.trim() ? source.id.trim() : ''
+      const type = source.type
+      if (type !== 'collect_data' && type !== 'display_notice' && type !== 'emphasize_link') return null
+      const status = source.status === 'active' || source.status === 'paused' || source.status === 'archived'
+        ? source.status
+        : 'draft'
+      const domains = Array.isArray(source.domain_allowlist)
+        ? source.domain_allowlist.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+        : []
+      const impressions = Number(source.impressions || 0)
+      const conversions = Number(source.conversions || 0)
+      return {
+        id: id || `focus-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        title: typeof source.title === 'string' ? source.title : '',
+        message: typeof source.message === 'string' ? source.message : '',
+        target_url: typeof source.target_url === 'string' ? source.target_url : '',
+        campaign_node_id: typeof source.campaign_node_id === 'string' ? source.campaign_node_id : '',
+        start_at: typeof source.start_at === 'string' ? source.start_at : '',
+        end_at: typeof source.end_at === 'string' ? source.end_at : '',
+        domain_allowlist: domains,
+        status,
+        impressions: Number.isFinite(impressions) ? impressions : 0,
+        conversions: Number.isFinite(conversions) ? conversions : 0,
+        updated_at: typeof source.updated_at === 'string' ? source.updated_at : '',
+        updated_by: typeof source.updated_by === 'string' ? source.updated_by : '',
+      }
+    })
+    .filter((row): row is CampaignFocusItem => !!row)
+}
+
+function createDefaultFocusItemDraft(): CampaignFocusItemDraft {
+  return {
+    type: 'display_notice',
+    title: '',
+    message: '',
+    targetUrl: '',
+    campaignNodeId: '',
+    startAt: '',
+    endAt: '',
+    domainAllowlist: '',
+    status: 'draft',
+  }
+}
+
+function buildPlanningBoardCompleteness(draft: CampaignPlanningBoardDraft) {
+  const requiredChecks = [
+    draft.objective.trim().length > 0,
+    draft.targetAudience.trim().length > 0,
+    draft.channelMix.trim().length > 0,
+    draft.cta.trim().length > 0,
+    draft.successMetrics.trim().length > 0,
+  ]
+  const completeCount = requiredChecks.filter(Boolean).length
+  return {
+    completeCount,
+    totalCount: requiredChecks.length,
+    isComplete: completeCount === requiredChecks.length,
+  }
+}
+
 export default function CampaignsPage() {
   const pathname = usePathname()
   const router = useRouter()
@@ -790,6 +943,18 @@ export default function CampaignsPage() {
   })
   const [journeyTimelineGeneratedAt, setJourneyTimelineGeneratedAt] = useState('')
   const [highlightedJourneyNodeId, setHighlightedJourneyNodeId] = useState('')
+  const [planningBoardDraft, setPlanningBoardDraft] = useState<CampaignPlanningBoardDraft>({
+    objective: '',
+    targetAudience: '',
+    channelMix: '',
+    cta: '',
+    successMetrics: '',
+    status: 'draft',
+  })
+  const [planningBoardSaving, setPlanningBoardSaving] = useState(false)
+  const [focusItems, setFocusItems] = useState<CampaignFocusItem[]>([])
+  const [focusItemDraft, setFocusItemDraft] = useState<CampaignFocusItemDraft>(createDefaultFocusItemDraft())
+  const [focusItemSaving, setFocusItemSaving] = useState(false)
 
   const [campaignDraft, setCampaignDraft] = useState({
     name: '',
@@ -936,6 +1101,9 @@ export default function CampaignsPage() {
       return
     }
     setJourneyNodeDrafts([createDefaultJourneyNodeDraft('action')])
+    setPlanningBoardDraft(parsePlanningBoardDraft(selectedCampaign))
+    setFocusItems(parseFocusItems(selectedCampaign))
+    setFocusItemDraft(createDefaultFocusItemDraft())
   }, [selectedCampaign])
 
   useEffect(() => {
@@ -1181,6 +1349,22 @@ export default function CampaignsPage() {
   const selectedCampaignStats = useMemo(
     () => (selectedCampaign ? campaignStatsById.get(selectedCampaign.id) || null : null),
     [campaignStatsById, selectedCampaign],
+  )
+  const planningBoardCompleteness = useMemo(
+    () => buildPlanningBoardCompleteness(planningBoardDraft),
+    [planningBoardDraft],
+  )
+  const focusTotals = useMemo(() => {
+    const impressions = focusItems.reduce((total, item) => total + item.impressions, 0)
+    const conversions = focusItems.reduce((total, item) => total + item.conversions, 0)
+    const conversionRate = impressions > 0 ? (conversions / impressions) * 100 : 0
+    return { impressions, conversions, conversionRate }
+  }, [focusItems])
+  const journeyNodeOptions = useMemo(
+    () => journeyNodeDrafts
+      .map(node => ({ id: node.id.trim(), title: node.title.trim() }))
+      .filter(node => node.id.length > 0),
+    [journeyNodeDrafts],
   )
 
   const capabilityMatrix = useMemo(() => ({
@@ -2145,7 +2329,7 @@ export default function CampaignsPage() {
           keywords,
           start_date: campaignDetailDraft.startDate || null,
           end_date: campaignDetailDraft.endDate || null,
-          cadence_rule: buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset),
+          cadence_rule: buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, selectedCampaign.cadence_rule),
           status: campaignDetailDraft.status,
         },
         appUser.user_id,
@@ -2357,6 +2541,213 @@ export default function CampaignsPage() {
     }
     void loadJourneyTimelineFromInput(0)
   }, [loadJourneyTimelineFromInput, selectedCampaign?.id])
+
+  const savePlanningBoardFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    setPlanningBoardSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const existingCadenceRule = selectedCampaign.cadence_rule
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(existingCadenceRule && typeof existingCadenceRule === 'object' ? existingCadenceRule : {}),
+        planning_board: {
+          objective: planningBoardDraft.objective.trim(),
+          target_audience: planningBoardDraft.targetAudience.trim(),
+          channel_mix: planningBoardDraft.channelMix.trim(),
+          cta: planningBoardDraft.cta.trim(),
+          success_metrics: planningBoardDraft.successMetrics.trim(),
+          status: planningBoardDraft.status,
+          updated_at: new Date().toISOString(),
+          updated_by: appUser.user_id,
+        },
+      })
+
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        {
+          cadence_rule: nextCadenceRule,
+        },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: 'campaign-planning-board-snapshot',
+        performed_by: appUser.user_id,
+        metadata: {
+          status: planningBoardDraft.status,
+          completeness: buildPlanningBoardCompleteness(planningBoardDraft),
+        },
+      })
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess('Planning board saved.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setPlanningBoardSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    markMutationSuccess,
+    planningBoardDraft,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  const createFocusItemFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    const title = focusItemDraft.title.trim()
+    const message = focusItemDraft.message.trim()
+    const startAt = focusItemDraft.startAt ? localDateTimeToIso(focusItemDraft.startAt) : null
+    const endAt = focusItemDraft.endAt ? localDateTimeToIso(focusItemDraft.endAt) : null
+    if (!title || !message) {
+      setError('Focus item title and message are required.')
+      return
+    }
+    if (focusItemDraft.targetUrl.trim() && !isHttpUrl(focusItemDraft.targetUrl.trim())) {
+      setError('Focus target URL must start with `http://` or `https://`.')
+      return
+    }
+    if (startAt && endAt && startAt > endAt) {
+      setError('Focus active start must be before end date.')
+      return
+    }
+    const domains = focusItemDraft.domainAllowlist
+      .split(',')
+      .map(domain => domain.trim().toLowerCase())
+      .filter(Boolean)
+      .map(domain => domain.replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+    if (focusItemDraft.status === 'active' && domains.length === 0) {
+      setError('Domain allowlist is required before enabling a focus item.')
+      return
+    }
+
+    const newItem: CampaignFocusItem = {
+      id: `focus-${Math.random().toString(36).slice(2, 10)}`,
+      type: focusItemDraft.type,
+      title,
+      message,
+      target_url: focusItemDraft.targetUrl.trim(),
+      campaign_node_id: focusItemDraft.campaignNodeId.trim(),
+      start_at: startAt || '',
+      end_at: endAt || '',
+      domain_allowlist: [...new Set(domains)],
+      status: focusItemDraft.status,
+      impressions: 0,
+      conversions: 0,
+      updated_at: new Date().toISOString(),
+      updated_by: appUser.user_id,
+    }
+
+    setFocusItemSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nextFocusItems = [newItem, ...focusItems]
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(selectedCampaign.cadence_rule && typeof selectedCampaign.cadence_rule === 'object' ? selectedCampaign.cadence_rule : {}),
+        focus_items: nextFocusItems,
+      })
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        { cadence_rule: nextCadenceRule },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setFocusItems(nextFocusItems)
+      setFocusItemDraft(createDefaultFocusItemDraft())
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: 'campaign-focus-item-created',
+        performed_by: appUser.user_id,
+        metadata: {
+          focus_item_id: newItem.id,
+          focus_item_type: newItem.type,
+          campaign_node_id: newItem.campaign_node_id || null,
+          domain_allowlist_count: newItem.domain_allowlist.length,
+        },
+      })
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess('Focus item created.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setFocusItemSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    focusItemDraft,
+    focusItems,
+    markMutationSuccess,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  const updateFocusItemMetricFromInput = useCallback(async (
+    focusItemId: string,
+    metric: 'impression' | 'conversion',
+  ) => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    const updatedItems = focusItems.map(item => {
+      if (item.id !== focusItemId) return item
+      return {
+        ...item,
+        impressions: metric === 'impression' ? item.impressions + 1 : item.impressions,
+        conversions: metric === 'conversion' ? item.conversions + 1 : item.conversions,
+        updated_at: new Date().toISOString(),
+        updated_by: appUser.user_id,
+      }
+    })
+
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(selectedCampaign.cadence_rule && typeof selectedCampaign.cadence_rule === 'object' ? selectedCampaign.cadence_rule : {}),
+        focus_items: updatedItems,
+      })
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        { cadence_rule: nextCadenceRule },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setFocusItems(updatedItems)
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: metric === 'impression' ? 'campaign-focus-impression-tracked' : 'campaign-focus-conversion-tracked',
+        performed_by: appUser.user_id,
+        metadata: {
+          focus_item_id: focusItemId,
+        },
+      })
+      markMutationSuccess(metric === 'impression' ? 'Focus impression tracked.' : 'Focus conversion tracked.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    focusItems,
+    markMutationSuccess,
+    selectedCampaign,
+    setErrorFromException,
+  ])
 
   const createContentDraftFromInput = useCallback(async (payload: {
     title?: string
@@ -6032,6 +6423,269 @@ export default function CampaignsPage() {
                         </button>
                       </div>
                     )}
+                  </article>
+
+                  <article className="card campaign-card">
+                    <div className="campaign-row-head">
+                      <div>
+                        <h3 className="campaign-card-title">Planning Board</h3>
+                        <p className="campaign-card-copy">
+                          Define objective, audience, channel mix, CTA, and success metrics before going live.
+                        </p>
+                      </div>
+                      <span className="campaign-pill">
+                        Completeness {planningBoardCompleteness.completeCount}/{planningBoardCompleteness.totalCount}
+                      </span>
+                    </div>
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Objective</span>
+                        <input
+                          className="input"
+                          value={planningBoardDraft.objective}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, objective: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Target Audience</span>
+                        <input
+                          className="input"
+                          value={planningBoardDraft.targetAudience}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, targetAudience: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Channel Mix</span>
+                        <input
+                          className="input"
+                          value={planningBoardDraft.channelMix}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, channelMix: event.target.value }))}
+                          placeholder="linkedin, email, site-banner"
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">CTA</span>
+                        <input
+                          className="input"
+                          value={planningBoardDraft.cta}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, cta: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Success Metrics</span>
+                        <input
+                          className="input"
+                          value={planningBoardDraft.successMetrics}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, successMetrics: event.target.value }))}
+                          placeholder="CTR > 2%, MQL >= 30"
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Planning Status</span>
+                        <select
+                          className="input"
+                          value={planningBoardDraft.status}
+                          onChange={(event) => setPlanningBoardDraft(previous => ({ ...previous, status: event.target.value as CampaignPlanningBoardStatus }))}
+                        >
+                          <option value="draft">draft</option>
+                          <option value="ready">ready</option>
+                          <option value="live">live</option>
+                          <option value="paused">paused</option>
+                        </select>
+                      </label>
+                    </div>
+                    {!planningBoardCompleteness.isComplete && (
+                      <p className="campaign-card-rejection">Missing required planning fields. Complete all five fields before launch readiness.</p>
+                    )}
+                    <div className="campaign-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--sm"
+                        onClick={() => { void savePlanningBoardFromInput() }}
+                        disabled={planningBoardSaving}
+                      >
+                        {planningBoardSaving ? 'Saving…' : 'Save Planning Board'}
+                      </button>
+                    </div>
+                  </article>
+
+                  <article className="card campaign-card">
+                    <div className="campaign-row-head">
+                      <div>
+                        <h3 className="campaign-card-title">Focus Item Workspace</h3>
+                        <p className="campaign-card-copy">
+                          Configure on-site prompts (`collect_data`, `display_notice`, `emphasize_link`) and link them to journey nodes.
+                        </p>
+                      </div>
+                      <span className="campaign-pill">
+                        Impressions {focusTotals.impressions} · Conversions {focusTotals.conversions} · CVR {focusTotals.conversionRate.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Type</span>
+                        <select
+                          className="input"
+                          value={focusItemDraft.type}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, type: event.target.value as CampaignFocusItemType }))}
+                        >
+                          <option value="collect_data">collect_data</option>
+                          <option value="display_notice">display_notice</option>
+                          <option value="emphasize_link">emphasize_link</option>
+                        </select>
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Title</span>
+                        <input
+                          className="input"
+                          value={focusItemDraft.title}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, title: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Message</span>
+                        <input
+                          className="input"
+                          value={focusItemDraft.message}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, message: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Target URL</span>
+                        <input
+                          className="input"
+                          value={focusItemDraft.targetUrl}
+                          placeholder="https://app.oliver.com/demo"
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, targetUrl: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Journey Node Link</span>
+                        <select
+                          className="input"
+                          value={focusItemDraft.campaignNodeId}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, campaignNodeId: event.target.value }))}
+                        >
+                          <option value="">No node link</option>
+                          {journeyNodeOptions.map((option, index) => (
+                            <option key={`focus-node-${option.id}-${index}`} value={option.id}>{option.title || option.id}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Status</span>
+                        <select
+                          className="input"
+                          value={focusItemDraft.status}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, status: event.target.value as CampaignFocusItemStatus }))}
+                        >
+                          <option value="draft">draft</option>
+                          <option value="active">active</option>
+                          <option value="paused">paused</option>
+                          <option value="archived">archived</option>
+                        </select>
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Active Start</span>
+                        <input
+                          className="input"
+                          type="datetime-local"
+                          value={focusItemDraft.startAt}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, startAt: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Active End</span>
+                        <input
+                          className="input"
+                          type="datetime-local"
+                          value={focusItemDraft.endAt}
+                          onChange={(event) => setFocusItemDraft(previous => ({ ...previous, endAt: event.target.value }))}
+                        />
+                      </label>
+                    </div>
+                    <label className="campaign-filter-control">
+                      <span className="campaign-card-copy">Domain Allowlist (comma-separated)</span>
+                      <input
+                        className="input"
+                        value={focusItemDraft.domainAllowlist}
+                        placeholder="app.oliver.com, staging.oliver-app.pages.dev"
+                        onChange={(event) => setFocusItemDraft(previous => ({ ...previous, domainAllowlist: event.target.value }))}
+                      />
+                    </label>
+                    {focusItemDraft.status === 'active' && focusItemDraft.domainAllowlist.trim().length === 0 && (
+                      <p className="campaign-card-rejection">Domain allowlist is required before activating a focus item.</p>
+                    )}
+                    <div className="campaign-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--sm"
+                        onClick={() => { void createFocusItemFromInput() }}
+                        disabled={focusItemSaving}
+                      >
+                        {focusItemSaving ? 'Saving…' : 'Create Focus Item'}
+                      </button>
+                    </div>
+
+                    <p className="campaign-card-copy">
+                      Embed snippet template:
+                      {' '}
+                      {`<script data-campaign="${selectedCampaign.id}" data-focus="<focus-id>" src="/focus-loader.js"></script>`}
+                    </p>
+                    <div className="campaign-grid">
+                      <article className="card campaign-card">
+                        <h4 className="campaign-card-title">Desktop Preview</h4>
+                        <p className="campaign-card-copy">{focusItemDraft.title || 'Focus title preview'}</p>
+                        <p className="campaign-card-copy">{focusItemDraft.message || 'Focus message preview'}</p>
+                        <p className="campaign-card-copy">Type: {focusItemDraft.type}</p>
+                      </article>
+                      <article className="card campaign-card campaign-focus-mobile-preview">
+                        <h4 className="campaign-card-title">Mobile Preview</h4>
+                        <p className="campaign-card-copy">{focusItemDraft.title || 'Focus title preview'}</p>
+                        <p className="campaign-card-copy">{focusItemDraft.message || 'Focus message preview'}</p>
+                        <p className="campaign-card-copy">Type: {focusItemDraft.type}</p>
+                      </article>
+                    </div>
+
+                    {focusItems.length === 0 && (
+                      <p className="campaign-card-copy">No focus items configured for this campaign yet.</p>
+                    )}
+                    {focusItems.map(item => (
+                      <article key={item.id} className="card campaign-card">
+                        <div className="campaign-row-head">
+                          <p className="campaign-card-title">{item.title || item.id}</p>
+                          <span className="campaign-pill">{item.status}</span>
+                        </div>
+                        <p className="campaign-card-copy">
+                          {item.type}
+                          {item.campaign_node_id ? ` · node: ${item.campaign_node_id}` : ' · no node link'}
+                          {item.start_at ? ` · start: ${new Date(item.start_at).toLocaleString()}` : ''}
+                          {item.end_at ? ` · end: ${new Date(item.end_at).toLocaleString()}` : ''}
+                        </p>
+                        <p className="campaign-card-copy">
+                          Allowlist: {item.domain_allowlist.length > 0 ? item.domain_allowlist.join(', ') : 'none'}
+                        </p>
+                        <p className="campaign-card-copy">
+                          Impressions {item.impressions} · Conversions {item.conversions}
+                        </p>
+                        <div className="campaign-card-actions">
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => { void updateFocusItemMetricFromInput(item.id, 'impression') }}
+                          >
+                            Track Impression
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => { void updateFocusItemMetricFromInput(item.id, 'conversion') }}
+                          >
+                            Track Conversion
+                          </button>
+                        </div>
+                      </article>
+                    ))}
                   </article>
                 </>
               )}
