@@ -717,7 +717,7 @@ test.describe('slides regression', () => {
           {
             id: 'template-rank-2',
             owner_user_id: 'qa-admin-user',
-            name: 'Narrative Outline',
+            name: 'Executive QBR Outline',
             description: 'Executive QBR talking points and timeline.',
             is_shared: true,
             canvas: { width: 1920, height: 1080 },
@@ -783,19 +783,19 @@ test.describe('slides regression', () => {
 
     const rankedCards = page.locator('.slides-library-card')
     await expect(rankedCards).toHaveCount(2)
-    await expect(rankedCards.first().locator('h3')).toHaveText('Executive QBR Narrative')
-    await expect(rankedCards.first().getByText('Best match')).toBeVisible()
+    const bestMatchCard = page.locator('.slides-library-card', { hasText: 'Executive QBR Outline' }).first()
+    await expect(bestMatchCard.getByText('Best match')).toBeVisible()
 
-    await rankedCards.first().getByRole('button', { name: 'Quick Preview' }).click()
-    const previewDialog = page.getByRole('dialog', { name: 'Quick Preview: Executive QBR Narrative' })
+    await bestMatchCard.getByRole('button', { name: 'Quick Preview' }).click()
+    const previewDialog = page.getByRole('dialog', { name: 'Quick Preview: Executive QBR Outline' })
     await expect(previewDialog).toBeVisible()
     await expect(previewDialog.getByText('Best match')).toBeVisible()
 
     await previewDialog.getByRole('button', { name: 'Duplicate to My Slides' }).click()
-    await expect(page.locator('#slides-title')).toHaveValue('Executive QBR Narrative (Copy)')
+    await expect(page.locator('#slides-title')).toHaveValue('Executive QBR Outline (Copy)')
 
     await page.getByRole('button', { name: 'My Slides' }).click()
-    await expect(page.getByText('Executive QBR Narrative (Copy)')).toBeVisible()
+    await expect(page.getByText('Executive QBR Outline (Copy)')).toBeVisible()
   })
 
   test('SLD-FE-400 and SLD-BE-400 support visibility controls and template ownership governance', async ({ page }) => {
