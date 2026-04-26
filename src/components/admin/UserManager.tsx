@@ -1,29 +1,29 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { AccountInfo } from '@azure/msal-browser'
 import type { AppUser, PagePermission, Role } from '@/types/auth'
 import { useUser } from '@/context/UserContext'
 import { useAuth } from '@/context/AuthContext'
-import { listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
+import { UsersApiError, listUsers, updateUserRole, updateUserPermissions } from '@/lib/users'
+import { getAccountMicrosoftIdentity } from '@/lib/microsoft-identity'
 import { getPermissionModules } from '@/modules/registry'
 import styles from './admin.module.css'
 
 const ALL_PERMISSIONS: PagePermission[] = getPermissionModules().map(module => module.id)
 
-function getActorMicrosoftIdentity(account: AccountInfo | null) {
-  if (!account) return {}
-  const claims = account.idTokenClaims as Record<string, unknown> | undefined
-  const microsoftOid = typeof claims?.oid === 'string' && claims.oid ? claims.oid : undefined
-  const microsoftSub = typeof claims?.sub === 'string' && claims.sub ? claims.sub : undefined
-  const microsoftTid = typeof claims?.tid === 'string' && claims.tid
-    ? claims.tid
-    : (account.tenantId || undefined)
-  return {
-    microsoftOid,
-    microsoftTid,
-    microsoftSub,
+function describeAdminUsersError(error: unknown) {
+  if (error instanceof UsersApiError) {
+    if (error.status === 401) {
+      return '401 unauthenticated: your session identity could not be verified. Refresh and sign in again.'
+    }
+    if (error.status === 403) {
+      return '403 unauthorized: your account is authenticated but does not have admin access for this action.'
+    }
+    if (error.status === 408 || error.status === 429 || error.status >= 500) {
+      return `Transient service failure (${error.status}). Retry in a moment.`
+    }
   }
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function UserManager() {
@@ -34,14 +34,14 @@ export function UserManager() {
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const actorIdentity = useMemo(
-    () => (appUser ? { userId: appUser.user_id, email: appUser.email, ...getActorMicrosoftIdentity(account) } : undefined),
+    () => (appUser ? { userId: appUser.user_id, email: appUser.email, ...getAccountMicrosoftIdentity(account) } : undefined),
     [account, appUser],
   )
 
   useEffect(() => {
     listUsers(actorIdentity)
       .then(u => { setUsers(u); setLoading(false) })
-      .catch(err => { setError(err instanceof Error ? err.message : String(err)); setLoading(false) })
+      .catch(err => { setError(describeAdminUsersError(err)); setLoading(false) })
   }, [actorIdentity])
 
   async function handleRoleChange(userId: string, role: Role) {
@@ -53,7 +53,7 @@ export function UserManager() {
       await updateUserRole(userId, role, actorIdentity)
       setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role } : u))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(describeAdminUsersError(err))
     } finally {
       setSaving(null)
     }
@@ -73,7 +73,7 @@ export function UserManager() {
       await updateUserPermissions(userId, updated, actorIdentity)
       setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, page_permissions: updated } : u))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(describeAdminUsersError(err))
     } finally {
       setSaving(null)
     }

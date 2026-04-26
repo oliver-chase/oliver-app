@@ -256,6 +256,14 @@
   min-width: 24px;
 }
 
+.deadAuditMeta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: var(--spacing-2xs) var(--spacing-xs);
+}
+
 .deadAuditChevron {
   margin-left: auto;
   color: var(--color-text-placeholder);
@@ -265,6 +273,41 @@
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-hover);
+}
+
+.deadAuditSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.deadAuditControls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.deadAuditControlStatus {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.deadAuditFixtures {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.deadAuditFixtures code {
+  font-family: var(--font-family-mono);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--spacing-2xs);
 }
 
 .deadAuditGroup {

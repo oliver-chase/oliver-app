@@ -136,6 +136,124 @@ test.describe('slides regression', () => {
     expect(String(parsed[0]?.content || '')).toContain('Canvas Edited Heading')
   })
 
+  test('SLD-FE-300 imports class-based CSS layout, colors, and typography from HTML slides', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      .slide-canvas { position: relative; width: 1600px; height: 900px; background: #f8fafc; }
+      .hero-title { position: absolute; left: 120px; top: 90px; width: 760px; font-size: 56px; line-height: 64px; color: #0f766e; font-family: Georgia, serif; }
+      .hero-panel { position: absolute; left: 120px; top: 220px; width: 480px; height: 220px; background: #111827; color: #f8fafc; border-radius: 24px; padding: 24px; }
+    </style>
+    <div class="slide-canvas">
+      <h1 class="hero-title">Class Styled Heading</h1>
+      <div class="hero-panel">Panel copy from class CSS.</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect(headingLayer).toHaveAttribute('data-component-x', '144')
+    await expect(headingLayer).toHaveAttribute('data-component-y', '108')
+    await expect(headingLayer).toHaveAttribute('data-component-width', '912')
+
+    await expect.poll(async () => {
+      const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
+      return Number.parseFloat(value)
+    }).toBeGreaterThan(67)
+    await expect.poll(async () => {
+      const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
+      return Number.parseFloat(value)
+    }).toBeLessThan(68)
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('15, 118, 110')
+
+    const panelLayer = page.locator('.slides-canvas-component[data-component-type="panel"]').first()
+    await expect.poll(async () => panelLayer.evaluate((node) => window.getComputedStyle(node).backgroundColor)).toContain('17, 24, 39')
+  })
+
+  test('SLD-FE-301 imports nested flow-layout HTML into multiple styled layers', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      .deck-root { width: 1280px; height: 720px; background: #e2e8f0; padding: 36px; }
+      .slide-shell { display: grid; gap: 24px; border-radius: 24px; background: #f8fafc; padding: 48px; }
+      .title { font-size: 56px; line-height: 64px; color: #0f172a; font-family: Georgia, serif; }
+      .panel { width: 760px; border-radius: 20px; background: #1e293b; color: #f8fafc; padding: 28px; }
+    </style>
+    <div class="deck-root">
+      <main class="slide-shell">
+        <section>
+          <h1 class="title">Flow Layout Title</h1>
+        </section>
+        <section>
+          <div class="panel">Flow panel body copy</div>
+        </section>
+      </main>
+    </div>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      type?: string
+      content?: string
+      style?: { fontSize?: number; backgroundColor?: string }
+    }>
+
+    expect(parsed.length).toBeGreaterThanOrEqual(2)
+    const heading = parsed.find((component) => component.type === 'heading')
+    const panel = parsed.find((component) => component.type === 'panel')
+
+    expect(heading).toBeTruthy()
+    expect(String(heading?.content || '')).toContain('Flow Layout Title')
+    expect(Number(heading?.style?.fontSize || 0)).toBeGreaterThan(40)
+
+    expect(panel).toBeTruthy()
+    expect(String(panel?.content || '')).toContain('Flow panel body copy')
+    expect(String(panel?.style?.backgroundColor || '')).toContain('30, 41, 59')
+  })
+
+  test('SLD-FE-302 toolbar controls use icon glyphs with tooltips and compact button modifier', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:80px;top:90px;width:600px;">Toolbar Icons</h1>
+      <div class="card" style="position:absolute;left:80px;top:260px;width:320px;height:180px;">Card 1</div>
+      <div class="card" style="position:absolute;left:440px;top:260px;width:320px;height:180px;">Card 2</div>
+      <div class="card" style="position:absolute;left:800px;top:260px;width:320px;height:180px;">Card 3</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const toolbarControls = [
+      'Undo',
+      'Redo',
+      'Align Left',
+      'Align Center',
+      'Align Right',
+      'Align Top',
+      'Align Middle',
+      'Align Bottom',
+      'Distribute Horizontally',
+      'Distribute Vertically',
+    ] as const
+
+    for (const label of toolbarControls) {
+      const control = page.getByRole('button', { name: label })
+      await expect(control).toHaveAttribute('title', label)
+      const textContent = (await control.textContent())?.trim() || ''
+      expect(textContent.length).toBeGreaterThan(0)
+      expect(textContent).not.toMatch(/[A-Za-z]{4,}/)
+    }
+
+    const nonCompactButtons = await page.locator('#main-content button.btn').evaluateAll((buttons) => (
+      buttons
+        .filter((button) => !button.className.includes('btn--compact'))
+        .map((button) => button.getAttribute('aria-label') || button.textContent || '<unnamed>')
+    ))
+    expect(nonCompactButtons).toEqual([])
+  })
+
   test('US-SLD-021 supports drag movement and keyboard nudge on selected canvas layers', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
@@ -220,6 +338,49 @@ test.describe('slides regression', () => {
     expect(minHeight).toBeGreaterThanOrEqual(32)
   })
 
+  test('SLD-FE-340 shows snapping guides and snaps dragged layers to nearby targets', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:640px;">Alignment Target</h1>
+      <div class="card" style="position:absolute;left:680px;top:420px;width:280px;height:180px;">Snap Me</div>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    const cardLayer = page.locator('.slides-canvas-component[data-component-type="card"]').first()
+    const sourceX = Number(await cardLayer.getAttribute('data-component-x'))
+    const sourceY = Number(await cardLayer.getAttribute('data-component-y'))
+    const targetX = Number(await headingLayer.getAttribute('data-component-x'))
+    const targetY = Number(await headingLayer.getAttribute('data-component-y'))
+    const cardHandle = cardLayer.locator('.slides-canvas-component-type')
+    await cardHandle.click()
+    await expect(cardLayer).toHaveAttribute('data-component-selected', 'true')
+    const cardHandleBox = await cardHandle.boundingBox()
+    if (!cardHandleBox) throw new Error('expected card handle bounding box')
+    const canvasScale = await page.locator('[data-slide-canvas="1"]').evaluate((node) => {
+      const transform = window.getComputedStyle(node).transform
+      if (!transform || transform === 'none') return 1
+      return new DOMMatrixReadOnly(transform).a || 1
+    })
+
+    const startX = cardHandleBox.x + (cardHandleBox.width / 2)
+    const startY = cardHandleBox.y + (cardHandleBox.height / 2)
+    const dragToX = startX + ((targetX - sourceX + 3) * canvasScale)
+    const dragToY = startY + ((targetY - sourceY + 3) * canvasScale)
+
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    await page.mouse.move(dragToX, dragToY, { steps: 6 })
+
+    await page.mouse.up()
+    await expect(page.locator('[data-snap-guide-axis="x"]')).toHaveCount(0)
+    await expect(page.locator('[data-snap-guide-axis="y"]')).toHaveCount(0)
+    await expect(cardLayer).toHaveAttribute('data-component-x', '100')
+    await expect(cardLayer).toHaveAttribute('data-component-y', '120')
+  })
+
   test('US-SLD-022 inline text editing and toolbar style controls update selected layers', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
@@ -247,6 +408,46 @@ test.describe('slides regression', () => {
     expect(String(parsed[0]?.content || '')).toContain('Toolbar Edited Heading')
     expect(Number(parsed[0]?.style?.fontSize)).toBe(14)
     expect(String(parsed[0]?.style?.textAlign || '')).toBe('center')
+  })
+
+  test('US-O30 inspector bounds and text auto-size keep advanced layer editing deterministic', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1920px;height:1080px;">
+      <h1 style="position:absolute;left:100px;top:120px;width:360px;height:48px;">Auto Size Target</h1>
+    </div>`)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await headingLayer.click()
+    await expect(page.locator('#slides-style-x')).toHaveValue('100')
+    await expect(page.locator('#slides-style-y')).toHaveValue('120')
+
+    await page.locator('#slides-style-x').fill('160')
+    await expect(headingLayer).toHaveAttribute('data-component-x', '160')
+
+    const beforeKeyboardResizeWidth = Number(await headingLayer.getAttribute('data-component-width'))
+    await page.locator('[data-slide-canvas="1"]').focus()
+    await page.keyboard.press('Alt+ArrowRight')
+    await expect(headingLayer).toHaveAttribute('data-component-width', String(beforeKeyboardResizeWidth + 1))
+
+    await page.locator('#slides-style-text-auto-size').check()
+    await expect(headingLayer).toHaveAttribute('data-component-auto-size', 'true')
+    await expect(page.locator('#slides-style-height')).toBeDisabled()
+
+    const beforeAutoSizeHeight = Number(await headingLayer.getAttribute('data-component-height'))
+    await headingLayer.dblclick()
+    const headingContent = headingLayer.locator('.slides-canvas-component-content')
+    await headingContent.fill('Auto-sizing should grow this layer height as this sentence wraps across multiple lines in the slide editor canvas.')
+    await page.locator('#slides-title').click()
+
+    await expect.poll(async () => Number(await headingLayer.getAttribute('data-component-height'))).toBeGreaterThan(beforeAutoSizeHeight)
+
+    await headingLayer.dblclick()
+    await headingContent.fill('short')
+    await page.locator('#slides-title').click()
+    await expect.poll(async () => Number(await headingLayer.getAttribute('data-component-height'))).toBeGreaterThanOrEqual(40)
   })
 
   test('US-SLD-023 supports shift multi-select, group nudge, align, and distribution feedback', async ({ page }) => {
@@ -1400,6 +1601,67 @@ test.describe('slides regression', () => {
 
     await page.getByRole('button', { name: 'Activity' }).click()
     await expect(page.getByText('export-pptx').first()).toBeVisible()
+  })
+
+  test('SLD-FE-501 My Slides selection UX supports select-visible and hidden-selection warnings', async ({ page }) => {
+    await page.addInitScript(() => {
+      const slide = (id: string, title: string, y: number) => ({
+        id,
+        owner_user_id: 'qa-admin-user',
+        title,
+        canvas: { width: 1920, height: 1080 },
+        components: [{
+          id: `${id}-heading`,
+          type: 'heading',
+          sourceLabel: '.heading',
+          x: 120,
+          y,
+          width: 900,
+          content: title,
+          style: { fontSize: 56, fontWeight: 700, color: '#0f172a' },
+          locked: false,
+          visible: true,
+        }],
+        metadata: {},
+        revision: 1,
+        source: 'import',
+        source_template_id: null,
+        created_at: '2026-04-25T10:00:00.000Z',
+        updated_at: '2026-04-25T10:00:00.000Z',
+        last_edited_at: '2026-04-25T10:00:00.000Z',
+      })
+
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [
+          slide('slide-sel-1', 'Alpha Launch', 140),
+          slide('slide-sel-2', 'Beta Review', 220),
+          slide('slide-sel-3', 'Gamma Plan', 300),
+        ],
+        templates: [],
+        collaborators: [],
+        approvals: [],
+        audits: [],
+        auditPresets: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'My Slides' }).click()
+
+    await page.getByRole('button', { name: 'Select Visible (3)' }).click()
+    await expect(page.getByText('Selected for export: 3 visible / 3 total.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Export Selected PPTX (3)' })).toBeEnabled()
+
+    await page.locator('#slides-search').fill('Alpha')
+    await expect(page.locator('.slides-library-card')).toHaveCount(1)
+    await expect(page.getByText('Selected for export: 1 visible / 3 total.')).toBeVisible()
+    await expect(page.getByText('2 selected slides are hidden by the current search filter.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear Selection' }).click()
+    await expect(page.getByText('Selected for export: 0 visible / 0 total.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Export Selected PPTX (0)' })).toBeDisabled()
   })
 
   test('US-SLD-028 library and activity search show actionable empty states instead of dead-end messaging', async ({ page }) => {

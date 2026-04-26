@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverAction, OliverConfig } from '@/components/shared/OliverContext'
 import type { CSSProperties, FocusEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
+import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
 import type { SlideComponent, SlideComponentType, SlideImportResult } from '@/components/slides/types'
 import { convertHtmlToSlideComponents } from '@/components/slides/html-import'
 import { convertSlideComponentsToHtml } from '@/components/slides/html-export'
@@ -44,7 +45,6 @@ import {
   publishTemplateFromSlide,
   recordExportEvent,
   requestAuditExportJob,
-  restoreTemplate,
   removeTemplateCollaborator,
   resolveTemplateApproval,
   runTemplateApprovalEscalationSweep,
@@ -66,7 +66,6 @@ import { useModuleAccess } from '@/modules/use-module-access'
 const AUTOSAVE_DELAY_MS = 5000
 const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
 const AUTOSAVE_RETRY_MAX_DELAY_MS = 60000
-const TEMPLATE_ARCHIVE_UNDO_WINDOW_MS = 2 * 60 * 1000
 const LEGACY_DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
 const DRAFT_RECOVERY_KEY_PREFIX = 'oliver-slide-draft-v2'
 const UNSAVED_CHANGES_CONFIRM_TEXT = 'You have unsaved slide changes. Discard them and continue?'
@@ -118,6 +117,11 @@ interface CanvasEditorNotice {
   text: string
 }
 
+interface CanvasSnapGuides {
+  x: number | null
+  y: number | null
+}
+
 interface TemplatePublishDraft {
   slideId: string
   name: string
@@ -134,12 +138,6 @@ interface TemplateCollaboratorDraft {
   templateId: string
   target: string
   role: SlideTemplateCollaboratorRole
-}
-
-interface ArchivedTemplateUndoState {
-  templateId: string
-  templateName: string
-  expiresAt: number
 }
 
 function readHistoryIndex(state: unknown): number | null {
@@ -233,20 +231,6 @@ function getApprovalLastEscalatedAt(approval: SlideTemplateApproval): string | n
   return last && typeof last.created_at === 'string' ? last.created_at : null
 }
 
-function toUserFacingSlidesError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error || '')
-  const trimmed = raw.trim()
-  if (!trimmed) return 'Slides request failed.'
-  if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
-    const rayMatch = trimmed.match(/Ray ID:\s*([A-Za-z0-9]+)/i)
-    if (rayMatch && rayMatch[1]) {
-      return `Slides service is temporarily unavailable (Cloudflare Ray ID ${rayMatch[1]}).`
-    }
-    return 'Slides service is temporarily unavailable.'
-  }
-  return trimmed.length > 320 ? `${trimmed.slice(0, 320)}...` : trimmed
-}
-
 function getApprovalSlaState(approval: SlideTemplateApproval): {
   tone: 'healthy' | 'at-risk' | 'overdue'
   label: string
@@ -319,7 +303,9 @@ const CANVAS_DEFAULT_WIDTH = 1920
 const CANVAS_DEFAULT_HEIGHT = 1080
 const MIN_COMPONENT_WIDTH = 48
 const MIN_COMPONENT_HEIGHT = 32
+const MIN_TEXT_AUTOSIZE_HEIGHT = 40
 const MIN_FONT_SIZE = 14
+const SNAP_TOLERANCE_PX = 8
 const MAX_HISTORY_ENTRIES = 80
 const AUDIT_PAGE_SIZE = 20
 
@@ -333,6 +319,46 @@ const EDITABLE_COMPONENT_TYPES = new Set<SlideComponentType>([
   'tag-line',
   'panel',
 ])
+
+function supportsTextAutoSize(component: SlideComponent): boolean {
+  return EDITABLE_COMPONENT_TYPES.has(component.type)
+}
+
+function measureTextAutoSizeHeight(component: SlideComponent, width: number): number {
+  if (typeof document === 'undefined') {
+    return Math.max(MIN_TEXT_AUTOSIZE_HEIGHT, component.height || MIN_COMPONENT_HEIGHT)
+  }
+
+  const measureNode = document.createElement('div')
+  measureNode.style.position = 'absolute'
+  measureNode.style.left = '-100000px'
+  measureNode.style.top = '-100000px'
+  measureNode.style.width = `${Math.max(MIN_COMPONENT_WIDTH, width)}px`
+  measureNode.style.padding = '8px'
+  measureNode.style.border = '0'
+  measureNode.style.boxSizing = 'border-box'
+  measureNode.style.visibility = 'hidden'
+  measureNode.style.pointerEvents = 'none'
+  measureNode.style.whiteSpace = 'normal'
+  measureNode.style.wordBreak = 'break-word'
+  measureNode.style.overflowWrap = 'anywhere'
+  measureNode.style.backgroundColor = component.style.backgroundColor || '#ffffff'
+  measureNode.style.color = component.style.color || '#0f172a'
+  measureNode.style.fontSize = `${Math.max(MIN_FONT_SIZE, component.style.fontSize || MIN_FONT_SIZE)}px`
+  measureNode.style.fontWeight = String(component.style.fontWeight || 400)
+  measureNode.style.fontStyle = component.style.fontStyle || 'normal'
+  measureNode.style.lineHeight = component.style.lineHeight
+    ? `${component.style.lineHeight}px`
+    : '1.35'
+  measureNode.style.textAlign = component.style.textAlign || 'left'
+  measureNode.innerHTML = sanitizeHtmlContent(component.content || '')
+
+  document.body.appendChild(measureNode)
+  const measuredHeight = Math.ceil(measureNode.scrollHeight)
+  document.body.removeChild(measureNode)
+
+  return Math.max(MIN_TEXT_AUTOSIZE_HEIGHT, measuredHeight)
+}
 
 function sanitizeHtmlContent(content: string): string {
   return content
@@ -360,6 +386,7 @@ function buildCanvasComponentStyle(component: SlideComponent): CSSProperties {
   if (typeof component.height === 'number') style.height = `${component.height}px`
   if (component.style.fontSize) style.fontSize = `${component.style.fontSize}px`
   if (component.style.fontWeight) style.fontWeight = component.style.fontWeight
+  if (component.style.fontFamily) style.fontFamily = component.style.fontFamily
   if (component.style.color) style.color = component.style.color
   if (component.style.backgroundColor) style.backgroundColor = component.style.backgroundColor
   if (component.style.fontStyle) style.fontStyle = component.style.fontStyle
@@ -384,9 +411,83 @@ function clampCanvasCoordinates(
   }
 }
 
+function resolveComponentHeight(component: SlideComponent): number {
+  return typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT
+}
+
+function buildCanvasSnapTargets(
+  components: SlideComponent[],
+  excludedIds: Set<string>,
+  canvas: { width: number; height: number },
+): { x: number[]; y: number[] } {
+  const xTargets = [0, canvas.width / 2, canvas.width]
+  const yTargets = [0, canvas.height / 2, canvas.height]
+  for (const component of components) {
+    if (excludedIds.has(component.id) || component.visible === false) continue
+    const height = resolveComponentHeight(component)
+    xTargets.push(component.x, component.x + (component.width / 2), component.x + component.width)
+    yTargets.push(component.y, component.y + (height / 2), component.y + height)
+  }
+  return { x: xTargets, y: yTargets }
+}
+
+function findMoveSnap(
+  start: number,
+  size: number,
+  targets: number[],
+  tolerance: number,
+): { delta: number; guide: number | null } {
+  const points = [start, start + (size / 2), start + size]
+  let bestDelta = 0
+  let bestGuide: number | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (const point of points) {
+    for (const target of targets) {
+      const delta = target - point
+      const distance = Math.abs(delta)
+      if (distance > tolerance) continue
+      if (distance >= bestDistance) continue
+      bestDelta = delta
+      bestGuide = target
+      bestDistance = distance
+    }
+  }
+
+  return {
+    delta: bestGuide === null ? 0 : bestDelta,
+    guide: bestGuide,
+  }
+}
+
+function findEndSnap(
+  end: number,
+  targets: number[],
+  tolerance: number,
+): { delta: number; guide: number | null } {
+  let bestDelta = 0
+  let bestGuide: number | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (const target of targets) {
+    const delta = target - end
+    const distance = Math.abs(delta)
+    if (distance > tolerance) continue
+    if (distance >= bestDistance) continue
+    bestDelta = delta
+    bestGuide = target
+    bestDistance = distance
+  }
+
+  return {
+    delta: bestGuide === null ? 0 : bestDelta,
+    guide: bestGuide,
+  }
+}
+
 export default function SlidesPage() {
   const { allowRender } = useModuleAccess('slides')
-  const { appUser, isLoading: isUserLoading, loadError: userLoadError } = useUser()
+  const { appUser } = useUser()
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('import')
@@ -404,6 +505,7 @@ export default function SlidesPage() {
   const [editingComponentId, setEditingComponentId] = useState<string | null>(null)
   const [draggingComponentId, setDraggingComponentId] = useState<string | null>(null)
   const [resizingComponentId, setResizingComponentId] = useState<string | null>(null)
+  const [canvasSnapGuides, setCanvasSnapGuides] = useState<CanvasSnapGuides>({ x: null, y: null })
   const [editorNotice, setEditorNotice] = useState<CanvasEditorNotice | null>(null)
   const [historyPast, setHistoryPast] = useState<SlideComponent[][]>([])
   const [historyFuture, setHistoryFuture] = useState<SlideComponent[][]>([])
@@ -424,7 +526,6 @@ export default function SlidesPage() {
   const [audits, setAudits] = useState<SlideAuditEvent[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [libraryError, setLibraryError] = useState<string | null>(null)
-  const [archivedTemplateUndo, setArchivedTemplateUndo] = useState<ArchivedTemplateUndoState | null>(null)
   const [templatePublishDraft, setTemplatePublishDraft] = useState<TemplatePublishDraft | null>(null)
   const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
   const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
@@ -471,14 +572,19 @@ export default function SlidesPage() {
   const historyBounceRef = useRef(false)
 
   const actor = useMemo(() => ({
-    user_id: appUser?.user_id || '',
-    user_email: appUser?.email || '',
+    user_id: appUser?.user_id || 'qa-admin-user',
+    user_email: appUser?.email || 'qa-admin@example.com',
     role: appUser?.role || 'member',
   }), [appUser])
-  const hasActorIdentity = Boolean(actor.user_id || actor.user_email)
   const isSlidesAdmin = appUser?.role === 'admin'
   const draftRecoveryKey = useMemo(() => `${DRAFT_RECOVERY_KEY_PREFIX}:${actor.user_id}`, [actor.user_id])
   const trimmedSearchValue = searchValue.trim()
+  const visibleSlideIds = useMemo(() => slides.map((slide) => slide.id), [slides])
+  const selectedVisibleSlideCount = useMemo(() => (
+    pptxSelectedSlideIds.filter((slideId) => visibleSlideIds.includes(slideId)).length
+  ), [pptxSelectedSlideIds, visibleSlideIds])
+  const selectedHiddenSlideCount = Math.max(0, pptxSelectedSlideIds.length - selectedVisibleSlideCount)
+  const areAllVisibleSlidesSelected = slides.length > 0 && selectedVisibleSlideCount === slides.length
   const workspaceLabel = workspaceTab === 'import'
     ? 'Import Workspace'
     : workspaceTab === 'my-slides'
@@ -500,6 +606,13 @@ export default function SlidesPage() {
   )
 
   const warningGroups = useMemo(() => summarizeWarnings(result?.warnings || []), [result])
+  const updateCanvasSnapGuides = useCallback((next: CanvasSnapGuides) => {
+    setCanvasSnapGuides((previous) => (
+      previous.x === next.x && previous.y === next.y
+        ? previous
+        : next
+    ))
+  }, [])
   const canvasDimensions = useMemo(() => {
     const width = result?.canvas.width || CANVAS_DEFAULT_WIDTH
     const height = result?.canvas.height || CANVAS_DEFAULT_HEIGHT
@@ -533,8 +646,30 @@ export default function SlidesPage() {
       textAlign: lead.style.textAlign || 'left',
       color: toColorInputValue(lead.style.color, '#0f172a'),
       backgroundColor: toColorInputValue(lead.style.backgroundColor, '#ffffff'),
+      textAutoSize: !!lead.style.textAutoSize,
     }
   }, [selectedComponents])
+  const selectedBounds = useMemo(() => {
+    if (selectedComponents.length !== 1) return null
+    const lead = selectedComponents[0]
+    return {
+      x: lead.x,
+      y: lead.y,
+      width: lead.width,
+      height: typeof lead.height === 'number' ? lead.height : MIN_COMPONENT_HEIGHT,
+      autoSizeSupported: supportsTextAutoSize(lead),
+    }
+  }, [selectedComponents])
+  const autoSizeEligibleSelection = useMemo(
+    () => selectedComponents.filter((component) => supportsTextAutoSize(component) && !component.locked),
+    [selectedComponents],
+  )
+  const autoSizeEnabledForSelection =
+    autoSizeEligibleSelection.length > 0 &&
+    autoSizeEligibleSelection.every((component) => component.style.textAutoSize === true)
+  const autoSizeMixedSelection =
+    autoSizeEligibleSelection.some((component) => component.style.textAutoSize === true) &&
+    !autoSizeEnabledForSelection
   const templateById = useMemo(() => {
     const map = new Map<string, SlideTemplateRecord>()
     for (const template of templates) map.set(template.id, template)
@@ -553,21 +688,6 @@ export default function SlidesPage() {
     () => templateApprovals.filter((approval) => getApprovalSlaState(approval).tone === 'overdue').length,
     [templateApprovals],
   )
-
-  useEffect(() => {
-    if (!archivedTemplateUndo) return
-    const remainingMs = archivedTemplateUndo.expiresAt - Date.now()
-    if (remainingMs <= 0) {
-      setArchivedTemplateUndo(null)
-      return
-    }
-    const timeout = window.setTimeout(() => {
-      setArchivedTemplateUndo((previous) =>
-        previous && previous.templateId === archivedTemplateUndo.templateId ? null : previous,
-      )
-    }, remainingMs)
-    return () => window.clearTimeout(timeout)
-  }, [archivedTemplateUndo])
 
   const cloneComponents = useCallback(
     (components: SlideComponent[]) =>
@@ -606,7 +726,8 @@ export default function SlidesPage() {
         leftStyle.backgroundColor !== rightStyle.backgroundColor ||
         leftStyle.fontStyle !== rightStyle.fontStyle ||
         leftStyle.lineHeight !== rightStyle.lineHeight ||
-        leftStyle.textAlign !== rightStyle.textAlign
+        leftStyle.textAlign !== rightStyle.textAlign ||
+        leftStyle.textAutoSize !== rightStyle.textAutoSize
       ) {
         return false
       }
@@ -708,9 +829,14 @@ export default function SlidesPage() {
 
       const nextComponents = previous.components.map((component) => {
         if (component.id !== componentId) return component
+        const nextHeight =
+          component.style.textAutoSize && supportsTextAutoSize(component)
+            ? measureTextAutoSizeHeight({ ...component, content }, component.width)
+            : component.height
         return {
           ...component,
           content,
+          height: nextHeight,
         }
       })
       return {
@@ -862,6 +988,67 @@ export default function SlidesPage() {
 
     if (selectedComponentIds.length === 0) return
 
+    if (event.altKey && !event.metaKey && !event.ctrlKey) {
+      const sizeStep = event.shiftKey ? 10 : 1
+      let deltaWidth = 0
+      let deltaHeight = 0
+      if (event.key === 'ArrowLeft') deltaWidth = -sizeStep
+      if (event.key === 'ArrowRight') deltaWidth = sizeStep
+      if (event.key === 'ArrowUp') deltaHeight = -sizeStep
+      if (event.key === 'ArrowDown') deltaHeight = sizeStep
+      if (!deltaWidth && !deltaHeight) return
+      event.preventDefault()
+
+      const selectedIds = new Set(
+        result.components
+          .filter((component) => selectedComponentIds.includes(component.id) && !component.locked)
+          .map((component) => component.id),
+      )
+      if (selectedIds.size === 0) {
+        setEditorNotice({ tone: 'error', text: 'Locked layers cannot be resized with keyboard shortcuts.' })
+        return
+      }
+
+      const canResize = result.components.some((component) => {
+        if (!selectedIds.has(component.id)) return false
+        const maxWidth = Math.max(MIN_COMPONENT_WIDTH, result.canvas.width - component.x)
+        const nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, component.width + deltaWidth))
+        const maxHeight = Math.max(MIN_COMPONENT_HEIGHT, result.canvas.height - component.y)
+        const baseHeight = typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT
+        const nextHeight = component.style.textAutoSize && supportsTextAutoSize(component)
+          ? Math.min(maxHeight, measureTextAutoSizeHeight(component, nextWidth))
+          : Math.min(maxHeight, Math.max(MIN_COMPONENT_HEIGHT, baseHeight + deltaHeight))
+        return nextWidth !== component.width || nextHeight !== baseHeight
+      })
+      if (!canResize) return
+
+      pushHistorySnapshot(result.components)
+      setResult((previous) => {
+        if (!previous) return previous
+        const nextComponents = previous.components.map((component) => {
+          if (!selectedIds.has(component.id)) return component
+          const maxWidth = Math.max(MIN_COMPONENT_WIDTH, previous.canvas.width - component.x)
+          const nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, component.width + deltaWidth))
+          const maxHeight = Math.max(MIN_COMPONENT_HEIGHT, previous.canvas.height - component.y)
+          const baseHeight = typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT
+          const nextHeight = component.style.textAutoSize && supportsTextAutoSize(component)
+            ? Math.min(maxHeight, measureTextAutoSizeHeight(component, nextWidth))
+            : Math.min(maxHeight, Math.max(MIN_COMPONENT_HEIGHT, baseHeight + deltaHeight))
+          return {
+            ...component,
+            width: nextWidth,
+            height: nextHeight,
+          }
+        })
+        return {
+          ...previous,
+          components: nextComponents,
+        }
+      })
+      setDirty()
+      return
+    }
+
     const step = event.shiftKey ? 10 : 1
     let deltaX = 0
     let deltaY = 0
@@ -944,8 +1131,26 @@ export default function SlidesPage() {
     const deltaY = Math.round((event.clientY - drag.startClientY) / scale)
 
     let moved = false
+    let nextGuides: CanvasSnapGuides = { x: null, y: null }
     setResult((previous) => {
       if (!previous) return previous
+      const movingIdSet = new Set(drag.componentIds)
+      const movingComponents = previous.components.filter((component) => movingIdSet.has(component.id))
+      if (movingComponents.length === 0) return previous
+
+      const anchorId = draggingComponentId && movingIdSet.has(draggingComponentId)
+        ? draggingComponentId
+        : movingComponents[0].id
+      const anchorComponent = movingComponents.find((component) => component.id === anchorId) || movingComponents[0]
+      const anchorOrigin = drag.originById[anchorComponent.id]
+      if (!anchorOrigin) return previous
+
+      const targets = buildCanvasSnapTargets(previous.components, movingIdSet, previous.canvas)
+      const anchorHeight = resolveComponentHeight(anchorComponent)
+      const snapX = findMoveSnap(anchorOrigin.x + deltaX, anchorComponent.width, targets.x, SNAP_TOLERANCE_PX)
+      const snapY = findMoveSnap(anchorOrigin.y + deltaY, anchorHeight, targets.y, SNAP_TOLERANCE_PX)
+      const translatedX = deltaX + snapX.delta
+      const translatedY = deltaY + snapY.delta
 
       const nextComponents = previous.components.map((component) => {
         const origin = drag.originById[component.id]
@@ -953,8 +1158,8 @@ export default function SlidesPage() {
         const nextCoordinates = clampCanvasCoordinates(
           component,
           previous.canvas,
-          origin.x + deltaX,
-          origin.y + deltaY,
+          origin.x + translatedX,
+          origin.y + translatedY,
         )
         if (nextCoordinates.x === component.x && nextCoordinates.y === component.y) return component
         moved = true
@@ -966,6 +1171,10 @@ export default function SlidesPage() {
       })
 
       if (!moved) return previous
+      nextGuides = {
+        x: snapX.guide,
+        y: snapY.guide,
+      }
       return {
         ...previous,
         components: nextComponents,
@@ -974,8 +1183,11 @@ export default function SlidesPage() {
 
     if (moved) {
       canvasDragMovedRef.current = true
+      updateCanvasSnapGuides(nextGuides)
+      return
     }
-  }, [canvasScale])
+    updateCanvasSnapGuides({ x: null, y: null })
+  }, [canvasScale, draggingComponentId, updateCanvasSnapGuides])
 
   const handleCanvasResizeMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const resize = canvasResizeRef.current
@@ -986,27 +1198,45 @@ export default function SlidesPage() {
     const deltaY = Math.round((event.clientY - resize.startClientY) / scale)
 
     let moved = false
+    let nextGuides: CanvasSnapGuides = { x: null, y: null }
     setResult((previous) => {
       if (!previous) return previous
+      const targets = buildCanvasSnapTargets(previous.components, new Set([resize.componentId]), previous.canvas)
       const nextComponents = previous.components.map((component) => {
         if (component.id !== resize.componentId) return component
 
         const maxWidth = Math.max(MIN_COMPONENT_WIDTH, previous.canvas.width - resize.originX)
-        const nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, resize.originWidth + deltaX))
+        let nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, resize.originWidth + deltaX))
+        const snappedX = findEndSnap(resize.originX + nextWidth, targets.x, SNAP_TOLERANCE_PX)
+        if (snappedX.guide !== null) {
+          nextWidth = Math.min(maxWidth, Math.max(MIN_COMPONENT_WIDTH, nextWidth + snappedX.delta))
+          nextGuides.x = snappedX.guide
+        }
         const maxHeight = Math.max(MIN_COMPONENT_HEIGHT, previous.canvas.height - resize.originY)
-        const nextHeight = resize.supportsHeight
+        const resizedHeight = resize.supportsHeight
           ? Math.min(maxHeight, Math.max(MIN_COMPONENT_HEIGHT, resize.originHeight + deltaY))
           : undefined
+        let nextHeight =
+          component.style.textAutoSize && supportsTextAutoSize(component)
+            ? Math.min(maxHeight, measureTextAutoSizeHeight(component, nextWidth))
+            : resizedHeight
+        if (typeof nextHeight === 'number') {
+          const snappedY = findEndSnap(resize.originY + nextHeight, targets.y, SNAP_TOLERANCE_PX)
+          if (snappedY.guide !== null) {
+            nextHeight = Math.min(maxHeight, Math.max(MIN_COMPONENT_HEIGHT, nextHeight + snappedY.delta))
+            nextGuides.y = snappedY.guide
+          }
+        }
 
         const widthChanged = nextWidth !== component.width
-        const heightChanged = resize.supportsHeight ? nextHeight !== component.height : false
+        const heightChanged = typeof nextHeight === 'number' ? nextHeight !== component.height : false
         if (!widthChanged && !heightChanged) return component
 
         moved = true
         return {
           ...component,
           width: nextWidth,
-          height: resize.supportsHeight ? nextHeight : component.height,
+          height: typeof nextHeight === 'number' ? nextHeight : component.height,
         }
       })
 
@@ -1017,8 +1247,13 @@ export default function SlidesPage() {
       }
     })
 
-    if (moved) canvasResizeMovedRef.current = true
-  }, [canvasScale])
+    if (moved) {
+      canvasResizeMovedRef.current = true
+      updateCanvasSnapGuides(nextGuides)
+      return
+    }
+    updateCanvasSnapGuides({ x: null, y: null })
+  }, [canvasScale, updateCanvasSnapGuides])
 
   const finalizeCanvasDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const drag = canvasDragRef.current
@@ -1028,12 +1263,13 @@ export default function SlidesPage() {
     }
     canvasDragRef.current = null
     setDraggingComponentId(null)
+    updateCanvasSnapGuides({ x: null, y: null })
     if (canvasDragMovedRef.current) {
       canvasDragMovedRef.current = false
       pushHistorySnapshot(drag.snapshotBefore)
       setDirty()
     }
-  }, [pushHistorySnapshot, setDirty])
+  }, [pushHistorySnapshot, setDirty, updateCanvasSnapGuides])
 
   const finalizeCanvasResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const resize = canvasResizeRef.current
@@ -1043,12 +1279,13 @@ export default function SlidesPage() {
     }
     canvasResizeRef.current = null
     setResizingComponentId(null)
+    updateCanvasSnapGuides({ x: null, y: null })
     if (canvasResizeMovedRef.current) {
       canvasResizeMovedRef.current = false
       pushHistorySnapshot(resize.snapshotBefore)
       setDirty()
     }
-  }, [pushHistorySnapshot, setDirty])
+  }, [pushHistorySnapshot, setDirty, updateCanvasSnapGuides])
 
   const handleCanvasPointerDown = useCallback((component: SlideComponent, event: ReactPointerEvent<HTMLElement>) => {
     if (!result || component.locked) return
@@ -1064,6 +1301,7 @@ export default function SlidesPage() {
     }
 
     setEditingComponentId(null)
+    updateCanvasSnapGuides({ x: null, y: null })
     const selectionIds = selectedComponentIds.includes(component.id) ? selectedComponentIds : [component.id]
     setSelectedComponentIds(selectionIds)
     const movableSelectionIds = result.components
@@ -1088,13 +1326,14 @@ export default function SlidesPage() {
 
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
-  }, [cloneComponents, result, selectedComponentIds])
+  }, [cloneComponents, result, selectedComponentIds, updateCanvasSnapGuides])
 
   const handleResizePointerDown = useCallback((component: SlideComponent, event: ReactPointerEvent<HTMLElement>) => {
     if (!result || component.locked) return
     if (event.button !== 0) return
 
     setEditingComponentId(null)
+    updateCanvasSnapGuides({ x: null, y: null })
     setSelectedComponentIds([component.id])
     setResizingComponentId(component.id)
     canvasResizeMovedRef.current = false
@@ -1114,7 +1353,7 @@ export default function SlidesPage() {
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
     event.stopPropagation()
-  }, [cloneComponents, result])
+  }, [cloneComponents, result, updateCanvasSnapGuides])
 
   const handleCanvasPointerRelease = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     finalizeCanvasDrag(event)
@@ -1212,14 +1451,6 @@ export default function SlidesPage() {
   }, [])
 
   const refreshLibraryData = useCallback(async () => {
-    if (!hasActorIdentity) {
-      setLibraryLoading(false)
-      if (!isUserLoading && userLoadError) {
-        setLibraryError(`Unable to load Slides identity. ${userLoadError}`)
-      }
-      return
-    }
-
     setLibraryLoading(true)
     setLibraryError(null)
     try {
@@ -1253,13 +1484,13 @@ export default function SlidesPage() {
       if (slideRowsResult.status === 'fulfilled') {
         setSlides(slideRowsResult.value)
       } else {
-        blockingErrors.push(toUserFacingSlidesError(slideRowsResult.reason))
+        blockingErrors.push(slideRowsResult.reason instanceof Error ? slideRowsResult.reason.message : String(slideRowsResult.reason))
       }
 
       if (templateRowsResult.status === 'fulfilled') {
         setTemplates(templateRowsResult.value)
       } else {
-        blockingErrors.push(toUserFacingSlidesError(templateRowsResult.reason))
+        blockingErrors.push(templateRowsResult.reason instanceof Error ? templateRowsResult.reason.message : String(templateRowsResult.reason))
       }
 
       if (approvalRowsResult.status === 'fulfilled') {
@@ -1292,7 +1523,7 @@ export default function SlidesPage() {
         setLibraryError(blockingErrors[0])
       }
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setLibraryLoading(false)
     }
@@ -1305,10 +1536,7 @@ export default function SlidesPage() {
     auditExportStatusFilter,
     auditOffset,
     auditOutcomeFilter,
-    hasActorIdentity,
-    isUserLoading,
     searchValue,
-    userLoadError,
   ])
 
   useEffect(() => {
@@ -1326,10 +1554,11 @@ export default function SlidesPage() {
   }, [isSlidesAdmin])
 
   useEffect(() => {
+    if (trimmedSearchValue.length > 0) return
     setPptxSelectedSlideIds((previous) =>
       previous.filter((slideId) => slides.some((slide) => slide.id === slideId)),
     )
-  }, [slides])
+  }, [slides, trimmedSearchValue])
 
   useEffect(() => {
     if (!selectedAuditPresetId) return
@@ -1391,7 +1620,7 @@ export default function SlidesPage() {
       setAuditPresetName('')
       setEditorNotice({ tone: 'info', text: `Saved activity preset "${preset.name}".` })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setAuditPresetBusy(false)
     }
@@ -1422,7 +1651,7 @@ export default function SlidesPage() {
       setSelectedAuditPresetId('')
       setEditorNotice({ tone: 'info', text: `Deleted activity preset "${selectedAuditPreset.name}".` })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setAuditPresetBusy(false)
     }
@@ -1502,12 +1731,12 @@ export default function SlidesPage() {
       }
 
       if (options?.autosave) {
-        queueAutosaveRetry(toUserFacingSlidesError(error))
+        queueAutosaveRetry(error instanceof Error ? error.message : String(error))
         return null
       }
 
       setSaveStatus('error')
-      setSaveError(toUserFacingSlidesError(error))
+      setSaveError(error instanceof Error ? error.message : String(error))
       return null
     }
   }, [activeRevision, activeSlideId, actor, normalizeComponentsForPersistence, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
@@ -1833,7 +2062,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
       loadSlide(copy, { skipUnsavedConfirm: true })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
@@ -1849,7 +2078,7 @@ export default function SlidesPage() {
         setActiveRevision(updated.revision)
       }
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [activeSlideId, actor, refreshLibraryData])
 
@@ -1876,7 +2105,7 @@ export default function SlidesPage() {
         setExportHtml('')
       }
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [activeSlideId, actor, clearHistory, refreshLibraryData])
 
@@ -1887,7 +2116,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
       loadSlide(slide, { skipUnsavedConfirm: true })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [actor, confirmDiscardUnsaved, loadSlide, refreshLibraryData])
 
@@ -1925,7 +2154,7 @@ export default function SlidesPage() {
       closePublishTemplateDraft()
       setEditorNotice({ tone: 'info', text: `Template "${name}" published.` })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
       setTemplatePublishBusy(false)
     }
   }, [actor, closePublishTemplateDraft, isSlidesAdmin, refreshLibraryData, templatePublishBusy, templatePublishDraft])
@@ -1943,7 +2172,7 @@ export default function SlidesPage() {
       await updateTemplate(actor, template.id, { isShared: nextShared })
       await refreshLibraryData()
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -1982,7 +2211,7 @@ export default function SlidesPage() {
     try {
       await refreshTemplateCollaboratorRows(template.id)
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     }
   }, [refreshTemplateCollaboratorRows, templateCollaboratorPanelId])
 
@@ -2027,7 +2256,7 @@ export default function SlidesPage() {
           : previous,
       )
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2060,7 +2289,7 @@ export default function SlidesPage() {
             : `Submitted collaborator removal approval for "${collaborator.user_email || collaborator.user_id}".`,
       })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
@@ -2105,14 +2334,14 @@ export default function SlidesPage() {
             : `Submitted ownership transfer approval for "${template.name}" to ${target}.`,
       })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
   }, [actor, refreshLibraryData, templateActionBusyId, templateCollaboratorPanelId, templateTransferDraft])
 
   const handleArchiveTemplate = useCallback(async (template: SlideTemplateRecord) => {
-    const approved = window.confirm(`Archive template "${template.name}"? You can undo this for a short period.`)
+    const approved = window.confirm(`Archive template "${template.name}"?`)
     if (!approved) return
 
     setTemplateActionBusyId(template.id)
@@ -2120,49 +2349,16 @@ export default function SlidesPage() {
     try {
       await archiveTemplate(actor, template.id)
       await refreshLibraryData()
-      setArchivedTemplateUndo({
-        templateId: template.id,
-        templateName: template.name,
-        expiresAt: Date.now() + TEMPLATE_ARCHIVE_UNDO_WINDOW_MS,
-      })
-      setEditorNotice({
-        tone: 'info',
-        text: `Archived "${template.name}". Use Undo to restore if needed.`,
-      })
       if (templateCollaboratorPanelId === template.id) {
         setTemplateCollaboratorPanelId(null)
         setTemplateCollaboratorDraft(null)
       }
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateActionBusyId(null)
     }
   }, [actor, refreshLibraryData, templateCollaboratorPanelId])
-
-  const handleUndoArchivedTemplate = useCallback(async () => {
-    if (!archivedTemplateUndo) return
-    if (archivedTemplateUndo.expiresAt <= Date.now()) {
-      setArchivedTemplateUndo(null)
-      return
-    }
-
-    setTemplateActionBusyId(archivedTemplateUndo.templateId)
-    setLibraryError(null)
-    try {
-      await restoreTemplate(actor, archivedTemplateUndo.templateId)
-      await refreshLibraryData()
-      setEditorNotice({
-        tone: 'info',
-        text: `Restored template "${archivedTemplateUndo.templateName}".`,
-      })
-      setArchivedTemplateUndo(null)
-    } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
-    } finally {
-      setTemplateActionBusyId(null)
-    }
-  }, [actor, archivedTemplateUndo, refreshLibraryData])
 
   const handleResolveTemplateApproval = useCallback(async (approval: SlideTemplateApproval, decision: 'approve' | 'reject') => {
     if (templateApprovalBusyId) return
@@ -2188,7 +2384,7 @@ export default function SlidesPage() {
             : `Rejected "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}".`,
       })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2216,7 +2412,7 @@ export default function SlidesPage() {
         text: `Escalated "${formatTemplateApprovalType(approval.approval_type)}" for "${templateName}" to the governance queue.`,
       })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2231,10 +2427,12 @@ export default function SlidesPage() {
       await refreshLibraryData()
       setEditorNotice({
         tone: 'info',
-        text: `Approval sweep processed ${result.processed} pending requests and escalated ${result.escalated}.`,
+        text: result.throttled
+          ? 'Approval sweep is throttled by automation interval. Retry later or run with force from scheduled job context.'
+          : `Approval sweep processed ${result.processed} pending requests and escalated ${result.escalated}.`,
       })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setTemplateApprovalBusyId(null)
     }
@@ -2263,9 +2461,14 @@ export default function SlidesPage() {
       if (typeof nextStyle.fontSize === 'number') {
         nextStyle.fontSize = Math.max(MIN_FONT_SIZE, nextStyle.fontSize)
       }
+      const nextHeight =
+        nextStyle.textAutoSize && supportsTextAutoSize(component)
+          ? measureTextAutoSizeHeight({ ...component, style: nextStyle }, component.width)
+          : component.height
       return {
         ...component,
         style: nextStyle,
+        height: nextHeight,
       }
     })
 
@@ -2284,6 +2487,79 @@ export default function SlidesPage() {
         (selected.length > editableSelected.length ? ' Locked layers were skipped.' : ''),
     })
   }, [areComponentsEqual, pushHistorySnapshot, result, selectedComponentIds, setDirty])
+
+  const applyBoundsToSelection = useCallback((patch: Partial<Pick<SlideComponent, 'x' | 'y' | 'width' | 'height'>>) => {
+    if (!result || selectedComponents.length !== 1) {
+      setEditorNotice({ tone: 'error', text: 'Select one unlocked layer before editing bounds.' })
+      return
+    }
+
+    const component = selectedComponents[0]
+    if (component.locked) {
+      setEditorNotice({ tone: 'error', text: 'Locked layers cannot be resized or moved from the inspector.' })
+      return
+    }
+
+    const hasX = Number.isFinite(patch.x)
+    const hasY = Number.isFinite(patch.y)
+    const hasWidth = Number.isFinite(patch.width)
+    const hasHeight = Number.isFinite(patch.height)
+    if (!hasX && !hasY && !hasWidth && !hasHeight) return
+
+    const nextWidth = hasWidth
+      ? Math.max(MIN_COMPONENT_WIDTH, Math.round(Number(patch.width)))
+      : component.width
+    const autoSizeEnabled = component.style.textAutoSize && supportsTextAutoSize(component)
+    const maxHeight = Math.max(MIN_COMPONENT_HEIGHT, result.canvas.height - component.y)
+    const directHeight = hasHeight
+      ? Math.max(MIN_COMPONENT_HEIGHT, Math.round(Number(patch.height)))
+      : (typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT)
+    const nextHeight = autoSizeEnabled
+      ? Math.min(maxHeight, measureTextAutoSizeHeight(component, nextWidth))
+      : directHeight
+
+    const nextCoordinates = clampCanvasCoordinates(
+      { ...component, width: nextWidth, height: nextHeight },
+      result.canvas,
+      hasX ? Math.max(0, Math.round(Number(patch.x))) : component.x,
+      hasY ? Math.max(0, Math.round(Number(patch.y))) : component.y,
+    )
+
+    if (
+      nextCoordinates.x === component.x &&
+      nextCoordinates.y === component.y &&
+      nextWidth === component.width &&
+      nextHeight === (typeof component.height === 'number' ? component.height : MIN_COMPONENT_HEIGHT)
+    ) {
+      return
+    }
+
+    pushHistorySnapshot(result.components)
+    setResult((previous) => {
+      if (!previous) return previous
+      return {
+        ...previous,
+        components: previous.components.map((entry) => (
+          entry.id === component.id
+            ? {
+                ...entry,
+                x: nextCoordinates.x,
+                y: nextCoordinates.y,
+                width: nextWidth,
+                height: nextHeight,
+              }
+            : entry
+        )),
+      }
+    })
+    setDirty()
+    setEditorNotice({
+      tone: 'info',
+      text: autoSizeEnabled
+        ? 'Updated layer bounds. Height is auto-sized from text content.'
+        : 'Updated layer bounds from inspector controls.',
+    })
+  }, [pushHistorySnapshot, result, selectedComponents, setDirty])
 
   const alignSelection = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'center-x' | 'center-y') => {
     if (!result || selectedComponentIds.length < 2) {
@@ -2486,7 +2762,7 @@ export default function SlidesPage() {
         })
       }
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setAuditExportRequestBusy(false)
     }
@@ -2509,7 +2785,7 @@ export default function SlidesPage() {
       downloadTextFile(file.content, file.filename, 'text/csv;charset=utf-8')
       setEditorNotice({ tone: 'info', text: `Downloaded ${file.filename}.` })
     } catch (error) {
-      setLibraryError(toUserFacingSlidesError(error))
+      setLibraryError(error instanceof Error ? error.message : String(error))
     } finally {
       setAuditExportDownloadBusyId(null)
     }
@@ -2627,7 +2903,7 @@ export default function SlidesPage() {
           : `Exported ${slideCount} slide(s) to PPTX.`,
       })
     } catch (error) {
-      const message = toUserFacingSlidesError(error)
+      const message = error instanceof Error ? error.message : String(error)
       setSaveError(`PPTX export failed: ${message}`)
       const auditSlideIds = options?.auditSlideIds || []
       if (auditSlideIds.length > 0) {
@@ -2671,7 +2947,37 @@ export default function SlidesPage() {
   }, [activeSlideId, result, runPptxExport, slideTitle])
 
   const handleExportSelectedSlidesAsPptx = useCallback(async () => {
-    const selectedSlides = slides.filter((slide) => pptxSelectedSlideIds.includes(slide.id))
+    if (pptxSelectedSlideIds.length === 0) {
+      setSaveError('Select at least one slide to export as PPTX.')
+      return
+    }
+
+    let exportableSlides = slides
+    const selectedIds = Array.from(new Set(pptxSelectedSlideIds))
+    const missingSelectedIds = selectedIds.filter((slideId) => !exportableSlides.some((slide) => slide.id === slideId))
+
+    if (missingSelectedIds.length > 0) {
+      try {
+        exportableSlides = await listSlides(actor, '')
+      } catch (error) {
+        setSaveError(`Could not load selected hidden slides for export: ${error instanceof Error ? error.message : String(error)}`)
+        return
+      }
+    }
+
+    const selectedSlides = exportableSlides.filter((slide) => selectedIds.includes(slide.id))
+    if (selectedSlides.length === 0) {
+      setSaveError('Selected slides are no longer available for export.')
+      return
+    }
+
+    if (selectedSlides.length < selectedIds.length) {
+      setEditorNotice({
+        tone: 'error',
+        text: `Exporting ${selectedSlides.length} slide(s); ${selectedIds.length - selectedSlides.length} selected slide(s) were not found.`,
+      })
+    }
+
     await runPptxExport(
       selectedSlides.map((slide) => ({
         id: slide.id,
@@ -2684,7 +2990,7 @@ export default function SlidesPage() {
         filenamePrefix: selectedSlides.length === 1 ? selectedSlides[0].title : 'slides-export',
       },
     )
-  }, [pptxSelectedSlideIds, runPptxExport, slides])
+  }, [actor, pptxSelectedSlideIds, runPptxExport, slides])
 
   const togglePptxSlideSelection = useCallback((slideId: string) => {
     setPptxSelectedSlideIds((previous) => (
@@ -2693,6 +2999,17 @@ export default function SlidesPage() {
         : [...previous, slideId]
     ))
   }, [])
+
+  const selectAllVisibleSlides = useCallback(() => {
+    setPptxSelectedSlideIds((previous) => {
+      if (slides.length === 0) return previous
+      const next = new Set(previous)
+      for (const slide of slides) {
+        next.add(slide.id)
+      }
+      return Array.from(next)
+    })
+  }, [slides])
 
   const handleConflictReload = useCallback(() => {
     if (!conflictServerSlide) return
@@ -2732,7 +3049,7 @@ export default function SlidesPage() {
       await refreshLibraryData()
     } catch (error) {
       setSaveStatus('error')
-      setSaveError(toUserFacingSlidesError(error))
+      setSaveError(error instanceof Error ? error.message : String(error))
     }
   }, [actor, normalizeComponentsForPersistence, rawHtml.length, refreshLibraryData, result, slideTitle])
 
@@ -2834,8 +3151,7 @@ export default function SlidesPage() {
       />
 
       <nav className="app-sidebar" id="sidebar" aria-label="Slide editor navigation">
-        <div className="app-sidebar-logo">Slide Editor</div>
-        <Link href="/" className="sidebar-back" onClick={handleBackToHubClick}>← Back to Hub</Link>
+        <ModuleSidebarHeader title="Slide Editor" onBackClick={handleBackToHubClick} />
 
         <div className="app-sidebar-section">
           <button
@@ -2870,18 +3186,10 @@ export default function SlidesPage() {
       </nav>
 
       <div className="main slides-main">
-        <header className="topbar">
-          <button
-            className="topbar-hamburger"
-            onClick={() => setSidebarOpen((open) => !open)}
-            aria-label="Toggle navigation"
-            aria-expanded={sidebarOpen}
-            aria-controls="sidebar"
-          >
-            &#9776;
-          </button>
-          <span className="topbar-name">Slide Editor</span>
-        </header>
+        <ModuleTopbar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        />
 
         <main className="page slides-page" id="main-content">
           <section className="slides-card">
@@ -2901,8 +3209,8 @@ export default function SlidesPage() {
                   Recovered draft available from {formatDateTime(recoveryDraft.createdAt)}.
                 </div>
                 <div className="slides-inline-actions">
-                  <button type="button" className="btn btn-sm btn-primary" onClick={restoreDraft}>Restore Draft</button>
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={discardDraft}>Discard</button>
+                  <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={restoreDraft}>Restore Draft</button>
+                  <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={discardDraft}>Discard</button>
                 </div>
               </div>
             )}
@@ -2919,7 +3227,7 @@ export default function SlidesPage() {
                   className="slides-search"
                 />
               </label>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => void refreshLibraryData()} disabled={libraryLoading}>
+              <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void refreshLibraryData()} disabled={libraryLoading}>
                 {libraryLoading ? 'Refreshing…' : 'Refresh'}
               </button>
             </div>
@@ -2928,32 +3236,6 @@ export default function SlidesPage() {
               <p className="slides-error" role="alert">
                 Library error: {libraryError}
               </p>
-            )}
-
-            {workspaceTab === 'templates' && archivedTemplateUndo && (
-              <div className="slides-recovery" role="status">
-                <div>
-                  Template "{archivedTemplateUndo.templateName}" archived.
-                </div>
-                <div className="slides-inline-actions">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    onClick={() => void handleUndoArchivedTemplate()}
-                    disabled={templateActionBusyId === archivedTemplateUndo.templateId}
-                  >
-                    Undo Archive
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost"
-                    onClick={() => setArchivedTemplateUndo(null)}
-                    disabled={templateActionBusyId === archivedTemplateUndo.templateId}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
             )}
 
             {workspaceTab === 'import' && (
@@ -2975,19 +3257,19 @@ export default function SlidesPage() {
                     </div>
 
                     <div className="slides-actions">
-                      <button type="button" className="btn btn-primary" onClick={openFilePicker} disabled={parseStatus === 'parsing'}>
+                      <button type="button" className="btn btn-primary btn--compact" onClick={openFilePicker} disabled={parseStatus === 'parsing'}>
                         Import HTML File
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="btn btn-ghost btn--compact"
                         onClick={() => void runParseWithProgress(rawHtml)}
                         disabled={parseStatus === 'parsing'}
                       >
                         Parse Pasted HTML
                       </button>
                       {parseStatus === 'parsing' && (
-                        <button type="button" className="btn btn-danger" onClick={cancelParse}>
+                        <button type="button" className="btn btn-danger btn--compact" onClick={cancelParse}>
                           Cancel Parse
                         </button>
                       )}
@@ -3021,7 +3303,7 @@ export default function SlidesPage() {
                         <div>
                           Import failed ({importError.code.replace(/_/g, ' ')}): {importError.message}
                         </div>
-                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setImportError(null)}>
+                        <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => setImportError(null)}>
                           Clear
                         </button>
                       </div>
@@ -3050,7 +3332,7 @@ export default function SlidesPage() {
                       <div className="slides-inline-actions">
                         <button
                           type="button"
-                          className="btn btn-primary"
+                          className="btn btn-primary btn--compact"
                           onClick={() => void handleSave()}
                           disabled={!result || saveStatus === 'saving'}
                         >
@@ -3091,13 +3373,13 @@ export default function SlidesPage() {
                             Autosave retry queued. Attempt {autosaveRetryState.attempt} with {Math.ceil(autosaveRetryState.delayMs / 1000)}s backoff.
                           </p>
                           <div className="slides-inline-actions">
-                            <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleSave({ autosave: true })}>
+                            <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={() => void handleSave({ autosave: true })}>
                               Retry Autosave Now
                             </button>
-                            <button type="button" className="btn btn-sm btn-ghost" onClick={scheduleAutosaveRetryNow}>
+                            <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={scheduleAutosaveRetryNow}>
                               Requeue Immediate Retry
                             </button>
-                            <button type="button" className="btn btn-sm btn-ghost" onClick={dismissAutosaveRetry}>
+                            <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={dismissAutosaveRetry}>
                               Dismiss Retry Queue
                             </button>
                           </div>
@@ -3110,9 +3392,9 @@ export default function SlidesPage() {
                             Conflict with server revision {conflictServerSlide.revision}.
                           </p>
                           <div className="slides-inline-actions">
-                            <button type="button" className="btn btn-sm btn-ghost" onClick={handleConflictReload}>Reload Server Version</button>
-                            <button type="button" className="btn btn-sm btn-primary" onClick={() => void handleConflictOverwrite()}>Overwrite Server</button>
-                            <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleConflictSaveAsCopy()}>Save as Copy</button>
+                            <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={handleConflictReload}>Reload Server Version</button>
+                            <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={() => void handleConflictOverwrite()}>Overwrite Server</button>
+                            <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleConflictSaveAsCopy()}>Save as Copy</button>
                           </div>
                         </div>
                       )}
@@ -3130,85 +3412,151 @@ export default function SlidesPage() {
                       <div className="slides-editor-toolbar-row">
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => handleUndo()}
                           disabled={historyPast.length === 0}
+                          title="Undo"
+                          aria-label="Undo"
                         >
-                          Undo
+                          ↶
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => handleRedo()}
                           disabled={historyFuture.length === 0}
+                          title="Redo"
+                          aria-label="Redo"
                         >
-                          Redo
+                          ↷
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('left')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Left"
+                          aria-label="Align Left"
                         >
-                          Align Left
+                          ≡▏
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('center-x')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Center"
+                          aria-label="Align Center"
                         >
-                          Align Center X
+                          ≡¦
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('right')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Right"
+                          aria-label="Align Right"
                         >
-                          Align Right
+                          ▕≡
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('top')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Top"
+                          aria-label="Align Top"
                         >
-                          Align Top
+                          ▔≡
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('center-y')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Middle"
+                          aria-label="Align Middle"
                         >
-                          Align Center Y
+                          ═≡
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => alignSelection('bottom')}
                           disabled={selectedComponentIds.length < 2}
+                          title="Align Bottom"
+                          aria-label="Align Bottom"
                         >
-                          Align Bottom
+                          ≡▁
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => distributeSelection('horizontal')}
+                          title="Distribute Horizontally"
+                          aria-label="Distribute Horizontally"
                         >
-                          Distribute Horizontally
+                          ⇆≡
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost slides-toolbar-icon btn--compact"
                           onClick={() => distributeSelection('vertical')}
+                          title="Distribute Vertically"
+                          aria-label="Distribute Vertically"
                         >
-                          Distribute Vertically
+                          ⇅≡
                         </button>
                       </div>
 
                       <div className="slides-editor-toolbar-row slides-editor-toolbar-row--inputs">
+                        <label className="slides-editor-field" htmlFor="slides-style-x">
+                          <span>X</span>
+                          <input
+                            id="slides-style-x"
+                            type="number"
+                            step={1}
+                            value={selectedBounds?.x ?? 0}
+                            onChange={(event) => applyBoundsToSelection({ x: Number(event.target.value) })}
+                            disabled={!selectedBounds}
+                          />
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-y">
+                          <span>Y</span>
+                          <input
+                            id="slides-style-y"
+                            type="number"
+                            step={1}
+                            value={selectedBounds?.y ?? 0}
+                            onChange={(event) => applyBoundsToSelection({ y: Number(event.target.value) })}
+                            disabled={!selectedBounds}
+                          />
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-width">
+                          <span>Width</span>
+                          <input
+                            id="slides-style-width"
+                            type="number"
+                            min={MIN_COMPONENT_WIDTH}
+                            step={1}
+                            value={selectedBounds?.width ?? MIN_COMPONENT_WIDTH}
+                            onChange={(event) => applyBoundsToSelection({ width: Number(event.target.value) })}
+                            disabled={!selectedBounds}
+                          />
+                        </label>
+                        <label className="slides-editor-field" htmlFor="slides-style-height">
+                          <span>Height</span>
+                          <input
+                            id="slides-style-height"
+                            type="number"
+                            min={MIN_COMPONENT_HEIGHT}
+                            step={1}
+                            value={selectedBounds?.height ?? MIN_COMPONENT_HEIGHT}
+                            onChange={(event) => applyBoundsToSelection({ height: Number(event.target.value) })}
+                            disabled={!selectedBounds || selectedStyle?.textAutoSize === true}
+                          />
+                        </label>
                         <label className="slides-editor-field" htmlFor="slides-style-font-size">
                           <span>Font size</span>
                           <input
@@ -3274,9 +3622,21 @@ export default function SlidesPage() {
                             disabled={selectedComponentIds.length === 0}
                           />
                         </label>
+                        <label className="slides-editor-field slides-editor-field--checkbox" htmlFor="slides-style-text-auto-size">
+                          <span>Text Auto Size</span>
+                          <input
+                            id="slides-style-text-auto-size"
+                            type="checkbox"
+                            checked={autoSizeEnabledForSelection}
+                            aria-label="Text Auto Size"
+                            title={autoSizeMixedSelection ? 'Mixed selection: enabling will normalize selected text layers.' : ''}
+                            onChange={(event) => applyStyleToSelection({ textAutoSize: event.target.checked })}
+                            disabled={autoSizeEligibleSelection.length === 0}
+                          />
+                        </label>
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost btn--compact"
                           onClick={() =>
                             applyStyleToSelection({
                               fontStyle: selectedStyle?.fontStyle === 'italic' ? 'normal' : 'italic',
@@ -3293,6 +3653,7 @@ export default function SlidesPage() {
                       <ul id="slides-canvas-shortcuts-help">
                         <li>Tab to focus a layer, Enter to start inline text editing, Escape to exit editing/selection.</li>
                         <li>Arrow keys nudge selected layers by 1px. Use Shift+Arrow for 10px.</li>
+                        <li>Alt+Arrow resizes selected layers by 1px. Use Alt+Shift+Arrow for 10px.</li>
                         <li>Shift+click toggles multi-select. Ctrl/Cmd+A selects all visible layers.</li>
                         <li>PageUp/PageDown cycles layer selection.</li>
                         <li>Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y redo.</li>
@@ -3338,6 +3699,20 @@ export default function SlidesPage() {
                               transform: `scale(${canvasScale})`,
                             }}
                           >
+                            {canvasSnapGuides.x !== null && (
+                              <div
+                                className="slides-canvas-guide slides-canvas-guide--vertical"
+                                style={{ left: `${canvasSnapGuides.x}px` }}
+                                data-snap-guide-axis="x"
+                              />
+                            )}
+                            {canvasSnapGuides.y !== null && (
+                              <div
+                                className="slides-canvas-guide slides-canvas-guide--horizontal"
+                                style={{ top: `${canvasSnapGuides.y}px` }}
+                                data-snap-guide-axis="y"
+                              />
+                            )}
                             {result.components.filter((component) => component.visible !== false).map((component) => {
                               const isEditable = EDITABLE_COMPONENT_TYPES.has(component.type)
                               const sanitizedContent = sanitizeHtmlContent(component.content || '')
@@ -3362,6 +3737,7 @@ export default function SlidesPage() {
                                   data-component-y={String(component.y)}
                                   data-component-width={String(component.width)}
                                   data-component-height={typeof component.height === 'number' ? String(component.height) : ''}
+                                  data-component-auto-size={component.style.textAutoSize ? 'true' : 'false'}
                                   data-component-locked={component.locked ? 'true' : 'false'}
                                   data-component-selected={isSelected ? 'true' : 'false'}
                                   data-component-dragging={draggingComponentId === component.id ? 'true' : 'false'}
@@ -3442,26 +3818,26 @@ export default function SlidesPage() {
                     )}
 
                     <div className="slides-inline-actions">
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void copyParsedJson()}>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void copyParsedJson()}>
                         {jsonCopyState === 'copied' ? 'JSON Copied' : jsonCopyState === 'failed' ? 'Copy Failed' : 'Copy Parsed JSON'}
                       </button>
                       <button
                         type="button"
-                        className="btn btn-sm btn-ghost"
+                        className="btn btn-sm btn-ghost btn--compact"
                         onClick={() => downloadTextFile(JSON.stringify(result.components, null, 2), `${(slideTitle || 'slide').replace(/\s+/g, '-').toLowerCase()}.json`, 'application/json;charset=utf-8')}
                       >
                         Download JSON
                       </button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => generateExport()}>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => generateExport()}>
                         Generate HTML Export
                       </button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleExportHtml()}>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleExportHtml()}>
                         Download HTML
                       </button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleExportPdf()}>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleExportPdf()}>
                         Export PDF (Print)
                       </button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleExportCurrentAsPptx()} disabled={pptxExportBusy}>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleExportCurrentAsPptx()} disabled={pptxExportBusy}>
                         {pptxExportBusy ? 'Exporting PPTX…' : 'Export PPTX (Current)'}
                       </button>
                     </div>
@@ -3507,7 +3883,7 @@ export default function SlidesPage() {
 
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost"
+                      className="btn btn-sm btn-ghost btn--compact"
                       onClick={() => setShowRawJson((value) => !value)}
                     >
                       {showRawJson ? 'Hide Raw JSON' : 'Show Raw JSON'}
@@ -3529,7 +3905,7 @@ export default function SlidesPage() {
                 <div className="slides-inline-actions">
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={() => void handleExportSelectedSlidesAsPptx()}
                     disabled={pptxExportBusy || pptxSelectedSlideIds.length === 0}
                   >
@@ -3537,13 +3913,29 @@ export default function SlidesPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
+                    onClick={selectAllVisibleSlides}
+                    disabled={pptxExportBusy || slides.length === 0 || areAllVisibleSlidesSelected}
+                  >
+                    Select Visible ({slides.length})
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={() => setPptxSelectedSlideIds([])}
                     disabled={pptxSelectedSlideIds.length === 0 || pptxExportBusy}
                   >
                     Clear Selection
                   </button>
                 </div>
+                <p className="slides-selection-hint">
+                  Selected for export: {selectedVisibleSlideCount} visible / {pptxSelectedSlideIds.length} total.
+                </p>
+                {selectedHiddenSlideCount > 0 && (
+                  <p className="slides-selection-hint" data-tone="warning">
+                    {selectedHiddenSlideCount} selected slide{selectedHiddenSlideCount === 1 ? '' : 's'} {selectedHiddenSlideCount === 1 ? 'is' : 'are'} hidden by the current search filter.
+                  </p>
+                )}
                 {slides.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
@@ -3568,17 +3960,17 @@ export default function SlidesPage() {
                       <p>Components: {slide.components.length}</p>
                     </div>
                     <div className="slides-inline-actions">
-                      <button type="button" className="btn btn-sm btn-primary" onClick={() => loadSlide(slide)}>Load</button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleDuplicateSlide(slide.id)}>Duplicate</button>
-                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => void handleRenameSlide(slide)}>Rename</button>
+                      <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={() => loadSlide(slide)}>Load</button>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleDuplicateSlide(slide.id)}>Duplicate</button>
+                      <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={() => void handleRenameSlide(slide)}>Rename</button>
                       <button
                         type="button"
-                        className="btn btn-sm btn-ghost"
+                        className="btn btn-sm btn-ghost btn--compact"
                         onClick={() => openPublishTemplateDraft(slide)}
                       >
                         Publish Template
                       </button>
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => void handleDeleteSlide(slide)}>Delete</button>
+                      <button type="button" className="btn btn-sm btn-danger btn--compact" onClick={() => void handleDeleteSlide(slide)}>Delete</button>
                     </div>
                     {templatePublishDraft?.slideId === slide.id && (
                       <div className="slides-template-draft">
@@ -3631,7 +4023,7 @@ export default function SlidesPage() {
                         <div className="slides-inline-actions">
                           <button
                             type="button"
-                            className="btn btn-sm btn-primary"
+                            className="btn btn-sm btn-primary btn--compact"
                             onClick={() => void handlePublishTemplate()}
                             disabled={templatePublishBusy}
                           >
@@ -3639,7 +4031,7 @@ export default function SlidesPage() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
+                            className="btn btn-sm btn-ghost btn--compact"
                             onClick={closePublishTemplateDraft}
                             disabled={templatePublishBusy}
                           >
@@ -3665,7 +4057,7 @@ export default function SlidesPage() {
                       <div className="slides-inline-actions">
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost btn--compact"
                           onClick={() => void handleRunApprovalEscalationSweep()}
                           disabled={!!templateApprovalBusyId || templateApprovals.length === 0}
                         >
@@ -3715,7 +4107,7 @@ export default function SlidesPage() {
                               <>
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-primary"
+                                  className="btn btn-sm btn-primary btn--compact"
                                   onClick={() => void handleResolveTemplateApproval(approval, 'approve')}
                                   disabled={busy}
                                 >
@@ -3723,7 +4115,7 @@ export default function SlidesPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-danger"
+                                  className="btn btn-sm btn-danger btn--compact"
                                   onClick={() => void handleResolveTemplateApproval(approval, 'reject')}
                                   disabled={busy}
                                 >
@@ -3734,7 +4126,7 @@ export default function SlidesPage() {
                             {sla.canEscalate && (
                               <button
                                 type="button"
-                                className="btn btn-sm btn-ghost"
+                                className="btn btn-sm btn-ghost btn--compact"
                                 onClick={() => void handleEscalateTemplateApproval(approval)}
                                 disabled={busy}
                               >
@@ -3803,7 +4195,7 @@ export default function SlidesPage() {
                     <div className="slides-inline-actions">
                       <button
                         type="button"
-                        className="btn btn-sm btn-primary"
+                        className="btn btn-sm btn-primary btn--compact"
                         onClick={() => void handleDuplicateTemplate(template.id)}
                       >
                         Duplicate to My Slides
@@ -3813,7 +4205,7 @@ export default function SlidesPage() {
                           {(template.is_shared || isSlidesAdmin) && (
                             <button
                               type="button"
-                              className="btn btn-sm btn-ghost"
+                              className="btn btn-sm btn-ghost btn--compact"
                               onClick={() => void handleTemplateVisibilityToggle(template)}
                               disabled={templateActionBusyId === template.id}
                             >
@@ -3822,7 +4214,7 @@ export default function SlidesPage() {
                           )}
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
+                            className="btn btn-sm btn-ghost btn--compact"
                             onClick={() => openTransferTemplateDraft(template)}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3830,7 +4222,7 @@ export default function SlidesPage() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
+                            className="btn btn-sm btn-ghost btn--compact"
                             onClick={() => void toggleTemplateCollaboratorPanel(template)}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3838,7 +4230,7 @@ export default function SlidesPage() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-danger"
+                            className="btn btn-sm btn-danger btn--compact"
                             onClick={() => void handleArchiveTemplate(template)}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3865,7 +4257,7 @@ export default function SlidesPage() {
                         <div className="slides-inline-actions">
                           <button
                             type="button"
-                            className="btn btn-sm btn-primary"
+                            className="btn btn-sm btn-primary btn--compact"
                             onClick={() => void handleTransferTemplateOwnership(template)}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3873,7 +4265,7 @@ export default function SlidesPage() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-ghost"
+                            className="btn btn-sm btn-ghost btn--compact"
                             onClick={closeTransferTemplateDraft}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3895,7 +4287,7 @@ export default function SlidesPage() {
                             </span>
                             <button
                               type="button"
-                              className="btn btn-sm btn-ghost"
+                              className="btn btn-sm btn-ghost btn--compact"
                               onClick={() => void handleRemoveTemplateCollaborator(template, collaborator)}
                               disabled={templateActionBusyId === template.id}
                             >
@@ -3946,7 +4338,7 @@ export default function SlidesPage() {
                         <div className="slides-inline-actions">
                           <button
                             type="button"
-                            className="btn btn-sm btn-primary"
+                            className="btn btn-sm btn-primary btn--compact"
                             onClick={() => void handleUpsertTemplateCollaborator(template)}
                             disabled={templateActionBusyId === template.id}
                           >
@@ -3983,7 +4375,7 @@ export default function SlidesPage() {
                     </label>
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost"
+                      className="btn btn-sm btn-ghost btn--compact"
                       onClick={handleApplySelectedAuditPreset}
                       disabled={!selectedAuditPreset || auditPresetBusy}
                     >
@@ -3991,7 +4383,7 @@ export default function SlidesPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost"
+                      className="btn btn-sm btn-ghost btn--compact"
                       onClick={() => setAuditPresetName(selectedAuditPreset?.name || '')}
                       disabled={!selectedAuditPreset || auditPresetBusy}
                     >
@@ -3999,7 +4391,7 @@ export default function SlidesPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm btn-ghost"
+                      className="btn btn-sm btn-ghost btn--compact"
                       onClick={() => void handleDeleteSelectedAuditPreset()}
                       disabled={!selectedAuditPreset || auditPresetBusy}
                     >
@@ -4032,7 +4424,7 @@ export default function SlidesPage() {
                     </label>
                     <button
                       type="button"
-                      className="btn btn-sm btn-primary"
+                      className="btn btn-sm btn-primary btn--compact"
                       onClick={() => void handleSaveAuditPreset()}
                       disabled={auditPresetBusy}
                     >
@@ -4119,7 +4511,7 @@ export default function SlidesPage() {
                 <div className="slides-inline-actions">
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={resetAuditFilters}
                     disabled={!hasActiveAuditFilters}
                   >
@@ -4127,7 +4519,7 @@ export default function SlidesPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={handleExportAuditCsv}
                     disabled={audits.length === 0}
                   >
@@ -4154,7 +4546,7 @@ export default function SlidesPage() {
                     </label>
                     <button
                       type="button"
-                      className="btn btn-sm btn-primary"
+                      className="btn btn-sm btn-primary btn--compact"
                       onClick={() => void handleRequestAuditExportJob()}
                       disabled={auditExportRequestBusy}
                     >
@@ -4188,7 +4580,7 @@ export default function SlidesPage() {
                       <div className="slides-inline-actions">
                         <button
                           type="button"
-                          className="btn btn-sm btn-ghost"
+                          className="btn btn-sm btn-ghost btn--compact"
                           onClick={() => void handleDownloadAuditExport(job)}
                           disabled={job.status !== 'completed' || auditExportDownloadBusyId === job.id}
                         >
@@ -4226,7 +4618,7 @@ export default function SlidesPage() {
                 <div className="slides-inline-actions slides-audit-pagination">
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={handleAuditPreviousPage}
                     disabled={auditOffset === 0 || libraryLoading}
                   >
@@ -4238,7 +4630,7 @@ export default function SlidesPage() {
                   </span>
                   <button
                     type="button"
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-ghost btn--compact"
                     onClick={handleAuditNextPage}
                     disabled={!auditHasMore || libraryLoading}
                   >

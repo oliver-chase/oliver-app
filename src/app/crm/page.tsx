@@ -1,11 +1,12 @@
 'use client'
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig } from '@/components/shared/OliverContext'
 import { CRM_COMMANDS } from '@/app/crm/commands'
 import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
+import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
+import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
 
 export default function CrmPage() {
   const { allowRender } = useModuleAccess('crm')
@@ -37,25 +38,16 @@ export default function CrmPage() {
         aria-hidden="true"
       />
       <nav className="app-sidebar" id="sidebar" aria-label="CRM navigation">
-        <div className="app-sidebar-logo">CRM &amp; Business Dev</div>
-        <Link href="/" className="sidebar-back">← Back to Hub</Link>
+        <ModuleSidebarHeader title="CRM & Business Dev" />
         <div className="app-sidebar-section">
           <div className="app-sidebar-item active" role="button" tabIndex={0}>Overview</div>
         </div>
       </nav>
       <div className="main">
-        <header className="topbar">
-          <button
-            className="topbar-hamburger"
-            onClick={toggleSidebar}
-            aria-label="Toggle navigation"
-            aria-expanded={sidebarOpen}
-            aria-controls="sidebar"
-          >
-            &#9776;
-          </button>
-          <span className="topbar-name">CRM &amp; Business Development</span>
-        </header>
+        <ModuleTopbar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={toggleSidebar}
+        />
         <main className="page" id="main-content">
           <div className="coming-soon">
             <div className="coming-soon-badge">Coming Soon</div>

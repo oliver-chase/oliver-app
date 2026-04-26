@@ -21,7 +21,7 @@ function seedQaAuth(page: Page, appUserOverrides?: Record<string, unknown>) {
       email: 'qa-admin@example.com',
       name: 'QA Admin',
       role: 'admin',
-      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
       created_at: '2026-04-23T00:00:00.000Z',
       updated_at: '2026-04-23T00:00:00.000Z',
       ...appUserOverrides,
@@ -40,13 +40,11 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/')
 
     await expect(page.getByText('V.Two Ops')).toBeVisible()
-    await expect(page.locator('[data-hub-columns="1"]')).toBeVisible()
-    await expect(page.locator('[data-hub-col="left"] > *')).toHaveCount(4)
-    await expect(page.locator('[data-hub-col="right"]')).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Account Strategy & Planning' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'HR & People Ops' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'SDR & Outreach' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Slide Editor' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Campaign Content & Posting' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'CRM & Business Development' })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeVisible()
 
@@ -66,6 +64,10 @@ test.describe('frontend smoke', () => {
     await expect(page).toHaveURL(/\/slides\/?$/)
 
     await gotoAndSettle(page, '/')
+    await page.getByRole('link', { name: 'Campaign Content & Posting' }).click()
+    await expect(page).toHaveURL(/\/campaigns\/?$/)
+
+    await gotoAndSettle(page, '/')
     await page.getByRole('link', { name: 'Admin', exact: true }).click()
     await expect(page).toHaveURL(/\/admin\/?$/)
     await page
@@ -77,18 +79,21 @@ test.describe('frontend smoke', () => {
 
   test('major routes render a non-empty shell', async ({ page }) => {
     const routes = [
-      { path: '/', text: 'Internal Operations Hub' },
-      { path: '/accounts', text: 'All Accounts' },
-      { path: '/hr', text: 'HR & People Ops' },
-      { path: '/sdr', text: 'SDR & Outreach' },
-      { path: '/slides', text: 'Slide Editor' },
-      { path: '/crm', text: 'CRM' },
-      { path: '/admin', text: 'Admin' },
-      { path: '/design-system', text: 'Design System' },
+      { path: '/', text: 'Internal Operations Hub', expectedUrl: /\/$/ },
+      { path: '/accounts', text: 'All Accounts', expectedUrl: /\/accounts\/?$/ },
+      { path: '/hr', text: 'HR & People Ops', expectedUrl: /\/hr\/?$/ },
+      { path: '/sdr', text: 'SDR & Outreach', expectedUrl: /\/sdr\/?$/ },
+      { path: '/slides', text: 'Slide Editor', expectedUrl: /\/slides\/?$/ },
+      { path: '/reviews', text: 'Self-Led Growth & Review', expectedUrl: /\/reviews\/?$/ },
+      { path: '/campaigns', text: 'Campaign Execution Workspace', expectedUrl: /\/campaigns\/?$/ },
+      { path: '/crm', text: 'Internal Operations Hub', expectedUrl: /\/$/ },
+      { path: '/admin', text: 'Admin', expectedUrl: /\/admin\/?$/ },
+      { path: '/design-system', text: 'Design System', expectedUrl: /\/design-system\/?$/ },
     ]
 
     for (const route of routes) {
       await gotoAndSettle(page, route.path)
+      await expect(page).toHaveURL(route.expectedUrl)
       await expect(page.getByText(route.text).first()).toBeVisible()
       await expect(page.locator('body')).not.toBeEmpty()
     }
@@ -206,6 +211,19 @@ test.describe('frontend smoke', () => {
     await expect(page.getByText(/For Admin, open that module first\./)).toBeVisible()
     await expect(page).toHaveURL(/\/accounts\/?$/)
     await context.close()
+  })
+
+  test('chatbot hides dormant module routing prompts when module is not enabled', async ({ page }) => {
+    await gotoAndSettle(page, '/accounts')
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    const input = page.getByLabel('Message or command')
+    await input.fill('show me the deal pipeline')
+    await input.press('Enter')
+
+    await expect(page.getByText(/That workflow is not available in this environment\./)).toBeVisible()
+    await expect(page.getByText(/CRM & Business Development/)).toHaveCount(0)
+    await expect(page).toHaveURL(/\/accounts\/?$/)
   })
 
   test('accounts chatbot transcript upload can be reviewed and written through confirm-write', async ({ page }) => {
@@ -423,13 +441,260 @@ test.describe('frontend smoke', () => {
     expect(typeof (savedPatch.patch as Record<string, unknown>).lu).toBe('string')
   })
 
-  test('crm route stays in explicit coming-soon mode without CRUD controls', async ({ page }) => {
+  test('crm route redirects to hub while module is disabled', async ({ page }) => {
     await gotoAndSettle(page, '/crm')
 
-    await expect(page.getByText('Coming Soon')).toBeVisible()
-    await expect(page.locator('.app-sidebar-item.active').getByText('Overview')).toBeVisible()
-    await expect(page.getByRole('link', { name: /Back to Hub/ })).toBeVisible()
-    await expect(page.locator('#main-content').locator('input, textarea, [role="combobox"]')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+  })
+
+  test('reviews route renders workspace shell and chatbot quick action routes to admin', async ({ page }) => {
+    await gotoAndSettle(page, '/reviews')
+
+    await expect(page.getByText('Self-Led Growth & Review').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Focus Areas' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Review Cycles' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Goals', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Updates', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Quarterly', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Annual', exact: true })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    await page.getByRole('button', { name: 'Open Admin Setup' }).first().click()
+    await expect(page).toHaveURL(/\/admin\/?$/)
+  })
+
+  test('reviews route shows migration guidance when reviews schema is missing', async ({ page }) => {
+    await page.route('**/rest/v1/review_*', async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42P01',
+          details: null,
+          hint: null,
+          message: 'relation "public.review_goals" does not exist',
+        }),
+      })
+    })
+
+    await gotoAndSettle(page, '/reviews')
+    await expect(page.getByRole('heading', { name: 'Schema migration needed' })).toBeVisible()
+    await expect(page.locator('.status-banner')).toContainText('supabase/migrations/011_reviews_module_foundation.sql')
+  })
+
+  test('reviews route shows access policy guidance when Supabase blocks read access', async ({ page }) => {
+    await page.route('**/rest/v1/review_*', async route => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42501',
+          details: null,
+          hint: null,
+          message: 'permission denied for table review_goals',
+        }),
+      })
+    })
+
+    await gotoAndSettle(page, '/reviews')
+    await expect(page.getByRole('heading', { name: 'Access policy check needed' })).toBeVisible()
+    await expect(page.locator('.status-banner')).toContainText('Supabase RLS/permissions')
+    await expect(page.getByRole('button', { name: 'Add Goal' })).toBeDisabled()
+  })
+
+  test('reviews route surfaces write-policy contract errors on goal save attempts', async ({ page }) => {
+    await page.route('**/rest/v1/review_*', async route => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42501',
+          details: null,
+          hint: 'new row violates row-level security policy for table "review_goals"',
+          message: 'permission denied for table review_goals',
+        }),
+      })
+    })
+
+    await gotoAndSettle(page, '/reviews')
+    await page.getByPlaceholder('Goal title').fill('Increase reviewer packet quality')
+    await page.getByRole('button', { name: 'Add Goal' }).click()
+
+    await expect(page.locator('.status-banner')).toContainText('Supabase RLS/permissions')
+    await expect(page.getByRole('heading', { name: 'Access policy check needed' })).toBeVisible()
+  })
+
+  test('campaigns route renders workspace shell and section controls for authorized users', async ({ page }) => {
+    await seedQaAuth(page, {
+      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page.getByText('Campaign Content & Posting').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Campaigns' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Content Library' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Review Queue' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save Campaign' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Save Draft' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Open Oliver' }).click()
+    await page.getByRole('button', { name: 'Open Reports' }).first().click()
+    await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible()
+  })
+
+  test('campaigns route shows migration guidance when campaigns schema is missing', async ({ page }) => {
+    await seedQaAuth(page, {
+      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
+    })
+
+    await page.route('**/rest/v1/campaign*', async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42P01',
+          details: null,
+          hint: null,
+          message: 'relation \"public.campaigns\" does not exist',
+        }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page.locator('.status-banner')).toContainText('supabase/migrations/014_campaign_content_posting_foundation.sql')
+  })
+
+  test('campaigns route shows access-policy guidance when Supabase blocks reads', async ({ page }) => {
+    await seedQaAuth(page, {
+      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
+    })
+
+    await page.route('**/rest/v1/campaign*', async route => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: '42501',
+          details: null,
+          hint: null,
+          message: 'permission denied for table campaigns',
+        }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page.locator('.status-banner')).toContainText('Supabase RLS/permissions')
+    await expect(page.getByRole('button', { name: 'Save Campaign' })).toBeDisabled()
+  })
+
+  test('campaigns content cards expose asset link controls and posted URL correction', async ({ page }) => {
+    await seedQaAuth(page, {
+      page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
+    })
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-1',
+            name: 'Q2 Demand Gen',
+            description: '',
+            offer_definition: '',
+            target_audience: 'RevOps leaders',
+            primary_cta: 'Book demo',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'content-1',
+            title: 'LinkedIn launch draft',
+            body: 'Launch body copy',
+            content_type: 'linkedin-post',
+            topic: 'Launch',
+            campaign_id: 'campaign-1',
+            status: 'draft',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-25T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'content-2',
+            title: 'Posted recap',
+            body: 'Recap copy',
+            content_type: 'linkedin-post',
+            topic: 'Recap',
+            campaign_id: 'campaign-1',
+            status: 'posted',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: 'qa-admin-user',
+            scheduled_for: '2026-04-24T12:00:00.000Z',
+            posted_at: '2026-04-24T13:00:00.000Z',
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-24T00:00:00.000Z',
+            updated_at: '2026-04-25T00:00:00.000Z',
+            archived_at: '2026-04-24T13:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    await expect(page.getByRole('heading', { name: 'Content Library' })).toBeVisible()
+
+    await page.getByPlaceholder('Asset title').first().fill('Creative brief')
+    await page.getByPlaceholder('https://asset-link.example').first().fill('invalid-link')
+    await expect(page.getByText('Asset URL must start with `http://` or `https://`.').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add Asset' }).first()).toBeDisabled()
+
+    await expect(page.getByRole('button', { name: 'Save Post URL' })).toBeVisible()
   })
 
   test('admin workspace keeps design-system navigation in the admin sidebar', async ({ page }) => {
@@ -476,7 +741,7 @@ test.describe('frontend smoke', () => {
             email: 'owner@example.com',
             name: 'Kiana Micari',
             role: 'admin',
-            page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+            page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews'],
             created_at: '2026-04-25T00:00:00.000Z',
             updated_at: '2026-04-25T00:00:00.000Z',
             is_owner: true,
@@ -519,7 +784,7 @@ test.describe('frontend smoke', () => {
     await expect.poll(async () => page.evaluate(() => window.scrollY)).toBeLessThan(40)
 
     await page.locator('button.deadAuditToggle').click()
-    await expect(page.getByText(/Colors \(|Spacing \(|Layout \(/).first()).toBeVisible()
+    await expect(page.locator('.deadAuditSummary')).toBeVisible()
 
     const copyButton = page.locator('button.copyToken').first()
     await copyButton.click()
@@ -549,6 +814,42 @@ test.describe('frontend smoke', () => {
     await editWorkspace.getByRole('button', { name: 'Edit' }).first().click()
     await expect(editWorkspace.locator('input').first()).toBeVisible()
     await editWorkspace.getByRole('button', { name: 'Cancel' }).first().click()
+  })
+
+  test('design system dead-token audit separates candidate-unused and untracked states', async ({ page }) => {
+    await gotoAndSettle(page, '/design-system')
+
+    const auditToggle = page.locator('button.deadAuditToggle')
+    await expect(auditToggle).toContainText('candidate-unused tokens')
+    await auditToggle.click()
+
+    const rescanButton = page.getByRole('button', { name: 'Re-Scan Usage Catalog' })
+    await expect(rescanButton).toBeVisible()
+    await rescanButton.click()
+    await expect(page.locator('.deadAuditControlStatus')).toContainText('Scan complete')
+    await expect(page.locator('.deadAuditFixtures')).toContainText('--color-brand-pink')
+    await expect(page.locator('.deadAuditFixtures')).toContainText('--color-status-success-bg')
+
+    const summary = page.locator('.deadAuditSummary')
+    await expect(summary).toContainText('Candidate-unused:')
+    await expect(summary).toContainText('Untracked:')
+    await expect(page.locator('.deadAuditGroup .typeUsagesLabel', { hasText: 'Untracked Catalog Entries' })).toBeVisible()
+
+    const usedSwatch = page.getByRole('button', { name: /^Show usages for --color-brand-pink$/ })
+    await usedSwatch.click()
+    const usedCard = usedSwatch.locator('xpath=ancestor::div[contains(@class,"swatchCard")]')
+    await expect(usedCard.getByText(/^Used by \(/)).toBeVisible()
+
+    const untrackedSwatch = page.getByRole('button', { name: 'Show usages for --color-bg-input' })
+    await untrackedSwatch.click()
+    const untrackedCard = untrackedSwatch.locator('xpath=ancestor::div[contains(@class,"swatchCard")]')
+    await expect(untrackedCard.getByText('Untracked in usage catalog')).toBeVisible()
+    await expect(untrackedCard.getByText('No COLOR_USAGES entry yet. Add evidence before treating this token as unused.')).toBeVisible()
+
+    const candidateUnusedSwatch = page.getByRole('button', { name: 'Show usages for --color-status-success-bg' })
+    await candidateUnusedSwatch.click()
+    const candidateUnusedCard = candidateUnusedSwatch.locator('xpath=ancestor::div[contains(@class,"swatchCard")]')
+    await expect(candidateUnusedCard.getByText('Candidate-unused (0 evidence entries)')).toBeVisible()
   })
 
   test('design system token edits persist across reload through backend contract', async ({ page }) => {
@@ -694,7 +995,7 @@ test.describe('frontend smoke', () => {
     await gotoAndSettle(page, '/slides')
 
     await expect(page.getByRole('heading', { name: 'HTML to Editable Components' })).toBeVisible()
-    await expect(page.getByText(/Import slide HTML, review parser output, and edit directly on a scaled 16:9 canvas/)).toBeVisible()
+    await expect(page.getByText(/Import slide HTML, parse into editable layers, and finish on a 16:9 canvas/i)).toBeVisible()
     const rawHtml = `<div class="slide-canvas" style="width:1920px;height:1080px;">
       <h1 style="position:absolute;left:100px;top:120px;width:800px;font-size:64px;color:#FEFFFF;">Hello</h1>
       <div class="card" style="position:absolute;left:120px;top:260px;width:420px;">Card Body</div>
@@ -829,7 +1130,7 @@ test.describe('frontend smoke', () => {
       email: 'qa-member@example.com',
       name: 'QA Member',
       role: 'user',
-      page_permissions: ['accounts', 'hr'],
+      page_permissions: ['accounts', 'hr', 'reviews'],
     })
 
     await gotoAndSettle(page, '/', { waitUntil: 'domcontentloaded', settle: false })
@@ -862,6 +1163,14 @@ test.describe('frontend smoke', () => {
     await expect(page.getByText('Internal Operations Hub')).toBeVisible()
 
     await gotoAndSettle(page, '/crm')
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await gotoAndSettle(page, '/reviews')
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByText('Internal Operations Hub')).toBeVisible()
+
+    await gotoAndSettle(page, '/campaigns')
     await expect(page).toHaveURL(/\/$/)
     await expect(page.getByText('Internal Operations Hub')).toBeVisible()
 

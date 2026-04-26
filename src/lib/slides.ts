@@ -68,6 +68,8 @@ export interface TemplateApprovalEscalationSweepResult {
   escalated: number
   skipped: number
   dry_run: boolean
+  throttled?: boolean
+  sweep_source?: 'manual' | 'scheduled'
 }
 
 export interface SlideAuditPresetInput {
@@ -1871,10 +1873,12 @@ export async function escalateTemplateApproval(
 
 export async function runTemplateApprovalEscalationSweep(
   actorInput: SlideActor,
-  options: { dryRun?: boolean } = {},
+  options: { dryRun?: boolean; force?: boolean; sweepSource?: 'manual' | 'scheduled' } = {},
 ): Promise<TemplateApprovalEscalationSweepResult> {
   const actor = normalizeActor(actorInput)
   const dryRun = !!options.dryRun
+  const force = !!options.force
+  const sweepSource = options.sweepSource === 'scheduled' ? 'scheduled' : 'manual'
 
   return withLocalFallback(
     async () => {
@@ -1884,6 +1888,8 @@ export async function runTemplateApprovalEscalationSweep(
           action: 'run-approval-escalation-sweep',
           actor,
           dry_run: dryRun,
+          force,
+          sweep_source: sweepSource,
         }),
       })
       if (!response.sweep) throw new SlideApiError('Escalation sweep failed.', 500)
@@ -1967,6 +1973,8 @@ export async function runTemplateApprovalEscalationSweep(
         escalated,
         skipped,
         dry_run: dryRun,
+        throttled: false,
+        sweep_source: sweepSource,
       }
     },
   )

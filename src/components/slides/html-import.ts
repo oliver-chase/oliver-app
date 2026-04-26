@@ -2,11 +2,69 @@ import type { SlideComponent, SlideComponentStyle, SlideComponentType, SlideImpo
 
 const DEFAULT_CANVAS_WIDTH = 1920
 const DEFAULT_CANVAS_HEIGHT = 1080
+const CANVAS_TARGET_ASPECT_RATIO = DEFAULT_CANVAS_WIDTH / DEFAULT_CANVAS_HEIGHT
+const MIN_FLOW_NODE_SIZE = 12
+const FLOW_TEXT_TAGS = new Set([
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'li',
+  'blockquote',
+  'figcaption',
+  'button',
+  'label',
+  'a',
+  'dt',
+  'dd',
+])
+const FLOW_MEDIA_TAGS = new Set(['img', 'picture', 'svg', 'canvas', 'video'])
+const IMPORT_STYLE_PROPERTIES = [
+  'color',
+  'background-color',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'font-family',
+  'line-height',
+  'text-align',
+  'letter-spacing',
+  'text-transform',
+  'display',
+  'align-items',
+  'justify-content',
+  'gap',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+  'border-top',
+  'border-right',
+  'border-bottom',
+  'border-left',
+  'border-radius',
+] as const
 
 interface ParsedLength {
   raw: string
   value: number
   unit: string
+}
+
+interface MeasuredNodeRect {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
+interface RenderSnapshot {
+  root: HTMLElement | null
+  nodesById: Map<string, HTMLElement>
+  dispose: () => void
 }
 
 function parseInlineStyle(styleValue: string): Record<string, string> {
@@ -43,11 +101,18 @@ function isPxLike(length: ParsedLength): boolean {
   return length.value === 0 || length.unit === '' || length.unit === 'px'
 }
 
-function sanitizeNode(node: HTMLElement): HTMLElement {
-  const clone = node.cloneNode(true) as HTMLElement
-  clone.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach(el => el.remove())
+function parsePositivePx(rawValue: string | null | undefined): number | undefined {
+  const parsed = parseLength(rawValue)
+  if (!parsed) return undefined
+  if (!isPxLike(parsed)) return undefined
+  if (parsed.value <= 0) return undefined
+  return parsed.value
+}
 
-  const allNodes = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>('*'))]
+function sanitizeNodeInPlace(root: HTMLElement): void {
+  root.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach(el => el.remove())
+
+  const allNodes = [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
   for (const element of allNodes) {
     for (const attr of Array.from(element.attributes)) {
       const attrName = attr.name.toLowerCase()
@@ -61,7 +126,77 @@ function sanitizeNode(node: HTMLElement): HTMLElement {
       }
     }
   }
+}
 
+function readComputedStyleSafe(node: HTMLElement): CSSStyleDeclaration | null {
+  if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return null
+  try {
+    return window.getComputedStyle(node)
+  } catch {
+    return null
+  }
+}
+
+function normalizeColor(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  if (normalized === 'transparent') return undefined
+  if (normalized === 'rgba(0, 0, 0, 0)' || normalized === 'rgba(0,0,0,0)') return undefined
+  return normalized
+}
+
+function hasRenderedBorder(style: CSSStyleDeclaration): boolean {
+  const widths = [
+    style.borderTopWidth,
+    style.borderRightWidth,
+    style.borderBottomWidth,
+    style.borderLeftWidth,
+  ]
+  const styles = [
+    style.borderTopStyle,
+    style.borderRightStyle,
+    style.borderBottomStyle,
+    style.borderLeftStyle,
+  ]
+
+  for (let index = 0; index < widths.length; index += 1) {
+    const width = parseLength(widths[index])
+    const hasWidth = !!width && isPxLike(width) && width.value > 0
+    const borderStyle = (styles[index] || '').trim().toLowerCase()
+    if (hasWidth && borderStyle && borderStyle !== 'none' && borderStyle !== 'hidden') return true
+  }
+
+  return false
+}
+
+function serializeInlineImportStyle(computedStyle: CSSStyleDeclaration | null): string {
+  if (!computedStyle) return ''
+  const entries: string[] = []
+  for (const property of IMPORT_STYLE_PROPERTIES) {
+    const value = computedStyle.getPropertyValue(property).trim()
+    if (!value) continue
+    if (property === 'background-color' && !normalizeColor(value)) continue
+    if (property === 'border-top' || property === 'border-right' || property === 'border-bottom' || property === 'border-left') {
+      if (value === '0px none rgb(0, 0, 0)' || value === 'none') continue
+    }
+    entries.push(`${property}: ${value}`)
+  }
+  return entries.join('; ')
+}
+
+function buildSanitizedContentNode(node: HTMLElement): HTMLElement {
+  const clone = node.cloneNode(true) as HTMLElement
+  const sourceNodes = [node, ...Array.from(node.querySelectorAll<HTMLElement>('*'))]
+  const cloneNodes = [clone, ...Array.from(clone.querySelectorAll<HTMLElement>('*'))]
+  const count = Math.min(sourceNodes.length, cloneNodes.length)
+
+  for (let index = 0; index < count; index += 1) {
+    const inlineStyle = serializeInlineImportStyle(readComputedStyleSafe(sourceNodes[index]))
+    if (inlineStyle) cloneNodes[index].setAttribute('style', inlineStyle)
+  }
+
+  sanitizeNodeInPlace(clone)
   return clone
 }
 
@@ -191,23 +326,46 @@ function parseTransformOffsets(
   return { x: 0, y: 0 }
 }
 
-function extractStyle(styleMap: Record<string, string>): SlideComponentStyle {
-  const fontSizeLength = parseLength(styleMap['font-size'])
-  const lineHeightLength = parseLength(styleMap['line-height'])
-  const fontWeightRaw = styleMap['font-weight']
-  const fontWeight = fontWeightRaw ? Number.parseInt(fontWeightRaw, 10) : undefined
-  const color = styleMap.color
-  const backgroundColor = styleMap['background-color']
-  const fontStyleRaw = styleMap['font-style']
+function parseFontWeight(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized === 'normal') return 400
+  if (normalized === 'bold') return 700
+  const parsed = Number.parseInt(normalized, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function normalizeTextAlign(value: string | undefined): SlideComponentStyle['textAlign'] | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'start') return 'left'
+  if (normalized === 'end') return 'right'
+  if (normalized === 'left' || normalized === 'center' || normalized === 'right' || normalized === 'justify') {
+    return normalized
+  }
+  return undefined
+}
+
+function extractStyle(
+  styleMap: Record<string, string>,
+  computedStyle: CSSStyleDeclaration | null,
+): SlideComponentStyle {
+  const fontSizeLength = parseLength(computedStyle?.fontSize || styleMap['font-size'])
+  const lineHeightLength = parseLength(computedStyle?.lineHeight || styleMap['line-height'])
+  const fontWeight = parseFontWeight(computedStyle?.fontWeight || styleMap['font-weight'])
+  const color = normalizeColor(computedStyle?.color || styleMap.color)
+  const backgroundColor = normalizeColor(computedStyle?.backgroundColor || styleMap['background-color'])
+  const fontStyleRaw = (computedStyle?.fontStyle || styleMap['font-style'] || '').trim().toLowerCase()
   const fontStyle = fontStyleRaw === 'italic' ? 'italic' : undefined
-  const textAlignRaw = styleMap['text-align']
-  const textAlign = textAlignRaw && ['left', 'center', 'right', 'justify'].includes(textAlignRaw)
-    ? textAlignRaw as SlideComponentStyle['textAlign']
-    : undefined
+  const textAlign = normalizeTextAlign(computedStyle?.textAlign || styleMap['text-align'])
+  const fontFamilyRaw = (computedStyle?.fontFamily || styleMap['font-family'] || '').trim()
+  const fontFamily = fontFamilyRaw || undefined
 
   return {
     fontSize: fontSizeLength && isPxLike(fontSizeLength) ? fontSizeLength.value : undefined,
-    fontWeight: Number.isFinite(fontWeight) ? fontWeight : undefined,
+    fontWeight,
+    fontFamily,
     color,
     backgroundColor,
     fontStyle,
@@ -217,17 +375,55 @@ function extractStyle(styleMap: Record<string, string>): SlideComponentStyle {
 }
 
 function getCanvasRoot(doc: Document): HTMLElement | null {
-  return (
+  const explicitRoot = (
     doc.querySelector<HTMLElement>('[data-slide-root]') ||
-    doc.querySelector<HTMLElement>('.slide-canvas') ||
-    doc.body.firstElementChild as HTMLElement | null ||
-    null
+    doc.querySelector<HTMLElement>('.slide-canvas')
   )
+  if (explicitRoot) return explicitRoot
+
+  if (!doc.body) return null
+
+  const scoredCandidates = Array.from(doc.body.querySelectorAll<HTMLElement>('div,section,article,main'))
+    .map((candidate) => {
+      const styleMap = parseInlineStyle(candidate.getAttribute('style') || '')
+      const width = parsePositivePx(styleMap.width ?? candidate.getAttribute('width'))
+      const height = parsePositivePx(styleMap.height ?? candidate.getAttribute('height'))
+      if (!width || !height) return { candidate, score: 0 }
+
+      const ratio = width / height
+      const ratioDelta = Math.abs(ratio - CANVAS_TARGET_ASPECT_RATIO)
+      const ratioScore = Math.max(0, 1 - Math.min(1, ratioDelta / 0.9))
+      const areaScore = width * height
+      const className = (candidate.className || '').toString().toLowerCase()
+      const semanticBoost = /slide|deck|canvas|presentation|frame|artboard/.test(className) ? 1_000_000 : 0
+      return {
+        candidate,
+        score: areaScore * ratioScore + semanticBoost,
+      }
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  if (scoredCandidates.length > 0) return scoredCandidates[0].candidate
+
+  return doc.body.firstElementChild as HTMLElement | null
 }
 
-function shouldImportNode(node: HTMLElement): boolean {
+function shouldImportNode(node: HTMLElement, computedStyle: CSSStyleDeclaration | null): boolean {
   const style = parseInlineStyle(node.getAttribute('style') || '')
-  const hasPositionInfo = style.position === 'absolute' || style.left !== undefined || style.top !== undefined
+  const computedPosition = (computedStyle?.position || '').trim().toLowerCase()
+  const computedLeft = (computedStyle?.left || '').trim().toLowerCase()
+  const computedTop = (computedStyle?.top || '').trim().toLowerCase()
+  const hasComputedPlacement = (computedLeft && computedLeft !== 'auto') || (computedTop && computedTop !== 'auto')
+  const hasPositionInfo =
+    style.position === 'absolute' ||
+    style.position === 'fixed' ||
+    computedPosition === 'absolute' ||
+    computedPosition === 'fixed' ||
+    style.left !== undefined ||
+    style.top !== undefined ||
+    hasComputedPlacement
+
   if (!hasPositionInfo) return false
   if (node.tagName.toLowerCase() === 'img') return true
   return !!node.textContent?.trim()
@@ -250,6 +446,130 @@ function scaleValue(value: number, scale: number): number {
   return Number((value * scale).toFixed(3))
 }
 
+function scaleTypographyStyle(
+  style: SlideComponentStyle,
+  scaleX: number,
+  scaleY: number,
+  options?: {
+    minScale?: number
+  },
+): SlideComponentStyle {
+  let typographyScale = Number(((scaleX + scaleY) / 2).toFixed(6))
+  if (typeof options?.minScale === 'number') {
+    typographyScale = Math.max(options.minScale, typographyScale)
+  }
+  if (!Number.isFinite(typographyScale) || typographyScale === 1) return style
+
+  return {
+    ...style,
+    fontSize: typeof style.fontSize === 'number' ? scaleValue(style.fontSize, typographyScale) : style.fontSize,
+    lineHeight: typeof style.lineHeight === 'number' ? scaleValue(style.lineHeight, typographyScale) : style.lineHeight,
+  }
+}
+
+function measureNodeRect(node: HTMLElement, root: HTMLElement): MeasuredNodeRect {
+  if (typeof node.getBoundingClientRect !== 'function' || typeof root.getBoundingClientRect !== 'function') {
+    return {}
+  }
+
+  const rect = node.getBoundingClientRect()
+  const rootRect = root.getBoundingClientRect()
+  if (!Number.isFinite(rect.left) || !Number.isFinite(rootRect.left)) return {}
+
+  return {
+    x: Math.max(0, rect.left - rootRect.left),
+    y: Math.max(0, rect.top - rootRect.top),
+    width: Number.isFinite(rect.width) && rect.width > 0 ? rect.width : undefined,
+    height: Number.isFinite(rect.height) && rect.height > 0 ? rect.height : undefined,
+  }
+}
+
+function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
+  if (typeof document === 'undefined' || !document.body) {
+    return {
+      root: null,
+      nodesById: new Map(),
+      dispose: () => {},
+    }
+  }
+
+  const sandbox = document.createElement('div')
+  sandbox.style.position = 'fixed'
+  sandbox.style.left = '-100000px'
+  sandbox.style.top = '-100000px'
+  sandbox.style.width = '1920px'
+  sandbox.style.minHeight = '1080px'
+  sandbox.style.opacity = '0'
+  sandbox.style.pointerEvents = 'none'
+  sandbox.style.zIndex = '-1'
+  sandbox.style.overflow = 'hidden'
+
+  const styleChunks = Array.from(doc.querySelectorAll('style'))
+    .map((styleEl) => styleEl.textContent || '')
+    .filter(Boolean)
+  if (styleChunks.length > 0) {
+    const styleEl = document.createElement('style')
+    styleEl.textContent = styleChunks.join('\n')
+    sandbox.appendChild(styleEl)
+  }
+
+  const rootClone = root.cloneNode(true) as HTMLElement
+  sandbox.appendChild(rootClone)
+  document.body.appendChild(sandbox)
+
+  const nodesById = new Map<string, HTMLElement>()
+  for (const node of Array.from(root.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
+    const id = node.getAttribute('data-import-node-id')
+    if (!id) continue
+    const cloneNode = rootClone.querySelector<HTMLElement>(`[data-import-node-id="${id}"]`)
+    if (cloneNode) nodesById.set(id, cloneNode)
+  }
+
+  return {
+    root: rootClone,
+    nodesById,
+    dispose: () => {
+      sandbox.remove()
+    },
+  }
+}
+
+function hasOwnTextNode(node: HTMLElement): boolean {
+  return Array.from(node.childNodes).some((child) => child.nodeType === 3 && Boolean(child.textContent?.trim()))
+}
+
+function shouldImportFlowNode(
+  node: HTMLElement,
+  computedStyle: CSSStyleDeclaration | null,
+  measuredRect: MeasuredNodeRect,
+): boolean {
+  if (!computedStyle) return false
+
+  const display = (computedStyle.display || '').trim().toLowerCase()
+  const visibility = (computedStyle.visibility || '').trim().toLowerCase()
+  const opacity = Number.parseFloat(computedStyle.opacity || '1')
+  if (display === 'none' || visibility === 'hidden') return false
+  if (Number.isFinite(opacity) && opacity <= 0.01) return false
+
+  const width = measuredRect.width || 0
+  const height = measuredRect.height || 0
+  if (width < MIN_FLOW_NODE_SIZE || height < MIN_FLOW_NODE_SIZE) return false
+
+  const tag = node.tagName.toLowerCase()
+  if (FLOW_MEDIA_TAGS.has(tag)) return true
+
+  const text = (node.textContent || '').trim()
+  const ownText = hasOwnTextNode(node)
+  const hasBackground = Boolean(normalizeColor(computedStyle.backgroundColor))
+  const hasBorder = hasRenderedBorder(computedStyle)
+
+  if (hasBackground || hasBorder) return true
+  if (FLOW_TEXT_TAGS.has(tag) && text.length > 0) return true
+  if (ownText && display !== 'inline') return true
+
+  return false
+}
+
 export function convertHtmlToSlideComponents(html: string): SlideImportResult {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
@@ -263,64 +583,119 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
     }
   }
 
+  const allNodes = Array.from(root.querySelectorAll<HTMLElement>('*'))
+  for (let index = 0; index < allNodes.length; index += 1) {
+    allNodes[index].setAttribute('data-import-node-id', `import-node-${index + 1}`)
+  }
+
   const warnings: string[] = []
-  const rootStyle = parseInlineStyle(root.getAttribute('style') || '')
-  const sourceCanvasWidth = parseCanvasPx(rootStyle.width ?? root.getAttribute('width') ?? undefined, 'width', warnings) ?? DEFAULT_CANVAS_WIDTH
-  const sourceCanvasHeight = parseCanvasPx(rootStyle.height ?? root.getAttribute('height') ?? undefined, 'height', warnings) ?? DEFAULT_CANVAS_HEIGHT
-
-  const scaleX = DEFAULT_CANVAS_WIDTH / sourceCanvasWidth
-  const scaleY = DEFAULT_CANVAS_HEIGHT / sourceCanvasHeight
-
-  if (sourceCanvasWidth !== DEFAULT_CANVAS_WIDTH || sourceCanvasHeight !== DEFAULT_CANVAS_HEIGHT) {
-    warnings.push('Normalized imported canvas from ' + sourceCanvasWidth + 'x' + sourceCanvasHeight + ' to ' + DEFAULT_CANVAS_WIDTH + 'x' + DEFAULT_CANVAS_HEIGHT + '.')
+  if (doc.querySelector('link[rel~="stylesheet"]')) {
+    warnings.push('Detected linked stylesheet references. Import can only apply styles present in the uploaded HTML payload.')
   }
+  const renderSnapshot = buildRenderSnapshot(doc, root)
 
-  const absoluteNodes = Array.from(root.querySelectorAll<HTMLElement>('*')).filter(shouldImportNode)
-  const fallbackNodes = Array.from(root.children).filter((node): node is HTMLElement => node instanceof HTMLElement)
-  const nodes = absoluteNodes.length > 0 ? absoluteNodes : fallbackNodes
+  try {
+    const rootStyle = parseInlineStyle(root.getAttribute('style') || '')
+    const measuredRootRect = renderSnapshot.root ? measureNodeRect(renderSnapshot.root, renderSnapshot.root) : {}
+    const explicitCanvasWidth = parseCanvasPx(rootStyle.width ?? root.getAttribute('width') ?? undefined, 'width', warnings)
+    const explicitCanvasHeight = parseCanvasPx(rootStyle.height ?? root.getAttribute('height') ?? undefined, 'height', warnings)
+    const sourceCanvasWidth = explicitCanvasWidth
+      ?? measuredRootRect.width
+      ?? DEFAULT_CANVAS_WIDTH
+    const sourceCanvasHeight = explicitCanvasHeight
+      ?? measuredRootRect.height
+      ?? DEFAULT_CANVAS_HEIGHT
 
-  if (absoluteNodes.length === 0) {
-    warnings.push('No absolutely positioned elements found; imported top-level nodes as fallback.')
-  }
+    const scaleX = DEFAULT_CANVAS_WIDTH / sourceCanvasWidth
+    const scaleY = DEFAULT_CANVAS_HEIGHT / sourceCanvasHeight
+    const shouldClampTypographyScale = explicitCanvasWidth === undefined || explicitCanvasHeight === undefined
 
-  const components: SlideComponent[] = nodes.map((node, index) => {
-    const styleMap = parseInlineStyle(node.getAttribute('style') || '')
-    const nodeLabel = getNodeLabel(node)
-    const sanitizedNode = sanitizeNode(node)
-    const content = sanitizedNode.innerHTML.trim() || sanitizedNode.outerHTML.trim()
-
-    const transformOffsets = parseTransformOffsets(styleMap.transform, nodeLabel, warnings)
-
-    const baseX = parseStylePx(styleMap, 'left', nodeLabel, warnings) ?? 0
-    const baseY = parseStylePx(styleMap, 'top', nodeLabel, warnings) ?? 0
-    const baseWidth = parseStylePx(styleMap, 'width', nodeLabel, warnings)
-      ?? parseAttrPx(node.getAttribute('width'), 'width', nodeLabel, warnings)
-      ?? 320
-    const baseHeight = parseStylePx(styleMap, 'height', nodeLabel, warnings)
-      ?? parseAttrPx(node.getAttribute('height'), 'height', nodeLabel, warnings)
-
-    if (styleMap.left === undefined || styleMap.top === undefined) {
-      warnings.push('Node "' + nodeLabel + '" had no explicit left/top; defaulted to 0.')
+    if (sourceCanvasWidth !== DEFAULT_CANVAS_WIDTH || sourceCanvasHeight !== DEFAULT_CANVAS_HEIGHT) {
+      warnings.push('Normalized imported canvas from ' + sourceCanvasWidth + 'x' + sourceCanvasHeight + ' to ' + DEFAULT_CANVAS_WIDTH + 'x' + DEFAULT_CANVAS_HEIGHT + '.')
     }
+
+    const absoluteNodes = allNodes.filter((node) => {
+      const nodeId = node.getAttribute('data-import-node-id') || ''
+      const renderNode = renderSnapshot.nodesById.get(nodeId) || node
+      return shouldImportNode(node, readComputedStyleSafe(renderNode))
+    })
+    const fallbackNodes = Array.from(root.children).filter((node): node is HTMLElement => node instanceof HTMLElement)
+    const flowNodes = allNodes.filter((node) => {
+      const nodeId = node.getAttribute('data-import-node-id') || ''
+      const renderNode = renderSnapshot.nodesById.get(nodeId) || node
+      const renderRoot = renderSnapshot.root || root
+      const measuredRect = measureNodeRect(renderNode, renderRoot)
+      return shouldImportFlowNode(node, readComputedStyleSafe(renderNode), measuredRect)
+    })
+    const nodes = absoluteNodes.length > 0
+      ? absoluteNodes
+      : flowNodes.length > 0
+        ? flowNodes
+        : fallbackNodes
+
+    if (absoluteNodes.length === 0) {
+      if (flowNodes.length > 0) {
+        warnings.push('No absolutely positioned elements found; imported flow-layout nodes using computed bounds.')
+      } else {
+        warnings.push('No absolutely positioned elements found; imported top-level nodes as fallback.')
+      }
+    }
+
+    const components: SlideComponent[] = nodes.map((node, index) => {
+      const styleMap = parseInlineStyle(node.getAttribute('style') || '')
+      const nodeLabel = getNodeLabel(node)
+      const nodeId = node.getAttribute('data-import-node-id') || ''
+      const renderNode = renderSnapshot.nodesById.get(nodeId) || node
+      const renderRoot = renderSnapshot.root || root
+      const computedStyle = readComputedStyleSafe(renderNode)
+      const measured = measureNodeRect(renderNode, renderRoot)
+      const sanitizedNode = buildSanitizedContentNode(renderNode)
+      const content = sanitizedNode.innerHTML.trim() || sanitizedNode.outerHTML.trim()
+
+      const transformOffsets = parseTransformOffsets(styleMap.transform, nodeLabel, warnings)
+      const baseX = measured.x
+        ?? parseStylePx(styleMap, 'left', nodeLabel, warnings)
+        ?? 0
+      const baseY = measured.y
+        ?? parseStylePx(styleMap, 'top', nodeLabel, warnings)
+        ?? 0
+      const baseWidth = measured.width
+        ?? parseStylePx(styleMap, 'width', nodeLabel, warnings)
+        ?? parseAttrPx(node.getAttribute('width'), 'width', nodeLabel, warnings)
+        ?? 320
+      const baseHeight = measured.height
+        ?? parseStylePx(styleMap, 'height', nodeLabel, warnings)
+        ?? parseAttrPx(node.getAttribute('height'), 'height', nodeLabel, warnings)
+
+      const extractedStyle = extractStyle(styleMap, computedStyle)
+      return {
+        id: 'import-' + String(index + 1).padStart(3, '0'),
+        type: inferType(node),
+        sourceLabel: nodeLabel,
+        x: scaleValue(baseX + transformOffsets.x, scaleX),
+        y: scaleValue(baseY + transformOffsets.y, scaleY),
+        width: scaleValue(baseWidth, scaleX),
+        height: baseHeight === undefined ? undefined : scaleValue(baseHeight, scaleY),
+        content,
+        style: scaleTypographyStyle(
+          extractedStyle,
+          scaleX,
+          scaleY,
+          shouldClampTypographyScale
+            ? { minScale: 0.75 }
+            : undefined,
+        ),
+        locked: false,
+        visible: true,
+      }
+    })
 
     return {
-      id: 'import-' + String(index + 1).padStart(3, '0'),
-      type: inferType(node),
-      sourceLabel: nodeLabel,
-      x: scaleValue(baseX + transformOffsets.x, scaleX),
-      y: scaleValue(baseY + transformOffsets.y, scaleY),
-      width: scaleValue(baseWidth, scaleX),
-      height: baseHeight === undefined ? undefined : scaleValue(baseHeight, scaleY),
-      content,
-      style: extractStyle(styleMap),
-      locked: false,
-      visible: true,
+      canvas: { width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT },
+      components,
+      warnings: Array.from(new Set(warnings)),
     }
-  })
-
-  return {
-    canvas: { width: DEFAULT_CANVAS_WIDTH, height: DEFAULT_CANVAS_HEIGHT },
-    components,
-    warnings: Array.from(new Set(warnings)),
+  } finally {
+    renderSnapshot.dispose()
   }
 }

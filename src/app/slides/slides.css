@@ -34,12 +34,6 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   outline-offset: var(--spacing-xs);
 }
 
-.topbar-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--text);
-}
-
 .sidebar-backdrop {
   display: none;
   position: fixed;
@@ -384,6 +378,10 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   min-width: 7.25rem;
 }
 
+.slides-editor-field--checkbox {
+  min-width: 9.5rem;
+}
+
 .slides-editor-field span {
   color: var(--color-text-secondary);
   font-size: var(--font-size-3xs);
@@ -407,6 +405,13 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   outline: none;
   border-color: var(--color-brand-pink);
   box-shadow: 0 0 0 var(--spacing-2xs) var(--color-pink-overlay-sm);
+}
+
+.slides-editor-field--checkbox input {
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  padding: 0;
+  accent-color: var(--color-brand-pink);
 }
 
 .slides-shortcuts {
@@ -508,8 +513,29 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   outline-offset: var(--spacing-2xs);
 }
 
+.slides-canvas-guide {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--color-brand-pink);
+  box-shadow: 0 0 0 var(--spacing-3xs) var(--color-pink-overlay-sm);
+}
+
+.slides-canvas-guide--vertical {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.slides-canvas-guide--horizontal {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
 .slides-canvas-component {
   position: absolute;
+  z-index: 2;
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-card);
@@ -629,6 +655,16 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   overflow: hidden;
 }
 
+.slides-toolbar-icon {
+  min-width: 2rem;
+  padding-inline: var(--spacing-xs);
+  font-family: var(--font-family-mono), var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  text-align: center;
+}
+
 .slides-component-grid-header,
 .slides-component-grid-row {
   display: grid;
@@ -667,6 +703,16 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   margin-top: var(--spacing-lg);
   display: grid;
   gap: var(--spacing-sm);
+}
+
+.slides-selection-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.slides-selection-hint[data-tone='warning'] {
+  color: var(--color-red-700);
 }
 
 .slides-library-section h2 {

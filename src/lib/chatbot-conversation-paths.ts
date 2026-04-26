@@ -3,6 +3,8 @@ export type OliverConversationPathId =
   | 'hr'
   | 'sdr'
   | 'slides'
+  | 'reviews'
+  | 'campaigns'
   | 'crm'
   | 'admin'
 
@@ -37,6 +39,25 @@ const PATHS: Record<OliverConversationPathId, OliverConversationPath> = {
     moduleId: 'slides',
     label: 'Slide Editor',
     allowedTopics: ['html import', 'slide component conversion', 'slide parsing'],
+  },
+  reviews: {
+    id: 'reviews',
+    moduleId: 'reviews',
+    label: 'Self-Led Growth & Review',
+    allowedTopics: ['focus areas', 'goals', 'quarterly prompts', 'annual self review', 'review packet'],
+  },
+  campaigns: {
+    id: 'campaigns',
+    moduleId: 'campaigns',
+    label: 'Campaign Content & Posting',
+    allowedTopics: [
+      'campaign dashboard',
+      'content drafts',
+      'review queue',
+      'claim and schedule',
+      'posting reminders',
+      'campaign reporting',
+    ],
   },
   crm: {
     id: 'crm',

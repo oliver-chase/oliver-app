@@ -24,11 +24,12 @@
 
 import { jsonResponse, errorResponse } from './_shared/ai.js';
 
-const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews']);
-const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews'];
+const VALID_PAGE_PERMISSIONS = new Set(['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns']);
+const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'];
 const USER_FIELDS = 'user_id,email,name,role,page_permissions,created_at,updated_at';
 const IDENTITY_FIELDS = 'identity_id,person_id,provider,tenant_id,subject_key,subject_key_type';
 const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
+let cachedAppUsersPersonIdSupport = null;
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -220,6 +221,30 @@ function isAdminUser(user, ownerPolicy) {
   return !!effective && effective.effective_role === 'admin';
 }
 
+function normalizedActorIdentityForAudit(identity, actor) {
+  return {
+    source: identity?.source || 'unknown',
+    actor_user_id: normalizeUserId(actor?.user_id || identity?.userId || ''),
+    actor_email: normalizeEmail(actor?.email || identity?.email || ''),
+    actor_microsoft_oid: normalizeMicrosoftSubject(identity?.microsoftOid || ''),
+    actor_microsoft_tid: normalizeTenantId(identity?.microsoftTid || ''),
+    actor_microsoft_sub: normalizeMicrosoftSubject(identity?.microsoftSub || ''),
+  };
+}
+
+function logPrivilegedWriteAudit(event, args = {}) {
+  const payload = {
+    event,
+    at: new Date().toISOString(),
+    ...args,
+  };
+  try {
+    console.info('[users-audit]', JSON.stringify(payload));
+  } catch {
+    // Do not block user-management writes if log serialization fails.
+  }
+}
+
 async function supabaseJson(env, path, init = {}) {
   const response = await fetch(resolveSupabaseUrl(env) + path, {
     ...init,
@@ -241,6 +266,25 @@ async function supabaseJson(env, path, init = {}) {
     text,
     data,
   };
+}
+
+async function appUsersSupportsPersonId(env) {
+  if (cachedAppUsersPersonIdSupport !== null) return cachedAppUsersPersonIdSupport;
+  const probe = await supabaseJson(env, '/rest/v1/app_users?select=person_id&limit=1');
+  if (probe.ok) {
+    cachedAppUsersPersonIdSupport = true;
+    return true;
+  }
+
+  const message = (probe.text || '').toLowerCase();
+  if (message.includes('person_id') && message.includes('does not exist')) {
+    cachedAppUsersPersonIdSupport = false;
+    return false;
+  }
+
+  // Unknown failure: avoid false negatives that would skip canonical linkage.
+  cachedAppUsersPersonIdSupport = true;
+  return true;
 }
 
 function buildMicrosoftIdentityCandidates(identity) {
@@ -328,6 +372,39 @@ async function createPerson(env, name, email) {
     };
   }
   return { ok: true, personId };
+}
+
+async function fetchPersonByEmail(env, email) {
+  if (!email) return { ok: true, personId: '' };
+  const lookup = await supabaseJson(
+    env,
+    '/rest/v1/people?primary_email=eq.' + encodeURIComponent(email)
+      + '&select=person_id'
+      + '&limit=1',
+  );
+  if (!lookup.ok) {
+    return {
+      ok: false,
+      status: lookup.status,
+      error: 'Person lookup failed: ' + lookup.text,
+      personId: '',
+    };
+  }
+  const rows = Array.isArray(lookup.data) ? lookup.data : [];
+  return {
+    ok: true,
+    personId: normalizePersonId(rows[0]?.person_id),
+  };
+}
+
+async function ensurePersonByEmail(env, name, email) {
+  const existing = await fetchPersonByEmail(env, email);
+  if (!existing.ok) return existing;
+  if (existing.personId) {
+    await patchPersonProfile(env, existing.personId, name, email);
+    return existing;
+  }
+  return createPerson(env, name, email);
 }
 
 async function patchPersonProfile(env, personId, name, email) {
@@ -438,7 +515,7 @@ async function syncMicrosoftIdentityCandidate(env, args) {
   return { ok: true };
 }
 
-async function resolvePersonFromMicrosoftIdentity(env, microsoftIdentity) {
+async function resolvePersonFromMicrosoftIdentity(env, microsoftIdentity, email) {
   if (!hasMicrosoftIdentity(microsoftIdentity)) {
     return { ok: true, personId: '', matchSource: 'no-microsoft-claims' };
   }
@@ -466,6 +543,9 @@ async function resolvePersonFromMicrosoftIdentity(env, microsoftIdentity) {
   }
 
   if (personIds.length === 0) {
+    const byEmail = await fetchPersonByEmail(env, email);
+    if (!byEmail.ok) return byEmail;
+    if (byEmail.personId) return { ok: true, personId: byEmail.personId, matchSource: 'matched-email' };
     return { ok: true, personId: '', matchSource: 'new-person-required' };
   }
 
@@ -478,7 +558,7 @@ async function resolvePersonFromMicrosoftIdentity(env, microsoftIdentity) {
 }
 
 async function syncMicrosoftIdentitySlice(env, args) {
-  const { userId, email, name, microsoftIdentity, identitySource } = args;
+  const { email, name, microsoftIdentity, identitySource } = args;
   if ((microsoftIdentity.microsoftOid || microsoftIdentity.microsoftSub) && !microsoftIdentity.microsoftTid) {
     return {
       ok: false,
@@ -490,14 +570,24 @@ async function syncMicrosoftIdentitySlice(env, args) {
   }
 
   if (!hasMicrosoftIdentity(microsoftIdentity)) {
+    const ensuredPerson = await ensurePersonByEmail(env, name, email);
+    if (!ensuredPerson.ok) {
+      return {
+        ok: false,
+        status: ensuredPerson.status || 500,
+        error: ensuredPerson.error || 'Person ensure failed.',
+        personId: '',
+        mappingDecision: 'person-ensure-failed',
+      };
+    }
     return {
       ok: true,
-      personId: '',
-      mappingDecision: 'microsoft-claims-missing',
+      personId: ensuredPerson.personId || '',
+      mappingDecision: 'email-only-fallback',
     };
   }
 
-  const resolved = await resolvePersonFromMicrosoftIdentity(env, microsoftIdentity);
+  const resolved = await resolvePersonFromMicrosoftIdentity(env, microsoftIdentity, email);
   if (!resolved.ok) {
     return {
       ok: false,
@@ -558,22 +648,42 @@ async function syncMicrosoftIdentitySlice(env, args) {
 
 async function fetchUserByMicrosoftIdentity(env, identity, ownerPolicy) {
   if (!hasMicrosoftIdentity(identity)) return null;
+  const canReadPersonId = await appUsersSupportsPersonId(env);
   const candidates = buildMicrosoftIdentityCandidates(identity);
   for (const candidate of candidates) {
     const identityLookup = await fetchIdentityRow(env, identity.microsoftTid, candidate.subjectKey);
     if (!identityLookup.ok) continue;
     if (!identityLookup.row) continue;
-    const lookup = await supabaseJson(
+    const personId = normalizePersonId(identityLookup.row.person_id);
+    if (!personId) continue;
+
+    if (canReadPersonId) {
+      const lookup = await supabaseJson(
+        env,
+        '/rest/v1/app_users?person_id=eq.' + encodeURIComponent(personId)
+        + '&select=' + USER_FIELDS
+        + '&limit=1',
+      );
+      if (lookup.ok) {
+        const rows = Array.isArray(lookup.data) ? lookup.data : [];
+        const row = normalizeUserRow(rows[0]);
+        const effective = await enforceOwnerInvariant(env, row, ownerPolicy);
+        if (effective) return effective;
+      }
+    }
+
+    // Legacy fallback before app_users.person_id rollout is complete.
+    const legacyLookup = await supabaseJson(
       env,
       '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(candidate.subjectKey)
       + '&select=' + USER_FIELDS
       + '&limit=1',
     );
-    if (!lookup.ok) continue;
-    const rows = Array.isArray(lookup.data) ? lookup.data : [];
-    const row = normalizeUserRow(rows[0]);
-    const effective = await enforceOwnerInvariant(env, row, ownerPolicy);
-    if (effective) return effective;
+    if (!legacyLookup.ok) continue;
+    const legacyRows = Array.isArray(legacyLookup.data) ? legacyLookup.data : [];
+    const legacyRow = normalizeUserRow(legacyRows[0]);
+    const legacyEffective = await enforceOwnerInvariant(env, legacyRow, ownerPolicy);
+    if (legacyEffective) return legacyEffective;
   }
   return null;
 }
@@ -608,8 +718,9 @@ function resolveActorIdentity(request, env, opts = {}) {
   );
 
   // This path is stricter than the plain trusted-client fallback:
-  // require tenant + oid/sub claim plus actor identity fields.
-  if (hasMicrosoftIdentity(actorMicrosoft) && (actorEmail || actorUserId)) {
+  // require Microsoft subject claim (oid/sub) plus actor identity fields.
+  // tenant_id is preferred but not guaranteed in every MSAL account shape.
+  if ((actorMicrosoft.microsoftOid || actorMicrosoft.microsoftSub) && (actorEmail || actorUserId)) {
     return {
       source: 'microsoft-asserted-client',
       email: actorEmail,
@@ -838,11 +949,15 @@ export async function onRequestPost(context) {
     email,
     name,
     microsoftIdentity,
-    identitySource: actorIdentity.source === 'trusted-client' ? 'msal-id-token' : 'cf-access',
+    identitySource: actorIdentity.source === 'cf-access' ? 'cf-access' : 'msal-id-token',
   });
   if (!identitySync.ok) {
     return errorResponse(identitySync.error || 'Identity sync failed.', identitySync.status || 409);
   }
+  if (!identitySync.personId) {
+    return errorResponse('Identity sync failed: missing canonical person_id.', 500);
+  }
+  const canWritePersonId = await appUsersSupportsPersonId(env);
 
   if (existingRows.length > 0) {
     const row = normalizeUserRow(existingRows[0]);
@@ -854,23 +969,34 @@ export async function onRequestPost(context) {
       );
     }
 
+    const updatePayload = {
+      user_id: userId,
+      email,
+      name: name || row.name,
+      updated_at: new Date().toISOString(),
+    };
+    if (canWritePersonId) updatePayload.person_id = identitySync.personId || row.person_id || null;
+
     const update = await supabaseJson(
       env,
       '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(row.user_id),
       {
         method: 'PATCH',
         headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({
-          user_id: userId,
-          email,
-          name: name || row.name,
-          updated_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(updatePayload),
       },
     );
     if (!update.ok) return errorResponse('Update failed: ' + update.text, update.status);
     const updatedRows = Array.isArray(update.data) ? update.data : [];
     const effective = await enforceOwnerInvariant(env, updatedRows[0], ownerPolicy);
+    if (actorAdmin) {
+      logPrivilegedWriteAudit('app_users.upsert.update', {
+        actor: normalizedActorIdentityForAudit(actorIdentity, actor),
+        target_user_id: normalizeUserId(effective?.user_id || userId),
+        target_email: normalizeEmail(effective?.email || email),
+        identity_mapping_decision: identitySync.mappingDecision,
+      });
+    }
     return jsonResponse(
       effective
         ? { ...effective, identity_mapping_decision: identitySync.mappingDecision }
@@ -879,24 +1005,35 @@ export async function onRequestPost(context) {
   }
 
   const isOwner = ownerPolicy.ownerEmails.has(email) || ownerPolicy.ownerUserIds.has(userId);
+  const insertPayload = {
+    user_id: userId,
+    email,
+    name,
+    role: isOwner ? 'admin' : 'user',
+    page_permissions: isOwner ? ALL_PAGE_PERMISSIONS : [],
+  };
+  if (canWritePersonId) insertPayload.person_id = identitySync.personId;
+
   const insert = await supabaseJson(
     env,
     '/rest/v1/app_users',
     {
       method: 'POST',
       headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({
-        user_id: userId,
-        email,
-        name,
-        role: isOwner ? 'admin' : 'user',
-        page_permissions: isOwner ? ALL_PAGE_PERMISSIONS : [],
-      }),
+      body: JSON.stringify(insertPayload),
     },
   );
   if (!insert.ok) return errorResponse('Insert failed: ' + insert.text, insert.status);
   const insertedRows = Array.isArray(insert.data) ? insert.data : [];
   const effective = await enforceOwnerInvariant(env, insertedRows[0], ownerPolicy);
+  if (actorAdmin) {
+    logPrivilegedWriteAudit('app_users.upsert.insert', {
+      actor: normalizedActorIdentityForAudit(actorIdentity, actor),
+      target_user_id: normalizeUserId(effective?.user_id || userId),
+      target_email: normalizeEmail(effective?.email || email),
+      identity_mapping_decision: identitySync.mappingDecision,
+    });
+  }
   return jsonResponse(
     effective
       ? { ...effective, identity_mapping_decision: identitySync.mappingDecision }
@@ -985,5 +1122,13 @@ export async function onRequestPatch(context) {
   if (!update.ok) return errorResponse('Update failed: ' + update.text, update.status);
   const updatedRows = Array.isArray(update.data) ? update.data : [];
   const effective = await enforceOwnerInvariant(env, updatedRows[0], ownerPolicy);
+  logPrivilegedWriteAudit('app_users.patch', {
+    actor: normalizedActorIdentityForAudit(actorIdentity, actor),
+    target_user_id: normalizeUserId(effective?.user_id || userId),
+    target_email: normalizeEmail(effective?.email || ''),
+    changed_fields: Object.keys(fields),
+    role_after: effective?.role || null,
+    permission_count_after: Array.isArray(effective?.page_permissions) ? effective.page_permissions.length : null,
+  });
   return jsonResponse({ ok: true, user: effective || null });
 }

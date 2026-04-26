@@ -9,7 +9,7 @@ const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 400;
 const DEFAULT_OWNER_EMAILS = ['kiana.micari@vtwo.co'];
-const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews'];
+const ALL_PAGE_PERMISSIONS = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'];
 const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
@@ -17,6 +17,8 @@ const MAX_APPROVAL_ESCALATION_REASON_LENGTH = 280;
 const AUDIT_PRESET_SCOPES = ['personal', 'shared'];
 const AUDIT_EXPORT_JOB_STATUSES = ['queued', 'running', 'completed', 'failed'];
 const MAX_AUDIT_EXPORT_ROWS = 10000;
+const SLIDES_SWEEP_HEARTBEAT_ENTITY_ID = 'approval-sla-sweep';
+const DEFAULT_SWEEP_MIN_INTERVAL_MINUTES = 60;
 const AUDIT_ACTIONS = [
   'save',
   'autosave',
@@ -347,6 +349,31 @@ function sanitizeAuditPresetName(value) {
   return trimmed;
 }
 
+function hasValidSlidesJobToken(request, env) {
+  const configuredToken = typeof env.SLIDES_JOB_TOKEN === 'string' ? env.SLIDES_JOB_TOKEN.trim() : '';
+  if (!configuredToken) return false;
+  const headerToken = (request.headers.get('x-slides-job-token') || '').trim();
+  if (!headerToken) return false;
+  return headerToken === configuredToken;
+}
+
+function resolveSlidesAutomationActor(env) {
+  const userId = normalizeUserId(env.SLIDES_AUTOMATION_ACTOR_USER_ID || '') || 'slides-automation';
+  const email = normalizeEmail(env.SLIDES_AUTOMATION_ACTOR_EMAIL || '') || null;
+  return {
+    user_id: userId,
+    email,
+    role: 'admin',
+    page_permissions: [...ALL_PAGE_PERMISSIONS],
+  };
+}
+
+function resolveSweepMinIntervalMinutes(env) {
+  const raw = Number.parseInt(String(env.SLIDES_APPROVAL_SWEEP_MIN_INTERVAL_MINUTES || DEFAULT_SWEEP_MIN_INTERVAL_MINUTES), 10);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SWEEP_MIN_INTERVAL_MINUTES;
+  return Math.max(5, Math.min(raw, 24 * 60));
+}
+
 function normalizeMetadata(rawMetadata) {
   if (!isObject(rawMetadata)) return {};
   return rawMetadata;
@@ -378,7 +405,6 @@ function normalizeTemplateRow(row) {
     name: row.name,
     description: row.description || '',
     is_shared: !!row.is_shared,
-    is_archived: !!row.is_archived,
     canvas: row.canvas || { width: 1920, height: 1080 },
     components: Array.isArray(row.components_json) ? row.components_json : [],
     metadata: row.metadata || {},
@@ -487,10 +513,7 @@ async function supabaseFetch(env, path, init = {}) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    const trimmed = typeof text === 'string' ? text.trim() : '';
-    const compact = trimmed.replace(/\s+/g, ' ');
-    const summary = compact.length > 600 ? compact.slice(0, 600) + '...' : compact;
-    throw new Error(`${init.method || 'GET'} ${path} failed: ${response.status}${summary ? ' ' + summary : ''}`);
+    throw new Error(`${init.method || 'GET'} ${path} failed: ${response.status} ${text}`);
   }
 
   return response;
@@ -505,12 +528,10 @@ async function readSlideById(env, slideId) {
   return rows[0] || null;
 }
 
-async function readTemplateById(env, templateId, options = {}) {
-  const includeArchived = options.includeArchived === true;
-  const archiveClause = includeArchived ? '' : '&is_archived=eq.false';
+async function readTemplateById(env, templateId) {
   const response = await supabaseFetch(
     env,
-    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(templateId) + archiveClause + '&select=*&limit=1',
+    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(templateId) + '&is_archived=eq.false&select=*&limit=1',
   );
   const rows = await response.json().catch(() => []);
   return rows[0] || null;
@@ -606,6 +627,153 @@ async function insertAudit(env, payload) {
   } catch (_) {
     // Do not block product flows if audit logging write fails.
   }
+}
+
+async function readLatestScheduledSweepHeartbeat(env) {
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_audit_events?entity_type=eq.template&entity_id=eq.' +
+      encodeURIComponent(SLIDES_SWEEP_HEARTBEAT_ENTITY_ID) +
+      '&action=eq.escalate-approval&select=created_at,details&order=created_at.desc&limit=10',
+  );
+  const rows = await response.json().catch(() => []);
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const details = isObject(row?.details) ? row.details : {};
+    if (details.sweep_heartbeat === true && details.sweep_source === 'scheduled') {
+      return {
+        created_at: typeof row.created_at === 'string' ? row.created_at : null,
+      };
+    }
+  }
+  return null;
+}
+
+async function executeApprovalEscalationSweep(env, actor, options = {}) {
+  const dryRun = options?.dryRun === true;
+  const force = options?.force === true;
+  const sweepSource = options?.sweepSource === 'scheduled' ? 'scheduled' : 'manual';
+  const nowMs = Date.now();
+  const overdueThresholdMs = 48 * 60 * 60 * 1000;
+  const escalationCooldownMs = 24 * 60 * 60 * 1000;
+  const overdueBefore = new Date(nowMs - overdueThresholdMs).toISOString();
+
+  if (!dryRun && !force && sweepSource === 'scheduled') {
+    const lastHeartbeat = await readLatestScheduledSweepHeartbeat(env).catch(() => null);
+    const minIntervalMs = resolveSweepMinIntervalMinutes(env) * 60 * 1000;
+    const lastRunMs = lastHeartbeat?.created_at ? Date.parse(lastHeartbeat.created_at) : NaN;
+    if (Number.isFinite(lastRunMs) && nowMs - lastRunMs < minIntervalMs) {
+      return {
+        processed: 0,
+        escalated: 0,
+        skipped: 0,
+        dry_run: false,
+        throttled: true,
+        sweep_source: sweepSource,
+      };
+    }
+  }
+
+  const response = await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_approvals?status=eq.pending&created_at=lte.' + encodeURIComponent(overdueBefore) + '&select=*&order=created_at.asc&limit=200',
+  );
+  const rows = await response.json().catch(() => []);
+  const pending = Array.isArray(rows) ? rows : [];
+
+  let escalated = 0;
+  let skipped = 0;
+
+  for (const approval of pending) {
+    const payload = isObject(approval.payload) ? approval.payload : {};
+    const priorEscalations = Array.isArray(payload.escalations) ? payload.escalations : [];
+    const explicitLast = typeof payload.last_escalated_at === 'string' ? payload.last_escalated_at : '';
+    const lastEscalationEntry = priorEscalations[priorEscalations.length - 1] || null;
+    const derivedLast = lastEscalationEntry && typeof lastEscalationEntry.created_at === 'string'
+      ? lastEscalationEntry.created_at
+      : '';
+    const lastEscalatedAt = explicitLast || derivedLast;
+    const lastEscalatedAtMs = lastEscalatedAt ? Date.parse(lastEscalatedAt) : NaN;
+    if (Number.isFinite(lastEscalatedAtMs) && nowMs - lastEscalatedAtMs < escalationCooldownMs) {
+      skipped += 1;
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const escalationRecord = {
+      escalated_by_user_id: actor.user_id,
+      escalated_by_email: actor.email || null,
+      reason: 'SLA overdue escalation sweep',
+      automated: true,
+      sweep_source: sweepSource,
+      created_at: now,
+    };
+
+    if (!dryRun) {
+      await supabaseFetch(
+        env,
+        '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            payload: {
+              ...payload,
+              escalations: [...priorEscalations, escalationRecord],
+              escalation_count: priorEscalations.length + 1,
+              last_escalated_at: now,
+            },
+            updated_at: now,
+          }),
+        },
+      );
+
+      await insertAudit(env, {
+        actor_user_id: actor.user_id,
+        actor_email: actor.email || null,
+        entity_type: 'template',
+        entity_id: approval.template_id,
+        action: 'escalate-approval',
+        outcome: 'success',
+        details: {
+          approval_id: approval.id,
+          approval_type: approval.approval_type,
+          escalation_count: priorEscalations.length + 1,
+          automated: true,
+          sweep_source: sweepSource,
+        },
+      });
+    }
+
+    escalated += 1;
+  }
+
+  if (!dryRun && sweepSource === 'scheduled') {
+    await insertAudit(env, {
+      actor_user_id: actor.user_id,
+      actor_email: actor.email || null,
+      entity_type: 'template',
+      entity_id: SLIDES_SWEEP_HEARTBEAT_ENTITY_ID,
+      action: 'escalate-approval',
+      outcome: 'success',
+      details: {
+        automated: true,
+        sweep_source: sweepSource,
+        sweep_heartbeat: true,
+        processed: pending.length,
+        escalated,
+        skipped,
+      },
+    });
+  }
+
+  return {
+    processed: pending.length,
+    escalated,
+    skipped,
+    dry_run: dryRun,
+    throttled: false,
+    sweep_source: sweepSource,
+  };
 }
 
 async function isTemplateVisibleToActor(env, template, actor) {
@@ -1078,6 +1246,15 @@ async function handleArchiveTemplateAction(env, actor, body) {
     },
   );
 
+  await supabaseFetch(
+    env,
+    '/rest/v1/slide_template_collaborators?template_id=eq.' + encodeURIComponent(template.id),
+    {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    },
+  );
+
   await insertAudit(env, {
     actor_user_id: actor.user_id,
     actor_email: actor.email || null,
@@ -1089,50 +1266,6 @@ async function handleArchiveTemplateAction(env, actor, body) {
   });
 
   return jsonResponse({ ok: true });
-}
-
-async function handleRestoreTemplateAction(env, actor, body) {
-  const templateId = typeof body.template_id === 'string' ? body.template_id.trim() : '';
-  if (!templateId) return errorResponse('template_id required for restore-template.', 400);
-
-  const template = await readTemplateById(env, templateId, { includeArchived: true });
-  if (!template) return errorResponse('Template not found for restore.', 404);
-
-  const actorIsAdmin = actor.role === 'admin';
-  if (!actorIsAdmin && template.owner_user_id !== actor.user_id) {
-    return errorResponse('Forbidden. You do not own this template.', 403);
-  }
-  if (!template.is_archived) {
-    return jsonResponse({ template: normalizeTemplateRow(template) });
-  }
-
-  const response = await supabaseFetch(
-    env,
-    '/rest/v1/slide_templates?id=eq.' + encodeURIComponent(template.id),
-    {
-      method: 'PATCH',
-      headers: { Prefer: 'return=representation' },
-      body: JSON.stringify({
-        is_archived: false,
-        updated_by: actor.user_id,
-        updated_at: new Date().toISOString(),
-      }),
-    },
-  );
-  const rows = await response.json().catch(() => []);
-  const restored = normalizeTemplateRow(rows[0] || null);
-
-  await insertAudit(env, {
-    actor_user_id: actor.user_id,
-    actor_email: actor.email || null,
-    entity_type: 'template',
-    entity_id: template.id,
-    action: 'delete',
-    outcome: 'success',
-    details: { operation: 'restore-template' },
-  });
-
-  return jsonResponse({ template: restored });
 }
 
 async function handleTransferTemplateOwnershipAction(env, actor, body) {
@@ -1609,90 +1742,16 @@ async function handleRunApprovalEscalationSweepAction(env, actor, body) {
   }
 
   const dryRun = body?.dry_run === true;
-  const nowMs = Date.now();
-  const overdueThresholdMs = 48 * 60 * 60 * 1000;
-  const escalationCooldownMs = 24 * 60 * 60 * 1000;
-  const overdueBefore = new Date(nowMs - overdueThresholdMs).toISOString();
-
-  const response = await supabaseFetch(
-    env,
-    '/rest/v1/slide_template_approvals?status=eq.pending&created_at=lte.' + encodeURIComponent(overdueBefore) + '&select=*&order=created_at.asc&limit=200',
-  );
-  const rows = await response.json().catch(() => []);
-  const pending = Array.isArray(rows) ? rows : [];
-
-  let escalated = 0;
-  let skipped = 0;
-
-  for (const approval of pending) {
-    const payload = isObject(approval.payload) ? approval.payload : {};
-    const priorEscalations = Array.isArray(payload.escalations) ? payload.escalations : [];
-    const explicitLast = typeof payload.last_escalated_at === 'string' ? payload.last_escalated_at : '';
-    const lastEscalationEntry = priorEscalations[priorEscalations.length - 1] || null;
-    const derivedLast = lastEscalationEntry && typeof lastEscalationEntry.created_at === 'string'
-      ? lastEscalationEntry.created_at
-      : '';
-    const lastEscalatedAt = explicitLast || derivedLast;
-    const lastEscalatedAtMs = lastEscalatedAt ? Date.parse(lastEscalatedAt) : NaN;
-    if (Number.isFinite(lastEscalatedAtMs) && nowMs - lastEscalatedAtMs < escalationCooldownMs) {
-      skipped += 1;
-      continue;
-    }
-
-    const now = new Date().toISOString();
-    const escalationRecord = {
-      escalated_by_user_id: actor.user_id,
-      escalated_by_email: actor.email || null,
-      reason: 'SLA overdue escalation sweep',
-      automated: true,
-      created_at: now,
-    };
-
-    if (!dryRun) {
-      await supabaseFetch(
-        env,
-        '/rest/v1/slide_template_approvals?id=eq.' + encodeURIComponent(approval.id),
-        {
-          method: 'PATCH',
-          headers: { Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            payload: {
-              ...payload,
-              escalations: [...priorEscalations, escalationRecord],
-              escalation_count: priorEscalations.length + 1,
-              last_escalated_at: now,
-            },
-            updated_at: now,
-          }),
-        },
-      );
-
-      await insertAudit(env, {
-        actor_user_id: actor.user_id,
-        actor_email: actor.email || null,
-        entity_type: 'template',
-        entity_id: approval.template_id,
-        action: 'escalate-approval',
-        outcome: 'success',
-        details: {
-          approval_id: approval.id,
-          approval_type: approval.approval_type,
-          escalation_count: priorEscalations.length + 1,
-          automated: true,
-        },
-      });
-    }
-
-    escalated += 1;
-  }
+  const force = body?.force === true;
+  const sweepSource = body?.sweep_source === 'scheduled' ? 'scheduled' : 'manual';
+  const result = await executeApprovalEscalationSweep(env, actor, {
+    dryRun,
+    force,
+    sweepSource,
+  });
 
   return jsonResponse({
-    sweep: {
-      processed: pending.length,
-      escalated,
-      skipped,
-      dry_run: dryRun,
-    },
+    sweep: result,
   });
 }
 
@@ -2059,69 +2118,32 @@ function addAuditSearch(path, query) {
   return path + '&or=' + encodeURIComponent(clause);
 }
 
-function createCorrelationId() {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-  } catch (_) {
-    // Fall through to timestamp-based identifier.
-  }
-  return 'slides-' + Date.now().toString(36);
-}
-
-function withCorrelationId(response, correlationId) {
-  try {
-    response.headers.set('x-correlation-id', correlationId);
-  } catch (_) {
-    // Ignore header mutation failures.
-  }
-  return response;
-}
-
-function summarizeUnhandledError(error) {
+function safeSlidesErrorResponse(error, fallbackMessage) {
   const detail = error instanceof Error ? error.message : String(error || '');
-  const trimmed = detail.trim();
-  if (!trimmed) return '';
-  if (/<!doctype html/i.test(trimmed) || /<html/i.test(trimmed)) {
-    const rayMatch = trimmed.match(/Ray ID:\s*([A-Za-z0-9]+)/i);
-    if (rayMatch && rayMatch[1]) {
-      return 'upstream runtime exception (cloudflare ray ' + rayMatch[1] + ')';
-    }
-    return 'upstream runtime exception';
-  }
-  const compact = trimmed.replace(/\s+/g, ' ');
-  return compact.length > 280 ? compact.slice(0, 280) + '...' : compact;
-}
-
-function safeSlidesErrorResponse(error, fallbackMessage, correlationId) {
-  const detail = summarizeUnhandledError(error);
   const message = detail
-    ? `${fallbackMessage} (ref ${correlationId}). ${detail}`
-    : `${fallbackMessage} (ref ${correlationId}).`;
-  return withCorrelationId(errorResponse(message, 503), correlationId);
+    ? `${fallbackMessage} ${detail}`
+    : fallbackMessage;
+  return errorResponse(message, 503);
 }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const correlationId = createCorrelationId();
+  const missing = assertSupabaseConfigured(env);
+  if (missing) return missing;
+
+  const authz = await authorizeActorForRead(request, env);
+  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+
+  const actor = authz.actor;
+  const url = new URL(request.url);
+  const resource = (url.searchParams.get('resource') || 'slides').toLowerCase();
+  const search = url.searchParams.get('search') || '';
+  const limitRaw = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
+  const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
   try {
-    const missing = assertSupabaseConfigured(env);
-    if (missing) return withCorrelationId(missing, correlationId);
-
-    const authz = await authorizeActorForRead(request, env);
-    if (!authz.ok) return withCorrelationId(errorResponse(authz.error, authz.status || 403), correlationId);
-
-    const actor = authz.actor;
-    const url = new URL(request.url);
-    const resource = (url.searchParams.get('resource') || 'slides').toLowerCase();
-    const search = url.searchParams.get('search') || '';
-    const limitRaw = Number.parseInt(url.searchParams.get('limit') || '50', 10);
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 200) : 50;
-    const offsetRaw = Number.parseInt(url.searchParams.get('offset') || '0', 10);
-    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
-
   if (resource === 'slides') {
     let path = '/rest/v1/slides?deleted_at=is.null&select=*&order=updated_at.desc&limit=' + String(limit);
     if (actor.role !== 'admin') {
@@ -2299,33 +2321,40 @@ export async function onRequestGet(context) {
     });
   }
 
-  return withCorrelationId(errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400), correlationId);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.', correlationId);
+    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.');
   }
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const correlationId = createCorrelationId();
+  const missing = assertSupabaseConfigured(env);
+  if (missing) return missing;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return errorResponse('Invalid JSON body', 400);
+  }
+
+  const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
+  const isScheduledSweepJob =
+    action === 'run-approval-escalation-sweep'
+    && body?.sweep_source === 'scheduled'
+    && hasValidSlidesJobToken(request, env);
+
+  let actor;
+  if (isScheduledSweepJob) {
+    actor = resolveSlidesAutomationActor(env);
+  } else {
+    const authz = await authorizeActor(request, body, env);
+    if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+    actor = authz.actor;
+  }
 
   try {
-    const missing = assertSupabaseConfigured(env);
-    if (missing) return withCorrelationId(missing, correlationId);
-
-    let body;
-    try {
-      body = await request.json();
-    } catch (_) {
-      return withCorrelationId(errorResponse('Invalid JSON body', 400), correlationId);
-    }
-
-    const authz = await authorizeActor(request, body, env);
-    if (!authz.ok) return withCorrelationId(errorResponse(authz.error, authz.status || 403), correlationId);
-
-    const actor = authz.actor;
-    const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
-
   if (action === 'save') return handleSaveAction(env, actor, body);
   if (action === 'duplicate-slide') return handleDuplicateSlideAction(env, actor, body);
   if (action === 'duplicate-template') return handleDuplicateTemplateAction(env, actor, body);
@@ -2334,7 +2363,6 @@ export async function onRequestPost(context) {
   if (action === 'publish-template') return handlePublishTemplateAction(env, actor, body);
   if (action === 'update-template') return handleUpdateTemplateAction(env, actor, body);
   if (action === 'archive-template') return handleArchiveTemplateAction(env, actor, body);
-  if (action === 'restore-template') return handleRestoreTemplateAction(env, actor, body);
   if (action === 'transfer-template-owner') return handleTransferTemplateOwnershipAction(env, actor, body);
   if (action === 'upsert-template-collaborator') return handleUpsertTemplateCollaboratorAction(env, actor, body);
   if (action === 'remove-template-collaborator') return handleRemoveTemplateCollaboratorAction(env, actor, body);
@@ -2348,8 +2376,8 @@ export async function onRequestPost(context) {
   if (action === 'download-audit-export-job') return handleDownloadAuditExportJobAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
-  return withCorrelationId(errorResponse('Unsupported action for /api/slides.', 400), correlationId);
+  return errorResponse('Unsupported action for /api/slides.', 400);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.', correlationId);
+    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.');
   }
 }

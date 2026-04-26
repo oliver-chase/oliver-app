@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import AppBadge from '@/components/shared/AppBadge'
 import AppChip from '@/components/shared/AppChip'
-import { ModuleCard } from '@/components/hub/ModuleCard'
+import { ModuleCard } from '@/components/shared/ModuleCard'
 import styles from './admin.module.css'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

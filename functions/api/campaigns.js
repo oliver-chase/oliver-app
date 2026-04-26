@@ -1,0 +1,672 @@
+// /api/campaigns — service-role campaign reporting/export API.
+//
+// GET  /api/campaigns?resource=summary|exports|export&...
+// POST /api/campaigns { action, actor, ...payload }
+
+import { jsonResponse, errorResponse } from './_shared/ai.js';
+
+const MAX_EXPORT_LIMIT = 200;
+const MAX_REPORT_ROWS = 10000;
+
+function resolveServiceKey(env) {
+  return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
+}
+
+function resolveSupabaseUrl(env) {
+  return env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || null;
+}
+
+function serviceHeaders(env, extra = {}) {
+  const key = resolveServiceKey(env);
+  return {
+    apikey: key,
+    Authorization: 'Bearer ' + key,
+    'Content-Type': 'application/json',
+    ...extra,
+  };
+}
+
+function assertConfigured(env) {
+  if (!resolveSupabaseUrl(env)) {
+    return errorResponse('Supabase URL not configured for /api/campaigns. Set SUPABASE_URL (preferred) or NEXT_PUBLIC_SUPABASE_URL.', 503);
+  }
+  if (!resolveServiceKey(env)) {
+    return errorResponse('Supabase admin key not configured for /api/campaigns. Set SUPABASE_SERVICE_ROLE_KEY (preferred) or SUPABASE_SERVICE_KEY.', 503);
+  }
+  return null;
+}
+
+function normalizeEmail(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function normalizeUserId(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function shouldTrustClientIdentity(env) {
+  if (env.CAMPAIGNS_TRUST_CLIENT_IDENTITY === '1') return true;
+  if (env.CAMPAIGNS_TRUST_CLIENT_IDENTITY === '0') return false;
+  if (env.USERS_TRUST_CLIENT_IDENTITY === '1') return true;
+  if (env.USERS_TRUST_CLIENT_IDENTITY === '0') return false;
+  return false;
+}
+
+function resolveActorIdentity(request, body, env) {
+  const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
+  if (cfAccessEmail) {
+    return { source: 'cf-access', email: cfAccessEmail, userId: '' };
+  }
+
+  if (!shouldTrustClientIdentity(env)) return null;
+
+  const source = body && typeof body === 'object' ? body : {};
+  const actor = source.actor && typeof source.actor === 'object' ? source.actor : {};
+  const userId = normalizeUserId(
+    actor.user_id
+      || source.user_id
+      || source.actor_user_id
+      || request.headers.get('x-user-id')
+      || '',
+  );
+  const userEmail = normalizeEmail(
+    actor.user_email
+      || source.user_email
+      || source.actor_email
+      || request.headers.get('x-user-email')
+      || '',
+  );
+
+  if (!userId && !userEmail) return null;
+  return { source: 'client', email: userEmail, userId };
+}
+
+function resolveActorIdentityFromQuery(request, env) {
+  const cfAccessEmail = normalizeEmail(request.headers.get('cf-access-authenticated-user-email') || '');
+  if (cfAccessEmail) {
+    return { source: 'cf-access', email: cfAccessEmail, userId: '' };
+  }
+
+  if (!shouldTrustClientIdentity(env)) return null;
+
+  const url = new URL(request.url);
+  const userId = normalizeUserId(
+    request.headers.get('x-user-id')
+      || url.searchParams.get('user_id')
+      || url.searchParams.get('actor_user_id')
+      || '',
+  );
+  const userEmail = normalizeEmail(
+    request.headers.get('x-user-email')
+      || url.searchParams.get('user_email')
+      || url.searchParams.get('actor_email')
+      || '',
+  );
+
+  if (!userId && !userEmail) return null;
+  return { source: 'client', email: userEmail, userId };
+}
+
+async function supabaseJson(env, path, init = {}) {
+  const response = await fetch(resolveSupabaseUrl(env) + path, {
+    ...init,
+    headers: {
+      ...serviceHeaders(env),
+      ...(init.headers || {}),
+    },
+  });
+
+  const text = await response.text().catch(() => '');
+  let data = null;
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = null; }
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    text,
+    data,
+  };
+}
+
+async function fetchActorAppUser(env, identity) {
+  const select = 'user_id,email,role,page_permissions';
+  let path = '';
+
+  if (identity.email && identity.userId) {
+    path = '/rest/v1/app_users?or=(email.eq.' + encodeURIComponent(identity.email) + ',user_id.eq.' + encodeURIComponent(identity.userId) + ')&select=' + select + '&limit=1';
+  } else if (identity.email) {
+    path = '/rest/v1/app_users?email=eq.' + encodeURIComponent(identity.email) + '&select=' + select + '&limit=1';
+  } else if (identity.userId) {
+    path = '/rest/v1/app_users?user_id=eq.' + encodeURIComponent(identity.userId) + '&select=' + select + '&limit=1';
+  } else {
+    return { ok: false, status: 401, error: 'Missing actor identity for campaign operation.' };
+  }
+
+  const lookup = await supabaseJson(env, path);
+  if (!lookup.ok) {
+    return { ok: false, status: lookup.status, error: 'Failed to verify campaign actor: ' + lookup.text };
+  }
+
+  const rows = Array.isArray(lookup.data) ? lookup.data : [];
+  return { ok: true, row: rows[0] || null };
+}
+
+function isAuthorizedCampaignActor(appUser) {
+  if (!appUser || typeof appUser !== 'object') return false;
+  if (appUser.role === 'admin') return true;
+  if (!Array.isArray(appUser.page_permissions)) return false;
+  return appUser.page_permissions.includes('campaigns');
+}
+
+async function authorizeActor(request, env, body = null) {
+  const identity = body
+    ? resolveActorIdentity(request, body, env)
+    : resolveActorIdentityFromQuery(request, env);
+
+  if (!identity) {
+    return { ok: false, status: 401, error: 'Unauthorized campaign request. Missing verified actor identity.' };
+  }
+
+  const actorLookup = await fetchActorAppUser(env, identity);
+  if (!actorLookup.ok) return actorLookup;
+
+  if (!isAuthorizedCampaignActor(actorLookup.row)) {
+    return { ok: false, status: 403, error: 'Forbidden. Campaign permission required.' };
+  }
+
+  return { ok: true, actor: actorLookup.row };
+}
+
+function asString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function parseFilters(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const startDate = asString(source.startDate || source.start_date || '');
+  const endDate = asString(source.endDate || source.end_date || '');
+  const campaignId = asString(source.campaignId || source.campaign_id || '');
+  const contentType = asString(source.contentType || source.content_type || '');
+
+  return {
+    startDate,
+    endDate,
+    campaignId,
+    contentType,
+  };
+}
+
+function dateToIsoOrNull(value, endOfDay = false) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const candidate = trimmed.includes('T')
+    ? trimmed
+    : (endOfDay ? `${trimmed}T23:59:59.999Z` : `${trimmed}T00:00:00.000Z`);
+
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+async function fetchContentRows(env, filters) {
+  const parts = [
+    '/rest/v1/campaign_content_items?select=id,status,created_at,updated_at,posted_at,scheduled_for,campaign_id,content_type,topic,created_by,posting_owner_id,archived_at',
+    '&order=created_at.desc',
+    '&limit=' + MAX_REPORT_ROWS,
+  ];
+
+  if (filters.campaignId) parts.push('&campaign_id=eq.' + encodeURIComponent(filters.campaignId));
+  if (filters.contentType) parts.push('&content_type=eq.' + encodeURIComponent(filters.contentType));
+
+  const startIso = dateToIsoOrNull(filters.startDate, false);
+  const endIso = dateToIsoOrNull(filters.endDate, true);
+  if (startIso) parts.push('&created_at=gte.' + encodeURIComponent(startIso));
+  if (endIso) parts.push('&created_at=lte.' + encodeURIComponent(endIso));
+
+  const lookup = await supabaseJson(env, parts.join(''));
+  if (!lookup.ok) {
+    return {
+      ok: false,
+      status: lookup.status,
+      error: 'Failed to load campaign content rows: ' + lookup.text,
+      rows: [],
+    };
+  }
+
+  return {
+    ok: true,
+    rows: Array.isArray(lookup.data) ? lookup.data : [],
+  };
+}
+
+function computeSummary(rows, nowIso) {
+  const now = new Date(nowIso).getTime();
+
+  const waitingReview = rows.filter((row) => row.status === 'needs_review').length;
+  const unclaimed = rows.filter((row) => row.status === 'unclaimed').length;
+  const claimed = rows.filter((row) => row.status === 'claimed').length;
+  const posted = rows.filter((row) => row.status === 'posted').length;
+  const submitted = waitingReview + unclaimed + claimed + posted;
+  const approved = unclaimed + claimed + posted;
+  const missed = rows.filter((row) => {
+    if (row.status !== 'claimed') return false;
+    if (!row.scheduled_for) return false;
+    return new Date(row.scheduled_for).getTime() < now;
+  }).length;
+
+  return {
+    created_count: rows.length,
+    submitted_count: submitted,
+    approved_count: approved,
+    claimed_count: claimed,
+    posted_count: posted,
+    missed_count: missed,
+    unclaimed_count: unclaimed,
+    waiting_review_count: waitingReview,
+  };
+}
+
+function countBy(rows, keyFn) {
+  const map = new Map();
+  for (const row of rows) {
+    const key = keyFn(row);
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return [...map.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+function computeGroupings(rows) {
+  return {
+    by_campaign: countBy(rows, (row) => row.campaign_id || 'unassigned'),
+    by_topic: countBy(rows, (row) => row.topic || 'untagged'),
+    by_user: countBy(rows, (row) => row.posting_owner_id || row.created_by || 'unknown'),
+  };
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildMarkdownExport(summary, groupings, filters) {
+  const lines = [
+    '# Campaign Execution Summary',
+    '',
+    `Generated: ${new Date().toISOString()}`,
+    '',
+    '## Filters',
+    `- Start: ${filters.startDate || 'all'}`,
+    `- End: ${filters.endDate || 'all'}`,
+    `- Campaign: ${filters.campaignId || 'all'}`,
+    `- Content Type: ${filters.contentType || 'all'}`,
+    '',
+    '## Summary Metrics',
+    '| Metric | Count |',
+    '| --- | ---: |',
+    `| Created | ${summary.created_count} |`,
+    `| Submitted | ${summary.submitted_count} |`,
+    `| Approved | ${summary.approved_count} |`,
+    `| Waiting Review | ${summary.waiting_review_count} |`,
+    `| Unclaimed | ${summary.unclaimed_count} |`,
+    `| Claimed | ${summary.claimed_count} |`,
+    `| Posted | ${summary.posted_count} |`,
+    `| Missed | ${summary.missed_count} |`,
+    '',
+    '## Grouping: Campaign',
+    ...groupings.by_campaign.map((row) => `- ${row.key}: ${row.count}`),
+    '',
+    '## Grouping: Topic',
+    ...groupings.by_topic.map((row) => `- ${row.key}: ${row.count}`),
+    '',
+    '## Grouping: User',
+    ...groupings.by_user.map((row) => `- ${row.key}: ${row.count}`),
+  ];
+
+  return lines.join('\n');
+}
+
+function buildHtmlExport(summary, groupings, filters) {
+  const metricRows = [
+    ['Created', summary.created_count],
+    ['Submitted', summary.submitted_count],
+    ['Approved', summary.approved_count],
+    ['Waiting Review', summary.waiting_review_count],
+    ['Unclaimed', summary.unclaimed_count],
+    ['Claimed', summary.claimed_count],
+    ['Posted', summary.posted_count],
+    ['Missed', summary.missed_count],
+  ]
+    .map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td style="text-align:right">${escapeHtml(value)}</td></tr>`)
+    .join('');
+
+  const listSection = (title, items) => [
+    `<h3>${escapeHtml(title)}</h3>`,
+    '<ul>',
+    ...items.map((row) => `<li>${escapeHtml(row.key)}: ${escapeHtml(row.count)}</li>`),
+    '</ul>',
+  ].join('');
+
+  return [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8" />',
+    '<title>Campaign Execution Summary</title>',
+    '<style>body{font-family:Arial,sans-serif;padding:24px;color:#1f2937}table{border-collapse:collapse;width:100%;max-width:560px}td,th{border:1px solid #d1d5db;padding:8px}h1,h2,h3{margin:0 0 12px 0}ul{margin:8px 0 20px 20px}</style>',
+    '</head><body>',
+    '<h1>Campaign Execution Summary</h1>',
+    `<p>Generated: ${escapeHtml(new Date().toISOString())}</p>`,
+    '<h2>Filters</h2>',
+    `<p>Start: ${escapeHtml(filters.startDate || 'all')}<br/>End: ${escapeHtml(filters.endDate || 'all')}<br/>Campaign: ${escapeHtml(filters.campaignId || 'all')}<br/>Content Type: ${escapeHtml(filters.contentType || 'all')}</p>`,
+    '<h2>Summary Metrics</h2>',
+    `<table><tbody>${metricRows}</tbody></table>`,
+    listSection('Grouping: Campaign', groupings.by_campaign),
+    listSection('Grouping: Topic', groupings.by_topic),
+    listSection('Grouping: User', groupings.by_user),
+    '</body></html>',
+  ].join('');
+}
+
+async function insertCampaignActivity(env, payload) {
+  await supabaseJson(env, '/rest/v1/campaign_activity_log', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function createExportJob(env, input) {
+  const insert = await supabaseJson(env, '/rest/v1/campaign_report_exports', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      requested_by_user_id: input.requestedBy,
+      format: input.format,
+      filters: input.filters,
+      status: 'completed',
+      file_name: input.fileName,
+      file_payload: input.payload,
+      completed_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!insert.ok) {
+    return {
+      ok: false,
+      status: insert.status,
+      error: 'Failed to store campaign export job: ' + insert.text,
+      row: null,
+    };
+  }
+
+  const rows = Array.isArray(insert.data) ? insert.data : [];
+  return { ok: true, row: rows[0] || null };
+}
+
+function parseFormat(raw) {
+  const normalized = asString(raw).toLowerCase();
+  if (normalized === 'html') return 'html';
+  return 'markdown';
+}
+
+async function generateSummaryAndGroupings(env, filters) {
+  const loaded = await fetchContentRows(env, filters);
+  if (!loaded.ok) return loaded;
+
+  const summary = computeSummary(loaded.rows, new Date().toISOString());
+  const groupings = computeGroupings(loaded.rows);
+  return {
+    ok: true,
+    rows: loaded.rows,
+    summary,
+    groupings,
+  };
+}
+
+function capLimit(value) {
+  const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 25;
+  return Math.min(parsed, MAX_EXPORT_LIMIT);
+}
+
+async function listExports(env, actor, limit) {
+  const parts = [
+    '/rest/v1/campaign_report_exports?select=id,requested_by_user_id,format,filters,status,file_name,error_message,requested_at,completed_at',
+    '&order=requested_at.desc',
+    '&limit=' + limit,
+  ];
+
+  if (actor.role !== 'admin') {
+    parts.push('&requested_by_user_id=eq.' + encodeURIComponent(actor.user_id));
+  }
+
+  return supabaseJson(env, parts.join(''));
+}
+
+async function loadExportById(env, exportId) {
+  return supabaseJson(
+    env,
+    '/rest/v1/campaign_report_exports?id=eq.' + encodeURIComponent(exportId)
+      + '&select=id,requested_by_user_id,format,filters,status,file_name,file_payload,error_message,requested_at,completed_at'
+      + '&limit=1',
+  );
+}
+
+function canAccessExport(actor, exportRow) {
+  if (actor.role === 'admin') return true;
+  return exportRow.requested_by_user_id === actor.user_id;
+}
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const missing = assertConfigured(env);
+  if (missing) return missing;
+
+  const authz = await authorizeActor(request, env, null);
+  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+
+  const url = new URL(request.url);
+  const resource = asString(url.searchParams.get('resource') || 'summary') || 'summary';
+
+  if (resource === 'summary') {
+    const filters = parseFilters({
+      startDate: url.searchParams.get('startDate') || '',
+      endDate: url.searchParams.get('endDate') || '',
+      campaignId: url.searchParams.get('campaignId') || '',
+      contentType: url.searchParams.get('contentType') || '',
+    });
+
+    const result = await generateSummaryAndGroupings(env, filters);
+    if (!result.ok) return errorResponse(result.error, result.status || 500);
+
+    return jsonResponse({
+      ok: true,
+      summary: result.summary,
+      groupings: result.groupings,
+      filters,
+    });
+  }
+
+  if (resource === 'exports') {
+    const limit = capLimit(url.searchParams.get('limit') || '');
+    const rows = await listExports(env, authz.actor, limit);
+    if (!rows.ok) return errorResponse('Failed to list campaign exports: ' + rows.text, rows.status || 500);
+
+    return jsonResponse({ ok: true, items: Array.isArray(rows.data) ? rows.data : [] });
+  }
+
+  if (resource === 'export') {
+    const exportId = asString(url.searchParams.get('export_id') || url.searchParams.get('id') || '');
+    if (!exportId) return errorResponse('export_id is required', 400);
+
+    const loaded = await loadExportById(env, exportId);
+    if (!loaded.ok) return errorResponse('Failed to load campaign export: ' + loaded.text, loaded.status || 500);
+
+    const rows = Array.isArray(loaded.data) ? loaded.data : [];
+    const exportRow = rows[0] || null;
+    if (!exportRow) return errorResponse('Campaign export job not found.', 404);
+    if (!canAccessExport(authz.actor, exportRow)) return errorResponse('Forbidden. Cannot access this campaign export job.', 403);
+
+    return jsonResponse({
+      ok: true,
+      item: exportRow,
+    });
+  }
+
+  return errorResponse('Unknown resource: ' + resource, 400);
+}
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const missing = assertConfigured(env);
+  if (missing) return missing;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse('Invalid JSON body', 400);
+  }
+
+  const authz = await authorizeActor(request, env, body);
+  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+
+  const action = asString(body.action || '');
+  if (!action) return errorResponse('action is required', 400);
+
+  if (action === 'get-report-summary') {
+    const filters = parseFilters(body.filters || {});
+    const result = await generateSummaryAndGroupings(env, filters);
+    if (!result.ok) return errorResponse(result.error, result.status || 500);
+
+    return jsonResponse({
+      ok: true,
+      summary: result.summary,
+      groupings: result.groupings,
+      filters,
+    });
+  }
+
+  if (action === 'request-report-export') {
+    const filters = parseFilters(body.filters || {});
+    const format = parseFormat(body.format || 'markdown');
+
+    const result = await generateSummaryAndGroupings(env, filters);
+    if (!result.ok) return errorResponse(result.error, result.status || 500);
+
+    const payload = format === 'html'
+      ? buildHtmlExport(result.summary, result.groupings, filters)
+      : buildMarkdownExport(result.summary, result.groupings, filters);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const extension = format === 'html' ? 'html' : 'md';
+    const fileName = `campaign-summary-${stamp}.${extension}`;
+
+    const created = await createExportJob(env, {
+      requestedBy: authz.actor.user_id,
+      format,
+      filters,
+      fileName,
+      payload,
+    });
+    if (!created.ok) return errorResponse(created.error, created.status || 500);
+
+    await insertCampaignActivity(env, {
+      entity_type: 'campaign-report',
+      entity_id: created.row?.id || 'unknown',
+      action_type: 'report-export-generated',
+      performed_by: authz.actor.user_id,
+      metadata: {
+        format,
+        filters,
+      },
+    });
+
+    return jsonResponse({
+      ok: true,
+      job: created.row,
+      summary: result.summary,
+      groupings: result.groupings,
+    }, 201);
+  }
+
+  if (action === 'download-report-export') {
+    const exportId = asString(body.export_id || body.id || '');
+    if (!exportId) return errorResponse('export_id is required', 400);
+
+    const loaded = await loadExportById(env, exportId);
+    if (!loaded.ok) return errorResponse('Failed to load campaign export: ' + loaded.text, loaded.status || 500);
+
+    const rows = Array.isArray(loaded.data) ? loaded.data : [];
+    const exportRow = rows[0] || null;
+    if (!exportRow) return errorResponse('Campaign export job not found.', 404);
+    if (!canAccessExport(authz.actor, exportRow)) return errorResponse('Forbidden. Cannot access this campaign export job.', 403);
+    if (exportRow.status !== 'completed') return errorResponse('Campaign export job is not ready for download.', 409);
+
+    return jsonResponse({
+      ok: true,
+      filename: exportRow.file_name || 'campaign-summary.md',
+      content: exportRow.file_payload || '',
+      format: exportRow.format || 'markdown',
+      filters: exportRow.filters || {},
+    });
+  }
+
+  return errorResponse('Unknown action: ' + action, 400);
+}
+
+export async function onRequestPatch(context) {
+  const { request, env } = context;
+  const missing = assertConfigured(env);
+  if (missing) return missing;
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse('Invalid JSON body', 400);
+  }
+
+  const authz = await authorizeActor(request, env, body);
+  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+  if (authz.actor.role !== 'admin') return errorResponse('Forbidden. Admin required.', 403);
+
+  const action = asString(body.action || '');
+  if (!action) return errorResponse('action is required', 400);
+
+  if (action === 'mark-export-failed') {
+    const exportId = asString(body.export_id || '');
+    if (!exportId) return errorResponse('export_id is required', 400);
+
+    const patch = await supabaseJson(
+      env,
+      '/rest/v1/campaign_report_exports?id=eq.' + encodeURIComponent(exportId),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          status: 'failed',
+          error_message: asString(body.error_message || 'marked-failed-by-admin'),
+          completed_at: new Date().toISOString(),
+        }),
+      },
+    );
+
+    if (!patch.ok) return errorResponse('Failed to mark export failed: ' + patch.text, patch.status || 500);
+    const rows = Array.isArray(patch.data) ? patch.data : [];
+
+    return jsonResponse({ ok: true, job: rows[0] || null });
+  }
+
+  return errorResponse('Unknown action: ' + action, 400);
+}

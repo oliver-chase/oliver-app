@@ -20,9 +20,25 @@ export const DESIGN_COMPONENT_CATALOG: DesignComponentRecord[] = [
     id: 'hub-module-card',
     name: 'ModuleCard',
     group: 'Hub',
-    source: 'src/components/hub/ModuleCard.tsx',
+    source: 'src/components/shared/ModuleCard.tsx',
     status: 'active',
-    notes: 'Standard module navigation card.',
+    notes: 'Standard module navigation card reused by hub and admin component library.',
+  },
+  {
+    id: 'module-sidebar-header',
+    name: 'ModuleSidebarHeader',
+    group: 'Layout',
+    source: 'src/components/shared/ModuleSidebarHeader.tsx',
+    status: 'active',
+    notes: 'Shared module sidebar title + back-link header contract.',
+  },
+  {
+    id: 'module-topbar',
+    name: 'ModuleTopbar',
+    group: 'Layout',
+    source: 'src/components/shared/ModuleTopbar.tsx',
+    status: 'active',
+    notes: 'Shared module topbar shell with hamburger and right-slot actions.',
   },
   {
     id: 'admin-shell',
@@ -49,4 +65,3 @@ export const DESIGN_COMPONENT_CATALOG: DesignComponentRecord[] = [
     notes: 'HTML-to-component conversion foundation.',
   },
 ]
-
