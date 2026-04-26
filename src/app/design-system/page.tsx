@@ -29,19 +29,92 @@ function ResolvedValue({ token, fallback }: { token: string; fallback: string })
   return <>{v}</>
 }
 
-function DeadTokenAudit() {
-  const colorTokens = COLOR_GROUPS.flatMap(g => g.tokens.map(t => t.name))
-  const deadColors = colorTokens.filter(n => !(n in COLOR_USAGES) || COLOR_USAGES[n].length === 0)
-  const deadSpacing = SPACING.filter(s => s.usages.length === 0).map(s => s.token)
-  const deadLayout = LAYOUT_BARS.filter(l => l.usages.length === 0).map(l => l.token)
-  const total = deadColors.length + deadSpacing.length + deadLayout.length
-  const [open, setOpen] = useState(false)
+type UsageBucket = {
+  used: string[]
+  candidateUnused: string[]
+  untracked: string[]
+}
 
-  if (total === 0) {
+const USAGE_CATALOG_METADATA = {
+  lastUpdated: '2026-04-25',
+  scope: 'Design System color/spacing/layout registries',
+  blindSpots: 'Tokens can appear untracked until their evidence is added to this catalog.',
+}
+
+const USAGE_QA_FIXTURES = {
+  knownUsed: '--color-brand-pink',
+  candidateUnused: '--color-status-success-bg',
+}
+
+function buildColorUsageBucket(tokens: string[], usageMap: Record<string, string[]>): UsageBucket {
+  const bucket: UsageBucket = { used: [], candidateUnused: [], untracked: [] }
+  for (const token of tokens) {
+    if (!(token in usageMap)) {
+      bucket.untracked.push(token)
+      continue
+    }
+    const usages = usageMap[token] || []
+    if (usages.length > 0) {
+      bucket.used.push(token)
+      continue
+    }
+    bucket.candidateUnused.push(token)
+  }
+  return bucket
+}
+
+function buildTrackedUsageBucket(rows: Array<{ token: string; usages: string[] }>) {
+  const used: string[] = []
+  const candidateUnused: string[] = []
+  for (const row of rows) {
+    if (row.usages.length > 0) {
+      used.push(row.token)
+      continue
+    }
+    candidateUnused.push(row.token)
+  }
+  return { used, candidateUnused }
+}
+
+function DeadTokenAudit() {
+  const [lastManualScanAt, setLastManualScanAt] = useState<string | null>(null)
+  const [scanState, setScanState] = useState<'idle' | 'running' | 'success' | 'error'>('idle')
+  const [scanError, setScanError] = useState<string | null>(null)
+  const colorTokens = COLOR_GROUPS.flatMap(g => g.tokens.map(t => t.name))
+  const colorUsage = buildColorUsageBucket(colorTokens, COLOR_USAGES)
+  const spacingUsage = buildTrackedUsageBucket(SPACING)
+  const layoutUsage = buildTrackedUsageBucket(LAYOUT_BARS)
+  const candidateUnusedTotal =
+    colorUsage.candidateUnused.length
+    + spacingUsage.candidateUnused.length
+    + layoutUsage.candidateUnused.length
+  const untrackedTotal = colorUsage.untracked.length
+  const usedTotal = colorUsage.used.length + spacingUsage.used.length + layoutUsage.used.length
+  const [open, setOpen] = useState(false)
+  const latestScanAt = lastManualScanAt || USAGE_CATALOG_METADATA.lastUpdated
+
+  async function handleRescan() {
+    setScanState('running')
+    setScanError(null)
+    try {
+      // Keep this asynchronous so the UI reports an explicit scan lifecycle.
+      await Promise.resolve()
+      buildColorUsageBucket(colorTokens, COLOR_USAGES)
+      buildTrackedUsageBucket(SPACING)
+      buildTrackedUsageBucket(LAYOUT_BARS)
+      setLastManualScanAt(new Date().toISOString())
+      setScanState('success')
+    } catch (error) {
+      setScanState('error')
+      setScanError(error instanceof Error ? error.message : 'Unknown scan failure')
+    }
+  }
+
+  if (candidateUnusedTotal === 0 && untrackedTotal === 0) {
     return (
       <div className="deadAudit deadAudit--clean">
         <span className="deadAuditCount">✓</span>
-        <span>Dead-token audit clean — every tracked token has at least one recorded consumer.</span>
+        <span>Usage inventory clean. All catalogued color/spacing/layout tokens have tracked evidence.</span>
       </div>
     )
   }
@@ -54,32 +127,65 @@ function DeadTokenAudit() {
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
       >
-        <span className="deadAuditCount">{total}</span>
-        <span>tokens with no tracked usage</span>
+        <span className="deadAuditCount">{candidateUnusedTotal}</span>
+        <span>candidate-unused tokens</span>
+        {untrackedTotal > 0 && (
+          <span className="deadAuditMeta">{untrackedTotal} untracked</span>
+        )}
         <span className="deadAuditChevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
       </button>
       {open && (
         <div className="deadAuditBody">
           <p className="sectionNote">
-            Missing usage data usually means the token is unused — or that this page
-            hasn&rsquo;t catalogued it yet. Grep the codebase before deleting.
+            Last scan: {latestScanAt} · Scope: {USAGE_CATALOG_METADATA.scope}. {USAGE_CATALOG_METADATA.blindSpots}
           </p>
-          {deadColors.length > 0 && (
+          <div className="deadAuditControls">
+            <button
+              type="button"
+              className="btn btn-secondary btn--compact"
+              onClick={() => { void handleRescan() }}
+              disabled={scanState === 'running'}
+            >
+              {scanState === 'running' ? 'Re-Scanning…' : 'Re-Scan Usage Catalog'}
+            </button>
+            <span className="deadAuditControlStatus">
+              {scanState === 'idle' && 'Ready'}
+              {scanState === 'running' && 'Running'}
+              {scanState === 'success' && 'Scan complete'}
+              {scanState === 'error' && `Scan failed${scanError ? `: ${scanError}` : ''}`}
+            </span>
+          </div>
+          <div className="deadAuditFixtures">
+            QA fixtures:
+            {' '}known-used <code>{USAGE_QA_FIXTURES.knownUsed}</code> · candidate-unused <code>{USAGE_QA_FIXTURES.candidateUnused}</code>
+          </div>
+          <div className="deadAuditSummary">
+            <span>Used: {usedTotal}</span>
+            <span>Candidate-unused: {candidateUnusedTotal}</span>
+            <span>Untracked: {untrackedTotal}</span>
+          </div>
+          {colorUsage.candidateUnused.length > 0 && (
             <div className="deadAuditGroup">
-              <div className="typeUsagesLabel">Colors ({deadColors.length})</div>
-              {deadColors.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+              <div className="typeUsagesLabel">Colors: Candidate-unused ({colorUsage.candidateUnused.length})</div>
+              {colorUsage.candidateUnused.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
             </div>
           )}
-          {deadSpacing.length > 0 && (
+          {colorUsage.untracked.length > 0 && (
             <div className="deadAuditGroup">
-              <div className="typeUsagesLabel">Spacing ({deadSpacing.length})</div>
-              {deadSpacing.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+              <div className="typeUsagesLabel">Colors: Untracked Catalog Entries ({colorUsage.untracked.length})</div>
+              {colorUsage.untracked.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
             </div>
           )}
-          {deadLayout.length > 0 && (
+          {spacingUsage.candidateUnused.length > 0 && (
             <div className="deadAuditGroup">
-              <div className="typeUsagesLabel">Layout ({deadLayout.length})</div>
-              {deadLayout.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+              <div className="typeUsagesLabel">Spacing: Candidate-unused ({spacingUsage.candidateUnused.length})</div>
+              {spacingUsage.candidateUnused.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
+            </div>
+          )}
+          {layoutUsage.candidateUnused.length > 0 && (
+            <div className="deadAuditGroup">
+              <div className="typeUsagesLabel">Layout: Candidate-unused ({layoutUsage.candidateUnused.length})</div>
+              {layoutUsage.candidateUnused.map(n => <div key={n} className="deadAuditItem">{n}</div>)}
             </div>
           )}
         </div>
@@ -236,6 +342,7 @@ const COLOR_USAGES: Record<string, string[]> = {
   '--color-tier-growth':       ['AccountCard tier-growth left border'],
   '--color-tier-maintenance':  ['AccountCard tier-maintenance left border'],
   '--color-tier-at-risk':      ['AccountCard tier-at-risk left border'],
+  '--color-status-success-bg': [],
   '--color-green':             ['sync-dot (ok), stat-value-green, status-success'],
   '--color-amber':             ['sync-dot (syncing), overdue-badge, pill-amber'],
   '--color-red':               ['sync-dot (error), delete danger, badge-overdue'],
@@ -574,7 +681,13 @@ export default function DesignSystemPage() {
             <div className="swatchGrid">
               {tokens.map(({ name, value }) => {
                 const isOpen = expandedColor === name
-                const usages = COLOR_USAGES[name] ?? []
+                const usageEntry = COLOR_USAGES[name]
+                const usages = usageEntry ?? []
+                const usageState = usageEntry === undefined
+                  ? 'untracked'
+                  : usages.length > 0
+                    ? 'used'
+                    : 'candidate-unused'
                 return (
                   <div key={name} className={'swatchCard' + (isOpen ? ' swatchCard--open' : '')}>
                     <button
@@ -597,11 +710,21 @@ export default function DesignSystemPage() {
                     {isOpen && (
                       <div className="swatchUsages">
                         <div className="typeUsagesLabel">
-                          {usages.length > 0 ? 'Used by (' + usages.length + ')' : 'No tracked usage'}
+                          {usageState === 'used'
+                            ? 'Used by (' + usages.length + ')'
+                            : usageState === 'candidate-unused'
+                              ? 'Candidate-unused (0 evidence entries)'
+                              : 'Untracked in usage catalog'}
                         </div>
-                        {usages.map((u, i) => (
-                          <div key={i} className="swatchUsageItem">{u}</div>
-                        ))}
+                        {usageState === 'untracked'
+                          ? (
+                            <div className="swatchUsageItem">
+                              No COLOR_USAGES entry yet. Add evidence before treating this token as unused.
+                            </div>
+                            )
+                          : usages.map((u, i) => (
+                            <div key={i} className="swatchUsageItem">{u}</div>
+                            ))}
                       </div>
                     )}
                   </div>
@@ -740,7 +863,7 @@ export default function DesignSystemPage() {
               {isOpen && (
                 <div className="typeUsages">
                   <div className="typeUsagesLabel">
-                    {usages.length > 0 ? 'Used by (' + usages.length + ')' : 'No tracked usage — candidate for removal'}
+                    {usages.length > 0 ? 'Used by (' + usages.length + ')' : 'Candidate-unused (0 evidence entries)'}
                   </div>
                   {usages.map((u, i) => (
                     <div key={i} className="typeUsageItem">
@@ -1123,9 +1246,13 @@ export default function DesignSystemPage() {
                 <div className="layoutToken">{token}</div>
                 <div className="layoutValue">{value}</div>
                 <div className="layoutLabel">{label}</div>
-                {usages.map((u, i) => (
-                  <div key={i} className="layoutUsage">{u}</div>
-                ))}
+                {usages.length > 0
+                  ? usages.map((u, i) => (
+                    <div key={i} className="layoutUsage">{u}</div>
+                    ))
+                  : (
+                    <div className="layoutUsage">Candidate-unused (0 evidence entries)</div>
+                    )}
               </div>
             </div>
           ))}

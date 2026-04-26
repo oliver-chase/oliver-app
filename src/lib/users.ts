@@ -18,6 +18,23 @@ export type MicrosoftIdentityInput = {
   microsoftSub?: string | null
 }
 
+export class UsersApiError extends Error {
+  status: number
+  method: string
+  path: string
+  responseText: string
+
+  constructor(args: { status: number; method: string; path: string; responseText: string }) {
+    const { status, method, path, responseText } = args
+    super(`${method} ${path} failed: ${status} ${responseText}`)
+    this.name = 'UsersApiError'
+    this.status = status
+    this.method = method
+    this.path = path
+    this.responseText = responseText
+  }
+}
+
 function actorHeaders(actor?: UserRequestActor): HeadersInit {
   if (!actor) return {}
   const headers: Record<string, string> = {}
@@ -35,6 +52,7 @@ function actorHeaders(actor?: UserRequestActor): HeadersInit {
 }
 
 async function request<T>(path: string, init?: RequestInit, actor?: UserRequestActor): Promise<T> {
+  const method = init?.method || 'GET'
   const res = await fetch(path, {
     ...init,
     headers: {
@@ -44,8 +62,13 @@ async function request<T>(path: string, init?: RequestInit, actor?: UserRequestA
     },
   })
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`${init?.method || 'GET'} ${path} failed: ${res.status} ${text}`)
+    const responseText = await res.text().catch(() => '')
+    throw new UsersApiError({
+      status: res.status,
+      method,
+      path,
+      responseText,
+    })
   }
   return res.json() as Promise<T>
 }

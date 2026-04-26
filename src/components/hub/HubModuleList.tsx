@@ -1,6 +1,6 @@
 'use client'
 
-import { ModuleCard } from '@/components/hub/ModuleCard'
+import { ModuleCard } from '@/components/shared/ModuleCard'
 import type { ModuleDefinition } from '@/modules/registry'
 import styles from './HubModuleList.module.css'
 
@@ -57,4 +57,3 @@ export function HubModuleList({ modules }: HubModuleListProps) {
     </div>
   )
 }
-

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { AccountInfo } from '@azure/msal-browser'
 import { useAuth } from '@/context/AuthContext'
 import { getUserByIdentity, upsertUser } from '@/lib/users'
+import { getAccountMicrosoftIdentity } from '@/lib/microsoft-identity'
 import type { AppUser, PagePermission } from '@/types/auth'
 
 type UserContextType = {
@@ -27,13 +28,13 @@ const UserContext = createContext<UserContextType>({
 const E2E_AUTH_BYPASS = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
 const USER_LOAD_RETRY_DELAYS_MS = [0, 1200, 3000]
 const BUILTIN_OWNER_EMAILS = new Set(['kiana.micari@vtwo.co'])
-const OWNER_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides']
+const OWNER_PERMISSIONS: PagePermission[] = ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns']
 
 function getAccountOid(account: AccountInfo | null) {
+  const identity = getAccountMicrosoftIdentity(account)
+  if (identity.microsoftOid) return identity.microsoftOid
+  if (identity.microsoftSub) return identity.microsoftSub
   if (!account) return null
-  const claims = account.idTokenClaims as Record<string, unknown> | undefined
-  if (typeof claims?.oid === 'string' && claims.oid) return claims.oid
-  if (typeof claims?.sub === 'string' && claims.sub) return claims.sub
   if (account.localAccountId) return account.localAccountId
   if (account.homeAccountId) return account.homeAccountId
   return null
@@ -86,7 +87,7 @@ function getBypassUser(account: AccountInfo | null): AppUser {
     email: account?.username || 'qa-admin@example.com',
     name: getAccountName(account) || 'QA Admin',
     role: 'admin',
-    page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides'],
+    page_permissions: ['accounts', 'hr', 'sdr', 'crm', 'slides', 'reviews', 'campaigns'],
     created_at: now,
     updated_at: now,
   }
@@ -142,14 +143,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (attempt > 0) await delay(USER_LOAD_RETRY_DELAYS_MS[attempt] || 0)
         try {
           const lookupEmail = account.username || ''
-          const actorIdentity = { userId, email: lookupEmail }
+          const microsoftIdentity = getAccountMicrosoftIdentity(account)
+          const actorIdentity = { userId, email: lookupEmail, ...microsoftIdentity }
           let row = await getUserByIdentity(userId, lookupEmail, actorIdentity)
-          if (!row && account.username) {
+          const needsIdentityReconcile = !!row && row.user_id !== userId
+          if ((!row || needsIdentityReconcile) && account.username) {
             row = await upsertUser({
               user_id: userId,
               email: account.username,
               name: getAccountName(account),
-            }, actorIdentity)
+            }, microsoftIdentity, actorIdentity)
           }
           setAppUser(row)
           setLoadError(null)

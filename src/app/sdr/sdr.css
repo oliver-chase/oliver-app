@@ -14,7 +14,6 @@ html,body { background: var(--surface2); color: var(--text); }
 .page-subtitle{font-size:var(--font-size-xs);color:var(--gray);margin-top:var(--spacing-2xs)}
 .topbar-hamburger { display: none; width: var(--spacing-xl); height: var(--spacing-xl); align-items: center; justify-content: center; cursor: pointer; color: var(--gray); background: none; border: none; border-radius: var(--radius); }
 .topbar-hamburger:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
-.topbar-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--text); flex: 1; }
 .sidebar-backdrop { display: none; position: fixed; inset: 0; background: var(--color-modal-overlay); z-index: 49; pointer-events: none; }
 .sidebar-backdrop.open { display: block; pointer-events: auto; }
 

@@ -89,6 +89,14 @@
 }
 .sidebar-back:hover { color: var(--color-text-inverse); }
 
+/* Shared topbar right-aligned content container used by module shells. */
+.module-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Org chart node — fixed size, content never expands the box
  * ══════════════════════════════════════════════════════════════════════════ */

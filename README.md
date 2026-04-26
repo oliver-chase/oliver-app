@@ -23,6 +23,8 @@ npm run build        # produces out/
 npm run lint         # token policy + story schema checks
 npm run typecheck
 npm run test:smoke   # starts/uses localhost:3001 automatically
+npm run test:smoke:mobile
+npm run test:smoke:all
 ```
 
 Environment variables (`.env.local`):
@@ -46,6 +48,10 @@ OWNER_EMAILS=<comma-separated owner emails>     # optional additive owners (kian
 # USERS_TRUST_CLIENT_IDENTITY=1                  # local/dev only (when not behind Cloudflare Access)
 # SLIDES_TRUST_CLIENT_IDENTITY=1                 # optional slides override; defaults to trusted app identity when unset
 # SLIDES_TRUST_CLIENT_IDENTITY=0                 # enforce CF Access-only identity for /api/slides
+# SLIDES_JOB_TOKEN=<secret>                      # optional: enables unattended scheduled approval SLA sweeps via x-slides-job-token
+# SLIDES_AUTOMATION_ACTOR_USER_ID=slides-automation
+# SLIDES_AUTOMATION_ACTOR_EMAIL=slides-automation@vtwo.co
+# SLIDES_APPROVAL_SWEEP_MIN_INTERVAL_MINUTES=60  # optional interval throttle for scheduled sweeps (min 5)
 
 # SDR draft approvals (/api/sdr-approve -> v-two-sdr approval-handler.yml)
 SDR_GITHUB_PAT=<github token with actions:write on oliver-chase/v-two-sdr>
@@ -76,7 +82,8 @@ git checkout staging
 ```
 
 CI verifies on every push. Local QA should use `npm run typecheck`, `npm run lint`,
-`npm run build`, and `npm run test:smoke` for browser smoke coverage.
+`npm run build`, and `npm run test:smoke:all` for required browser smoke coverage
+across desktop and mobile viewports.
 
 ## Commit and PR traceability
 
@@ -91,9 +98,12 @@ Use grouped commits tied to one epic ownership boundary, with story IDs and QA g
 ## QA workflow
 
 - Static gates: `npm run typecheck`, `npm run lint`, `npm run build`
-- Browser smoke: `npm run test:smoke` (Playwright manages the local server on `127.0.0.1:3001`)
+- `npm run lint` includes `check-module-boundaries` to enforce module isolation.
+- Browser smoke (required): `npm run test:smoke:all`
+- Desktop smoke only: `npm run test:smoke` (Playwright manages the local server on `127.0.0.1:3001`)
+- Mobile smoke only: `npm run test:smoke:mobile` (Pixel 7 profile, same core click paths)
 - Pre-push commit-size gate: `npm run check-epic-size`
-- Current smoke spec: `tests/e2e/frontend-smoke.spec.ts`
+- Current smoke specs: `tests/e2e/frontend-smoke.spec.ts` (desktop), `tests/e2e/mobile-clickpaths.spec.ts` (mobile)
 - Deep-pass checklist: `src/tech-debt/deep-qa-workflow.md`
 - Commit grouping policy: `src/tech-debt/commit-grouping-and-qa-gates.md`
 - Release traceability log: `src/tech-debt/release-traceability.md`
@@ -118,6 +128,7 @@ src/
     hr/                 HR page shell + hr.css
     sdr/                SDR page shell + sdr.css
     slides/             Slide editor shell + slides.css (HTML import + canvas editing workflow)
+    reviews/            Self-led growth/review scaffold module shell + reviews.css
     crm/ admin/ login/ design-system/
     page.tsx            Hub (module landing page)
     layout.tsx          Root layout
@@ -127,7 +138,7 @@ src/
     accounts/           Account view, portfolio, sections, org chart, picker, chatbot
     hr/                 Dashboard, Hiring, Directory, Onboarding, Inventory,
                         Assignments, Tracks, Reports, Settings + cp-actions, step-flow
-    sdr/ crm/ admin/ layout/ shared/ auth/
+    sdr/ reviews/ crm/ admin/ layout/ shared/ auth/
   hooks/                useAccountsData, useFilterSync, useSoftDelete
   lib/                  supabase client, db helpers, export utilities
   context/              AuthContext + mounted UserContext
@@ -138,6 +149,51 @@ src/
 functions/api/          CF Pages Functions (AI chat, parse, admin keys, SDR)
 public/                 Static assets
 ```
+
+## Module sections
+
+The app is intentionally split so one module can be built or maintained with minimal cross-reading.
+
+Hub modules (current product modules):
+
+- Account Planning: `src/app/accounts/*` + `src/components/accounts/*`.
+- HR & Hiring: `src/app/hr/*` + `src/components/hr/*` (Hiring is part of `hr`, not a separate top-level module).
+- SDR: `src/app/sdr/*` + `src/components/sdr/*`.
+- Slides: `src/app/slides/*` + `src/components/slides/*`.
+- Campaign Content & Posting: `src/app/campaigns/*` + `src/components/campaigns/*` (skeleton route and backlog scaffolding live).
+
+Planned module scaffolds (not currently shown on hub):
+
+- Self-Led Growth & Review: `src/app/reviews/*` + `src/components/reviews/*` (MVP workspace live; persistence migration: `supabase/migrations/011_reviews_module_foundation.sql`).
+- CRM & Business Development: `src/app/crm/*`.
+
+Admin workspace (separate from hub modules):
+
+- Admin + Design System pages: `src/app/admin/*`, `src/app/design-system/*`.
+- Admin workspace components/config: `src/components/admin/*`, `src/modules/admin-nav.ts`, `src/modules/design-catalog.ts`.
+
+Overarching/core layer (shared across all modules/workspaces):
+
+- Auth and permission backbone: `src/context/*`, `src/modules/*`, `src/app/layout.tsx`.
+- Shared chatbot baseline: `src/components/shared/OliverDock.tsx`, `src/components/shared/OliverContext.tsx`.
+- Shared design system + visual rules: `src/app/tokens.css`, `src/app/components*.css`, margin/spacing rules, and token policies.
+- Hub shell/navigation: `src/app/page.tsx`, `src/components/hub/*`.
+
+Module boundary rules:
+
+- Hub modules may import shared/core primitives (`shared`, `lib`, `types`, `modules`) but not other hub modules.
+- Hub modules may not import admin workspace internals.
+- Admin workspace may not import hub module internals.
+- Feature scopes (hub modules + admin workspace) may not import hub implementation internals directly.
+- Enforcement: `npm run check-module-boundaries`.
+
+Module baseline standard (applies to every module):
+
+- Shared baseline (always reused): design tokens/CSS contracts, shared app primitives, auth/access guard, and Oliver dock core.
+- Chatbot baseline pattern: shared dock + shared registration contract (`OliverProvider`, `useRegisterOliver`) + module-local commands/flows.
+- Module-specific scope: each module owns only its route shell, UI components, and module chatbot actions/flows.
+- Locked visual/dev consistency (margins, spacing, token policy, dropdown patterns, etc.) applies to every page and module.
+- Mobile-first baseline is mandatory across every module and shared hub surface. New routes, components, and navigation flows must be usable on phone viewports without horizontal overflow or blocked actions, and must ship with passing mobile smoke coverage.
 
 ## Design system
 

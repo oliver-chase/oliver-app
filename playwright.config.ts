@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   reporter: 'list',
   webServer: {
     command: 'npm run dev -- --port 3001',

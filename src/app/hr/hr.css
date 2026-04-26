@@ -27,8 +27,8 @@ html,body{background:var(--bg);color:var(--text)}
 /* sidebar backdrop — shown on mobile when sidebar is open */
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:var(--color-modal-overlay);z-index:49;pointer-events:none}
 .sidebar-backdrop.open{display:block;pointer-events:auto}
-/* push global search to the right of topbar */
-.gs-wrap{margin-left:auto}
+/* module topbar handles right alignment; keep search wrapper layout-only */
+.gs-wrap{margin-left:0}
 .sync-status{font-size:var(--font-size-xs);color:var(--text3);display:flex;align-items:center;gap:var(--spacing-5)}
 .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
 .sync-dot.syncing{background:var(--amber);animation:pulse 1s infinite}

@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { dbWrite } from '@/lib/db-helpers'
@@ -21,6 +20,8 @@ import { useAppModal } from '@/components/shared/AppModal'
 import { useRegisterOliver } from '@/components/shared/OliverContext'
 import type { OliverConfig, OliverAction } from '@/components/shared/OliverContext'
 import { triggerOliverUpload } from '@/components/shared/OliverDock'
+import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
+import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
 import { useModuleAccess } from '@/modules/use-module-access'
 import { HR_COMMANDS } from '@/app/hr/commands'
 import { buildHrFlows } from '@/app/hr/flows'
@@ -437,8 +438,7 @@ export default function HrPage() {
         aria-hidden="true"
       />
       <nav className="app-sidebar" id="sidebar" aria-label="HR navigation">
-        <div className="app-sidebar-logo">HR &amp; People Ops</div>
-        <Link href="/" className="sidebar-back">&larr; Back to Hub</Link>
+        <ModuleSidebarHeader title="HR & People Ops" />
         {SECTIONS.map(section => (
           <div key={section || 'main'} className="app-sidebar-section">
             {section && <div className="app-sidebar-section-label">{section}</div>}
@@ -462,24 +462,18 @@ export default function HrPage() {
       </nav>
 
       <div className="main">
-        <header className="topbar">
-          <button
-            className="topbar-hamburger"
-            onClick={() => setSidebarOpen(o => !o)}
-            aria-label="Toggle navigation"
-            aria-expanded={sidebarOpen}
-            aria-controls="sidebar"
-          >
-            &#9776;
-          </button>
-          <div className="gs-wrap" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+        <ModuleTopbar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        >
+          <div className="gs-wrap">
             <GlobalSearchButton onClick={() => setSearchOpen(true)} />
           </div>
           <div className="sync-status" aria-live="polite">
             <div className={'sync-dot' + (syncState === 'syncing' ? ' syncing' : syncState === 'error' ? ' error' : '')} />
             <span id="sync-text">{syncState === 'syncing' ? 'Syncing...' : syncState === 'error' ? 'Error' : 'Synced'}</span>
           </div>
-        </header>
+        </ModuleTopbar>
 
         <main id="main-content">
           {renderPage()}

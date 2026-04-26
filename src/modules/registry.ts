@@ -64,6 +64,15 @@ const MODULES: ModuleDefinition[] = [
     showInHub: false,
   },
   {
+    id: 'campaigns',
+    name: 'Campaign Content & Posting',
+    description: 'Campaign planning, content lifecycle, review queue, claiming, posting, and execution reporting.',
+    href: '/campaigns',
+    pageLabel: 'Campaign Content & Posting',
+    defaultPlaceholder: 'Find content, review queue, claims, reminders, and campaign status...',
+    defaultGreeting: "Hi, I'm Oliver. You're viewing Campaign Content & Posting. I can help you create drafts, review content, claim posts, and check campaign status.",
+  },
+  {
     id: 'crm',
     name: 'CRM & Business Development',
     description: 'Client relationships, opportunity tracking, and proposal management.',
@@ -94,6 +103,8 @@ function parseModuleIdList(rawValue: string | undefined): Set<ModuleId> {
 }
 
 const DISABLED_MODULES = parseModuleIdList(process.env.NEXT_PUBLIC_DISABLED_MODULES)
+const FORCE_ENABLED_MODULES = parseModuleIdList(process.env.NEXT_PUBLIC_ENABLED_MODULES)
+const FORCE_HUB_VISIBLE_MODULES = parseModuleIdList(process.env.NEXT_PUBLIC_HUB_VISIBLE_MODULES)
 
 export function getModuleById(id: ModuleId): ModuleDefinition {
   const module = MODULE_BY_ID.get(id)
@@ -106,13 +117,21 @@ export function getAllModules(): ModuleDefinition[] {
 }
 
 export function getPermissionModules(): ModuleDefinition[] {
-  return MODULES.filter(module => module.showInHub !== false)
+  return MODULES.filter(module => isModuleHubVisible(module.id))
 }
 
 export function isModuleEnabled(id: ModuleId): boolean {
   const module = getModuleById(id)
+  if (DISABLED_MODULES.has(id)) return false
+  if (FORCE_ENABLED_MODULES.has(id)) return true
   if (module.enabledByDefault === false) return false
-  return !DISABLED_MODULES.has(id)
+  return true
+}
+
+export function isModuleHubVisible(id: ModuleId): boolean {
+  const module = getModuleById(id)
+  if (FORCE_HUB_VISIBLE_MODULES.has(id)) return true
+  return module.showInHub !== false
 }
 
 export function getHubModules(): ModuleDefinition[] {

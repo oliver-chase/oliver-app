@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import SdrOverview from '@/components/sdr/SdrOverview'
@@ -16,6 +15,8 @@ import { buildModuleOliverConfig } from '@/modules/oliver-config'
 import { useModuleAccess } from '@/modules/use-module-access'
 import { useUser } from '@/context/UserContext'
 import type { SdrProspect, SdrApprovalItem, SdrSend, SdrTab, SdrFilters } from '@/components/sdr/types'
+import { ModuleSidebarHeader } from '@/components/shared/ModuleSidebarHeader'
+import { ModuleTopbar } from '@/components/shared/ModuleTopbar'
 
 const TABS: { id: SdrTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -159,8 +160,7 @@ export default function SdrPage() {
         aria-hidden="true"
       />
       <nav className="app-sidebar" id="sidebar" aria-label="SDR navigation">
-        <div className="app-sidebar-logo">SDR &amp; Outreach</div>
-        <Link href="/" className="sidebar-back">← Back to Hub</Link>
+        <ModuleSidebarHeader title="SDR & Outreach" />
         <div className="app-sidebar-section">
           {TABS.map(t => (
             <div
@@ -178,17 +178,10 @@ export default function SdrPage() {
       </nav>
 
       <div className="main">
-        <header className="topbar">
-          <button
-            className="topbar-hamburger"
-            onClick={() => setSidebarOpen(o => !o)}
-            aria-label="Toggle navigation"
-            aria-expanded={sidebarOpen}
-            aria-controls="sidebar"
-          >
-            &#9776;
-          </button>
-          <span className="topbar-name">SDR &amp; Outreach</span>
+        <ModuleTopbar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        >
           <div className="sync-indicator">
             <div className={'sync-dot' + (syncState === 'syncing' ? ' syncing' : syncState === 'error' ? ' error' : '')} />
             <span>{syncState === 'syncing' ? 'Loading...' : syncState === 'error' ? 'Error' : 'Synced'}</span>
@@ -201,7 +194,7 @@ export default function SdrPage() {
               &#8635;
             </button>
           </div>
-        </header>
+        </ModuleTopbar>
 
         <main id="main-content">
           {loading ? (

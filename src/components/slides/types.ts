@@ -12,11 +12,13 @@ export type SlideComponentType =
 export interface SlideComponentStyle {
   fontSize?: number
   fontWeight?: number
+  fontFamily?: string
   color?: string
   backgroundColor?: string
   fontStyle?: 'normal' | 'italic'
   lineHeight?: number
   textAlign?: 'left' | 'center' | 'right' | 'justify'
+  textAutoSize?: boolean
 }
 
 export interface SlideComponent {
