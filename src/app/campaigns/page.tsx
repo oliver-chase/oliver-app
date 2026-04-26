@@ -24,11 +24,13 @@ import {
   createCampaignAsset,
   createCampaignContentDraft,
   createCampaignReminder,
+  deleteCampaignReminder,
   isCampaignsAccessDenied,
   isCampaignsSchemaMissing,
   listCampaignActivityLogs,
   listCampaignAssets,
   listCampaignContentItems,
+  listCampaignReminders,
   listCampaigns,
   isCampaignAssetsTableAvailable,
   markCampaignContentPosted,
@@ -44,8 +46,10 @@ import {
   type CampaignSyncState,
   unclaimCampaignContent,
   updateCampaign,
+  updateCampaignContentDraftBody,
   updateCampaignContentPostUrl,
   updateCampaignContentSchedule,
+  updateCampaignReminder,
 } from '@/lib/campaigns'
 import type {
   CampaignActivityLog,
@@ -62,13 +66,14 @@ import type {
   CampaignReportSummary,
 } from '@/types/campaigns'
 
-type CampaignSection = 'list' | 'content' | 'review' | 'calendar' | 'reports'
+type CampaignSection = 'list' | 'content' | 'review' | 'calendar' | 'reminders' | 'reports'
 
 const SECTION_TO_ANCHOR: Record<CampaignSection, string> = {
   list: 'campaigns-list',
   content: 'campaigns-content',
   review: 'campaigns-review',
   calendar: 'campaigns-calendar',
+  reminders: 'campaigns-reminders',
   reports: 'campaigns-reports',
 }
 
@@ -77,6 +82,7 @@ const SECTION_TO_ROUTE: Record<CampaignSection, string> = {
   content: '/campaigns/content',
   review: '/campaigns/review-queue',
   calendar: '/campaigns/calendar',
+  reminders: '/campaigns/reminders',
   reports: '/campaigns/reports',
 }
 
@@ -91,6 +97,8 @@ function sectionFromPathname(pathname: string): CampaignSection | null {
       return 'review'
     case '/campaigns/calendar':
       return 'calendar'
+    case '/campaigns/reminders':
+      return 'reminders'
     case '/campaigns/reports':
       return 'reports'
     default:
@@ -112,6 +120,7 @@ const CONTENT_TYPE_OPTIONS: Array<{ value: CampaignContentItem['content_type']; 
 ]
 
 const CAMPAIGNS_ACCESS_POLICY_MESSAGE = 'Campaign module access is blocked by Supabase RLS/permissions. Confirm policy coverage for campaign_* tables.'
+const REPORT_FILTERS_STORAGE_KEY = 'campaigns-report-filters-v1'
 
 type CampaignReportPreset = 'last-7' | 'last-30' | 'current-month' | 'custom'
 
@@ -124,6 +133,7 @@ type CampaignReportFilters = {
 }
 
 type ReviewQueueSort = 'oldest' | 'newest' | 'campaign' | 'topic'
+type ReviewQueueFilter = 'needs-review' | 'all' | 'unclaimed' | 'assigned-to-me' | 'changes-requested' | 'approved-unscheduled' | 'overdue'
 type ContentLibraryOwnershipFilter = 'all' | 'created-by-me' | 'claimed-by-me' | 'unclaimed'
 type ContentLibraryViewMode = 'action' | 'all'
 type CalendarSort = 'overdue-first' | 'soonest' | 'latest' | 'title'
@@ -146,6 +156,13 @@ type CalendarFilters = {
   channel: string
   timing: CalendarTimingFilter
   ownership: 'all' | 'mine'
+}
+
+type ReminderEditorDraft = {
+  contentId: string
+  userId: string
+  reminderType: CampaignReminder['reminder_type']
+  scheduledFor: string
 }
 
 type CampaignReasonModalState = {
@@ -228,7 +245,33 @@ function isHttpUrl(value: string) {
 
 function campaignTransitionMessageFromError(error: unknown) {
   const transitionError = parseCampaignTransitionError(error)
-  if (!transitionError) return null
+  if (!transitionError) {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : ''
+    const normalized = rawMessage.toLowerCase()
+    if (normalized.includes('not found') || normalized.includes('stale')) {
+      return {
+        message: 'Campaign item not found or stale. Refresh and retry.',
+        refreshRecommended: true,
+      }
+    }
+    if (normalized.includes('does not exist')) {
+      return {
+        message: 'Campaign item not found or stale. Refresh and retry.',
+        refreshRecommended: true,
+      }
+    }
+    if (normalized.includes('reason_code is required')) {
+      return {
+        message: 'Reason_code is required.',
+        refreshRecommended: false,
+      }
+    }
+    return null
+  }
 
   switch (transitionError.code) {
     case 'CMP_NOT_FOUND':
@@ -247,11 +290,15 @@ function campaignTransitionMessageFromError(error: unknown) {
         refreshRecommended: false,
       }
     case 'CMP_VALIDATION_FAILED':
+      {
+      const reason = transitionError.reason
+        ? `${transitionError.reason.charAt(0).toUpperCase()}${transitionError.reason.slice(1)}`
+        : 'Please provide the required information and retry.'
+      const message = /[.!?]$/.test(reason) ? reason : `${reason}.`
       return {
-        message: transitionError.reason
-          ? `${transitionError.reason.charAt(0).toUpperCase()}${transitionError.reason.slice(1)}`
-          : 'Please provide the required information and retry.',
+        message,
         refreshRecommended: false,
+      }
       }
     case 'CMP_CONFLICT':
       return {
@@ -275,6 +322,23 @@ function humanizeActionType(value: string) {
   const cleaned = value.trim().replace(/[_-]+/g, ' ')
   if (!cleaned) return 'activity'
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+}
+
+function canonicalStatusFromItem(item: CampaignContentItem) {
+  if (item.lifecycle_status) return item.lifecycle_status
+  if (item.status === 'draft') return 'draft'
+  if (item.status === 'needs_review') return 'in_review'
+  if (item.status === 'unclaimed') return 'approved'
+  if (item.status === 'claimed') return 'scheduled'
+  if (item.status === 'posted' && item.archived_at) return 'archived'
+  if (item.status === 'posted') return 'posted'
+  return 'draft'
+}
+
+function formatCanonicalStatusLabel(value: string) {
+  if (value === 'in_review') return 'In Review'
+  if (value === 'changes_requested') return 'Changes Requested'
+  return humanizeActionType(value)
 }
 
 function toDateTimeLocalValue(input: string | null) {
@@ -473,7 +537,9 @@ function resolveNextOpenSlotDate(params: {
 function startOfWeek(dateValue: Date) {
   const value = new Date(dateValue)
   value.setHours(0, 0, 0, 0)
-  value.setDate(value.getDate() - value.getDay())
+  const day = value.getDay()
+  const offset = (day + 6) % 7
+  value.setDate(value.getDate() - offset)
   return value
 }
 
@@ -547,6 +613,7 @@ export default function CampaignsPage() {
     return 'Start date must be on or before end date.'
   }, [reportFiltersDraft.endDate, reportFiltersDraft.startDate])
   const [reviewQueueSort, setReviewQueueSort] = useState<ReviewQueueSort>('oldest')
+  const [reviewQueueFilter, setReviewQueueFilter] = useState<ReviewQueueFilter>('needs-review')
   const [reviewSelectedById, setReviewSelectedById] = useState<Record<string, boolean>>({})
   const [reviewBulkRunning, setReviewBulkRunning] = useState(false)
   const [reviewBulkMessage, setReviewBulkMessage] = useState<string | null>(null)
@@ -578,7 +645,7 @@ export default function CampaignsPage() {
     campaignId: '',
     channel: 'all',
     timing: 'all',
-    ownership: 'all',
+    ownership: 'mine',
   })
   const [focusedCampaignId, setFocusedCampaignId] = useState('')
   const [calendarView, setCalendarView] = useState<CalendarView>('weekly')
@@ -587,7 +654,17 @@ export default function CampaignsPage() {
   const [campaignDetailDraft, setCampaignDetailDraft] = useState<CampaignDetailDraft>(() => buildCampaignDetailDraft(null))
   const [campaignDetailSaving, setCampaignDetailSaving] = useState(false)
   const [contentFocusId, setContentFocusId] = useState('')
+  const [contentPanelId, setContentPanelId] = useState('')
+  const [contentPanelDraftBody, setContentPanelDraftBody] = useState('')
+  const [contentPanelSaving, setContentPanelSaving] = useState(false)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
+  const [reminders, setReminders] = useState<CampaignReminder[]>([])
+  const [reminderEditor, setReminderEditor] = useState<ReminderEditorDraft>({
+    contentId: '',
+    userId: appUser?.user_id || '',
+    reminderType: 'in-app',
+    scheduledFor: '',
+  })
 
   const [campaignDraft, setCampaignDraft] = useState({
     name: '',
@@ -727,19 +804,120 @@ export default function CampaignsPage() {
   }, [selectedCampaign])
 
   useEffect(() => {
+    if (!appUser?.user_id) return
+    setReminderEditor(previous => (
+      previous.userId
+        ? previous
+        : { ...previous, userId: appUser.user_id }
+    ))
+  }, [appUser?.user_id])
+
+  useEffect(() => {
     if (!infoMessage) return
     const timer = window.setTimeout(() => setInfoMessage(null), 2800)
     return () => window.clearTimeout(timer)
   }, [infoMessage])
 
-  const queueNeedsReview = useMemo(
-    () => contentItems.filter(item => item.status === 'needs_review'),
-    [contentItems],
+  const contentPanelItem = useMemo(
+    () => contentItems.find(item => item.id === contentPanelId) || null,
+    [contentItems, contentPanelId],
   )
+  const contentPanelActivity = useMemo(() => {
+    if (!contentPanelItem) return []
+    return activityLogs
+      .filter(log => log.entity_type === 'campaign-content' && log.entity_id === contentPanelItem.id)
+      .slice(0, 8)
+  }, [activityLogs, contentPanelItem])
+  const contentPanelReviewThread = useMemo(() => {
+    if (!contentPanelItem) return []
+    return contentPanelActivity
+      .filter(log => /review|approve|reject|submit/i.test(log.action_type))
+      .slice(0, 6)
+  }, [contentPanelActivity, contentPanelItem])
+  const contentPanelMissingMetadata = useMemo(() => {
+    if (!contentPanelItem) return []
+    const missing: string[] = []
+    if (!contentPanelItem.title?.trim()) missing.push('title')
+    if (!contentPanelItem.topic?.trim()) missing.push('topic')
+    if (!contentPanelItem.body?.trim()) missing.push('body')
+    return missing
+  }, [contentPanelItem])
+  const contentPanelIsOverdue = useMemo(() => {
+    if (!contentPanelItem?.scheduled_for) return false
+    if (contentPanelItem.status !== 'claimed') return false
+    return new Date(contentPanelItem.scheduled_for).getTime() < Date.now()
+  }, [contentPanelItem])
+  useEffect(() => {
+    if (!contentPanelItem) {
+      setContentPanelDraftBody('')
+      return
+    }
+    setContentPanelDraftBody(contentPanelItem.body || '')
+  }, [contentPanelItem])
+
+  useEffect(() => {
+    if (!contentPanelId) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setContentPanelId('')
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [contentPanelId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.sessionStorage.getItem(REPORT_FILTERS_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as {
+        draft?: CampaignReportFilters
+        applied?: CampaignReportFilters
+      }
+      if (parsed.draft) setReportFiltersDraft(parsed.draft)
+      if (parsed.applied) setReportFiltersApplied(parsed.applied)
+    } catch {
+      // ignore storage parse failures
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(REPORT_FILTERS_STORAGE_KEY, JSON.stringify({
+      draft: reportFiltersDraft,
+      applied: reportFiltersApplied,
+    }))
+  }, [reportFiltersApplied, reportFiltersDraft])
 
   const sortedReviewQueue = useMemo(() => {
-    const rows = [...queueNeedsReview]
+    const now = Date.now()
+    const baseRows = contentItems.filter(item => {
+      const isChangesRequested = item.status === 'draft' && !!item.rejection_reason
+      const isApprovedUnscheduled = item.status === 'unclaimed' && !item.scheduled_for
+      const isOverdue = item.status === 'claimed' && !!item.scheduled_for && new Date(item.scheduled_for).getTime() < now
+
+      if (reviewQueueFilter === 'needs-review') return item.status === 'needs_review'
+      if (reviewQueueFilter === 'unclaimed') return item.status === 'unclaimed'
+      if (reviewQueueFilter === 'assigned-to-me') return item.status === 'claimed' && item.posting_owner_id === appUser?.user_id
+      if (reviewQueueFilter === 'changes-requested') return isChangesRequested
+      if (reviewQueueFilter === 'approved-unscheduled') return isApprovedUnscheduled
+      if (reviewQueueFilter === 'overdue') return isOverdue
+
+      return (
+        item.status === 'needs_review'
+        || item.status === 'unclaimed'
+        || item.status === 'claimed'
+        || isChangesRequested
+      )
+    })
+
+    const rows = [...baseRows]
     rows.sort((left, right) => {
+      const leftOverdue = left.status === 'claimed' && !!left.scheduled_for && new Date(left.scheduled_for).getTime() < now
+      const rightOverdue = right.status === 'claimed' && !!right.scheduled_for && new Date(right.scheduled_for).getTime() < now
+      if (leftOverdue && !rightOverdue) return -1
+      if (!leftOverdue && rightOverdue) return 1
+
       if (reviewQueueSort === 'campaign') {
         const leftCampaign = (left.campaign_id ? campaignNameById.get(left.campaign_id) : '') || 'Unassigned'
         const rightCampaign = (right.campaign_id ? campaignNameById.get(right.campaign_id) : '') || 'Unassigned'
@@ -754,11 +932,16 @@ export default function CampaignsPage() {
       return leftCreated - rightCreated
     })
     return rows
-  }, [campaignNameById, queueNeedsReview, reviewQueueSort])
+  }, [appUser?.user_id, campaignNameById, contentItems, reviewQueueFilter, reviewQueueSort])
+
+  const reviewQueueNeedsReviewRows = useMemo(
+    () => sortedReviewQueue.filter(item => item.status === 'needs_review'),
+    [sortedReviewQueue],
+  )
 
   const selectedReviewIds = useMemo(
-    () => sortedReviewQueue.filter(item => reviewSelectedById[item.id]).map(item => item.id),
-    [reviewSelectedById, sortedReviewQueue],
+    () => reviewQueueNeedsReviewRows.filter(item => reviewSelectedById[item.id]).map(item => item.id),
+    [reviewQueueNeedsReviewRows, reviewSelectedById],
   )
 
   const queueDraft = useMemo(
@@ -864,6 +1047,36 @@ export default function CampaignsPage() {
     () => (selectedCampaign ? campaignStatsById.get(selectedCampaign.id) || null : null),
     [campaignStatsById, selectedCampaign],
   )
+
+  const capabilityMatrix = useMemo(() => ({
+    canReview: isAdmin,
+    canAdminOverride: isAdmin,
+    canRunJobs: isAdmin,
+    canEditOwnDraft: (item: CampaignContentItem) => item.status === 'draft' && item.created_by === appUser?.user_id,
+    canReleaseClaim: (item: CampaignContentItem) => item.status === 'claimed' && (isAdmin || item.posting_owner_id === appUser?.user_id),
+    canClaim: (item: CampaignContentItem) => item.status === 'unclaimed',
+    canReassignToMe: (item: CampaignContentItem) => isAdmin && item.status === 'claimed' && item.posting_owner_id !== appUser?.user_id,
+  }), [appUser?.user_id, isAdmin])
+  const contentPanelPrimaryAction = useMemo(() => {
+    if (!contentPanelItem) return 'No action'
+    if (contentPanelItem.status === 'draft') {
+      return contentPanelItem.created_by === appUser?.user_id ? 'Next: Submit for Review' : 'Awaiting author update'
+    }
+    if (contentPanelItem.status === 'needs_review') {
+      return isAdmin ? 'Next: Approve or Request Changes' : 'Awaiting reviewer decision'
+    }
+    if (contentPanelItem.status === 'unclaimed') {
+      return 'Next: Claim and schedule'
+    }
+    if (contentPanelItem.status === 'claimed') {
+      return (isAdmin || contentPanelItem.posting_owner_id === appUser?.user_id)
+        ? 'Next: Post or release claim'
+        : 'Awaiting posting owner'
+    }
+    if (contentPanelItem.status === 'posted') return 'Posted'
+    return 'No action'
+  }, [appUser?.user_id, contentPanelItem, isAdmin])
+
 
   const focusedCampaignDensity = useMemo(() => {
     const focusedCampaign = campaigns.find(campaign => campaign.id === focusedCampaignId) || null
@@ -996,7 +1209,7 @@ export default function CampaignsPage() {
       if (item.status === 'posted') return false
       if (item.status === 'unclaimed') return true
       if (item.status === 'claimed' && item.posting_owner_id === appUser?.user_id) return true
-      if (item.status === 'draft' && item.created_by === appUser?.user_id) return true
+      if (item.status === 'draft') return true
       if (item.status === 'needs_review' && isAdmin) return true
       return false
     })
@@ -1007,7 +1220,7 @@ export default function CampaignsPage() {
       if (item.status === 'claimed' && item.posting_owner_id === appUser?.user_id) return 1
       if (item.status === 'needs_review' && isAdmin) return 2
       if (item.status === 'draft' && item.created_by === appUser?.user_id) return 3
-      if (item.status === 'draft') return 4
+      if (item.status === 'draft') return 3
       if (item.status === 'claimed') return 5
       return 6
     }
@@ -1394,6 +1607,50 @@ export default function CampaignsPage() {
     return rows
   }, [calendarSort, filteredMyClaimed])
 
+  const approvedUnscheduledRows = useMemo(
+    () => contentItems
+      .filter(item => item.status === 'unclaimed' && !item.scheduled_for)
+      .filter(item => !calendarFilters.campaignId || item.campaign_id === calendarFilters.campaignId)
+      .filter(item => calendarFilters.channel === 'all' || (item.intended_channel || '') === calendarFilters.channel)
+      .sort((left, right) => {
+        const leftUpdated = new Date(left.updated_at || 0).getTime()
+        const rightUpdated = new Date(right.updated_at || 0).getTime()
+        return rightUpdated - leftUpdated
+      }),
+    [calendarFilters.campaignId, calendarFilters.channel, contentItems],
+  )
+
+  const reminderRows = useMemo(() => {
+    const now = Date.now()
+    return reminders
+      .map(reminder => {
+        const content = contentItems.find(item => item.id === reminder.content_id) || null
+        const campaignLabel = content?.campaign_id
+          ? (campaignNameById.get(content.campaign_id) || content.campaign_id)
+          : 'Unassigned'
+        const dueAt = new Date(reminder.scheduled_for)
+        const isOverdue = reminder.status === 'pending' && !Number.isNaN(dueAt.getTime()) && dueAt.getTime() < now
+        return {
+          reminder,
+          content,
+          campaignLabel,
+          isOverdue,
+        }
+      })
+      .sort((left, right) => new Date(left.reminder.scheduled_for).getTime() - new Date(right.reminder.scheduled_for).getTime())
+  }, [campaignNameById, contentItems, reminders])
+
+  const reminderAssignableUsers = useMemo(() => {
+    const values = new Set<string>()
+    if (appUser?.user_id) values.add(appUser.user_id)
+    for (const row of contentItems) {
+      if (row.created_by) values.add(row.created_by)
+      if (row.posting_owner_id) values.add(row.posting_owner_id)
+      if (row.reviewer_id) values.add(row.reviewer_id)
+    }
+    return [...values].sort((left, right) => left.localeCompare(right))
+  }, [appUser?.user_id, contentItems])
+
   const assetsByContentId = useMemo(() => {
     const map = new Map<string, CampaignAsset[]>()
     for (const asset of assets) {
@@ -1504,16 +1761,18 @@ export default function CampaignsPage() {
         }).catch(() => [])
         : Promise.resolve([])
 
-      const [campaignRows, contentRows, assetRows, jobs, assetsSupported] = await Promise.all([
+      const [campaignRows, contentRows, assetRows, reminderRows, jobs, assetsSupported] = await Promise.all([
         listCampaigns(),
         listCampaignContentItems(),
         listCampaignAssets(),
+        listCampaignReminders().catch(() => []),
         exportJobsPromise,
         isCampaignAssetsTableAvailable().catch(() => false),
       ])
       setCampaigns(campaignRows)
       setContentItems(contentRows)
       setAssets(assetRows)
+      setReminders(reminderRows)
       setExportJobs(jobs)
       setCampaignAssetsAvailable(assetsSupported)
       void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
@@ -1584,7 +1843,7 @@ export default function CampaignsPage() {
     setReviewSelectedById(previous => {
       const next: Record<string, boolean> = {}
       let changed = false
-      for (const item of sortedReviewQueue) {
+      for (const item of reviewQueueNeedsReviewRows) {
         if (!previous[item.id]) continue
         next[item.id] = true
       }
@@ -1601,7 +1860,7 @@ export default function CampaignsPage() {
       }
       return changed ? next : previous
     })
-  }, [sortedReviewQueue])
+  }, [reviewQueueNeedsReviewRows])
 
   useEffect(() => {
     if (!reviewBulkRejectModalOpen) return
@@ -1669,6 +1928,20 @@ export default function CampaignsPage() {
 
   const removeAssetFromState = useCallback((assetId: string) => {
     setAssets(previous => previous.filter(asset => asset.id !== assetId))
+  }, [])
+
+  const upsertReminder = useCallback((row: CampaignReminder) => {
+    setReminders(previous => {
+      const existingIdx = previous.findIndex(reminder => reminder.id === row.id)
+      if (existingIdx < 0) return [row, ...previous]
+      const clone = [...previous]
+      clone[existingIdx] = row
+      return clone
+    })
+  }, [])
+
+  const removeReminderFromState = useCallback((reminderId: string) => {
+    setReminders(previous => previous.filter(reminder => reminder.id !== reminderId))
   }, [])
 
   const createCampaignFromInput = useCallback(async (payload: {
@@ -1898,6 +2171,22 @@ export default function CampaignsPage() {
     }
   }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
 
+  const saveDraftBodyFromInput = useCallback(async (payload: { contentId: string; body: string }) => {
+    if (!appUser?.user_id) throw new Error('No active user.')
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const updated = await updateCampaignContentDraftBody(payload.contentId, appUser.user_id, payload.body)
+      upsertContentItem(updated)
+      markMutationSuccess('Draft content updated.')
+      return updated
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+      throw exception
+    }
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertContentItem])
+
   const submitReviewFromInput = useCallback(async (payload: { contentId: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
     setSyncState('syncing')
@@ -1977,6 +2266,7 @@ export default function CampaignsPage() {
         reminder_type: payload.reminderType,
         scheduled_for: payload.scheduledFor,
       })
+      upsertReminder(created)
       markMutationSuccess('Reminder added.')
       return created
     } catch (exception) {
@@ -1984,7 +2274,78 @@ export default function CampaignsPage() {
       setErrorFromException(exception)
       throw exception
     }
-  }, [appUser?.user_id, markMutationSuccess, setErrorFromException])
+  }, [appUser?.user_id, markMutationSuccess, setErrorFromException, upsertReminder])
+
+  const updateReminderFromInput = useCallback(async (
+    reminderId: string,
+    payload: {
+      userId?: string
+      reminderType?: CampaignReminder['reminder_type']
+      scheduledFor?: string
+      status?: CampaignReminder['status']
+      sentAt?: string | null
+      failureReason?: string | null
+    },
+  ): Promise<CampaignReminder> => {
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const updated = await updateCampaignReminder(reminderId, {
+        user_id: payload.userId,
+        reminder_type: payload.reminderType,
+        scheduled_for: payload.scheduledFor,
+        status: payload.status,
+        sent_at: payload.sentAt,
+        failure_reason: payload.failureReason,
+      })
+      upsertReminder(updated)
+      markMutationSuccess('Reminder updated.')
+      return updated
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+      throw exception
+    }
+  }, [markMutationSuccess, setErrorFromException, upsertReminder])
+
+  const deleteReminderFromInput = useCallback(async (reminderId: string): Promise<void> => {
+    setSyncState('syncing')
+    setError(null)
+    try {
+      await deleteCampaignReminder(reminderId)
+      removeReminderFromState(reminderId)
+      markMutationSuccess('Reminder deleted.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+      throw exception
+    }
+  }, [markMutationSuccess, removeReminderFromState, setErrorFromException])
+
+  const reassignClaimToMeFromInput = useCallback(async (contentId: string): Promise<CampaignContentItem> => {
+    if (!appUser?.user_id) throw new Error('No active user.')
+    const current = contentItems.find(item => item.id === contentId)
+    if (!current) throw new Error('Content item not found.')
+    if (current.status !== 'claimed') throw new Error('Only claimed content can be reassigned.')
+    if (current.posting_owner_id === appUser.user_id) return current
+
+    setSyncState('syncing')
+    setError(null)
+    try {
+      await unclaimCampaignContent(contentId, appUser.user_id, 'Queue reassign to current reviewer')
+      const reclaimed = await claimCampaignContent(contentId, appUser.user_id, {
+        intended_channel: current.intended_channel || 'linkedin',
+        scheduled_for: current.scheduled_for || new Date().toISOString(),
+      })
+      upsertContentItem(reclaimed)
+      markMutationSuccess(`Reassigned to you: ${reclaimed.title}.`)
+      return reclaimed
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+      throw exception
+    }
+  }, [appUser?.user_id, contentItems, markMutationSuccess, setErrorFromException, upsertContentItem])
 
   const markPostedFromInput = useCallback(async (payload: { contentId: string; postUrl?: string }) => {
     if (!appUser?.user_id) throw new Error('No active user.')
@@ -2287,11 +2648,11 @@ export default function CampaignsPage() {
 
   const selectAllReviewFromInput = useCallback(() => {
     const next: Record<string, boolean> = {}
-    for (const item of sortedReviewQueue) {
+    for (const item of reviewQueueNeedsReviewRows) {
       next[item.id] = true
     }
     setReviewSelectedById(next)
-  }, [sortedReviewQueue])
+  }, [reviewQueueNeedsReviewRows])
 
   const clearReviewSelectionFromInput = useCallback(() => {
     setReviewSelectedById({})
@@ -2535,6 +2896,7 @@ export default function CampaignsPage() {
   }, [jumpTo])
 
   const openReviewQueueFromInput = useCallback(() => {
+    setReviewQueueFilter('needs-review')
     jumpTo('review')
   }, [jumpTo])
 
@@ -2551,12 +2913,66 @@ export default function CampaignsPage() {
       ownership: payload?.ownership ?? 'mine',
       timing: payload?.timing ?? 'all',
     }))
-    jumpTo('calendar')
+    router.push(SECTION_TO_ROUTE.calendar)
+    closeSidebar()
+  }, [closeSidebar, router])
+
+  const openRemindersFromInput = useCallback(() => {
+    jumpTo('reminders')
   }, [jumpTo])
 
   const openReportsFromInput = useCallback(() => {
     jumpTo('reports')
   }, [jumpTo])
+
+  const nextActions = useMemo(() => {
+    const rows: Array<{
+      id: string
+      label: string
+      detail: string
+      run: () => void
+    }> = []
+
+    if (reviewQueueNeedsReviewRows.length > 0) {
+      rows.push({
+        id: 'next-review',
+        label: 'Review Queue Needs Attention',
+        detail: `${reviewQueueNeedsReviewRows.length} items waiting review`,
+        run: () => {
+          setReviewQueueFilter('needs-review')
+          jumpTo('review')
+        },
+      })
+    }
+    if (approvedUnscheduledRows.length > 0) {
+      rows.push({
+        id: 'next-unscheduled',
+        label: 'Approved Content Needs Schedule',
+        detail: `${approvedUnscheduledRows.length} approved-unscheduled items`,
+        run: () => jumpTo('calendar'),
+      })
+    }
+    const overdueReminderCount = reminderRows.filter(row => row.isOverdue).length
+    if (overdueReminderCount > 0) {
+      rows.push({
+        id: 'next-overdue-reminders',
+        label: 'Overdue Reminders',
+        detail: `${overdueReminderCount} reminders overdue`,
+        run: () => jumpTo('reminders'),
+      })
+    }
+    const missingMetadataCount = contentItems.filter(item => !item.topic || !item.title || !item.body).length
+    if (missingMetadataCount > 0) {
+      rows.push({
+        id: 'next-metadata',
+        label: 'Missing Content Metadata',
+        detail: `${missingMetadataCount} rows with missing title/topic/body`,
+        run: () => jumpTo('content'),
+      })
+    }
+
+    return rows
+  }, [approvedUnscheduledRows.length, contentItems, jumpTo, reminderRows, reviewQueueNeedsReviewRows.length])
 
   async function copyToClipboard(text: string) {
     if (!text) return
@@ -2592,6 +3008,33 @@ export default function CampaignsPage() {
     jumpTo('content')
   }
 
+  function openContentPanelFromInput(contentId: string) {
+    const item = contentItems.find(row => row.id === contentId)
+    if (!item) return
+    setContentPanelId(contentId)
+  }
+
+  const saveContentPanelDraftFromInput = useCallback(async () => {
+    if (!contentPanelItem) return
+    if (!capabilityMatrix.canEditOwnDraft(contentPanelItem)) return
+    const draftBody = contentPanelDraftBody.trim()
+    if (!draftBody) {
+      setInfoMessage('Draft body is required.')
+      return
+    }
+    setContentPanelSaving(true)
+    try {
+      await saveDraftBodyFromInput({ contentId: contentPanelItem.id, body: draftBody })
+    } finally {
+      setContentPanelSaving(false)
+    }
+  }, [
+    capabilityMatrix,
+    contentPanelDraftBody,
+    contentPanelItem,
+    saveDraftBodyFromInput,
+  ])
+
   function downloadIcs(item: CampaignContentItem) {
     const scheduledIso = item.scheduled_for || new Date().toISOString()
     const payload = buildIcsPayload(item, scheduledIso)
@@ -2611,7 +3054,7 @@ export default function CampaignsPage() {
       campaigns,
       allContent: contentItems,
       draftContent: queueDraft,
-      needsReviewContent: queueNeedsReview,
+      needsReviewContent: reviewQueueNeedsReviewRows,
       unclaimedContent: queueUnclaimed,
       myClaimedContent: myClaimed,
       postedContent,
@@ -2659,6 +3102,7 @@ export default function CampaignsPage() {
       openContentLibrary: payload => openContentLibraryFromInput(payload),
       openReviewQueue: () => openReviewQueueFromInput(),
       openCalendar: payload => openCalendarFromInput(payload),
+      openReminders: () => openRemindersFromInput(),
       openReports: () => openReportsFromInput(),
     }),
     [
@@ -2666,7 +3110,7 @@ export default function CampaignsPage() {
       campaigns,
       contentItems,
       queueDraft,
-      queueNeedsReview,
+      reviewQueueNeedsReviewRows,
       queueUnclaimed,
       myClaimed,
       postedContent,
@@ -2688,6 +3132,7 @@ export default function CampaignsPage() {
       openContentLibraryFromInput,
       openReviewQueueFromInput,
       openCalendarFromInput,
+      openRemindersFromInput,
       openReportsFromInput,
     ],
   )
@@ -2710,6 +3155,9 @@ export default function CampaignsPage() {
           break
         case 'open-calendar':
           run = () => openCalendarFromInput({ ownership: 'all' })
+          break
+        case 'open-reminders':
+          run = () => openRemindersFromInput()
           break
         case 'open-reports':
           run = () => openReportsFromInput()
@@ -2757,6 +3205,7 @@ export default function CampaignsPage() {
     loadReportSummary,
     openCalendarFromInput,
     openContentLibraryFromInput,
+    openRemindersFromInput,
     openReportsFromInput,
     openReviewQueueFromInput,
     policyBlocked,
@@ -2806,6 +3255,13 @@ export default function CampaignsPage() {
             onClick={closeSidebar}
           >
             Calendar
+          </Link>
+          <Link
+            href={SECTION_TO_ROUTE.reminders}
+            className={'app-sidebar-item' + (activeSidebarSection === 'reminders' ? ' active' : '')}
+            onClick={closeSidebar}
+          >
+            Reminders
           </Link>
           <Link
             href={SECTION_TO_ROUTE.reports}
@@ -2861,6 +3317,64 @@ export default function CampaignsPage() {
           )}
           {infoMessage && (
             <div className="status-banner status-banner-info" role="status">{infoMessage}</div>
+          )}
+          {campaigns.length > 0 && (
+            <section className="card campaign-card campaign-context-shell">
+              <div className="campaign-row-head">
+                <div>
+                  <h2 className="campaign-section-title">Campaign Workspace Context</h2>
+                  <p className="campaign-card-copy">Persistent context across overview, content, review, calendar, reminders, and reporting.</p>
+                </div>
+                <label className="campaign-filter-control campaign-context-select">
+                  <span className="campaign-card-copy">Selected campaign</span>
+                  <select
+                    className="input"
+                    value={selectedCampaignId}
+                    onChange={(event) => setSelectedCampaignId(event.target.value)}
+                  >
+                    {campaigns.map(campaign => (
+                      <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {selectedCampaign && (
+                <>
+                  <div className="campaign-chip-row">
+                    <span className="campaign-pill">{selectedCampaign.name}</span>
+                    <span className="campaign-pill">{selectedCampaign.status}</span>
+                    <span className="campaign-pill">Owner: {selectedCampaign.created_by}</span>
+                    <span className="campaign-pill">
+                      Dates: {selectedCampaign.start_date || 'n/a'} - {selectedCampaign.end_date || 'n/a'}
+                    </span>
+                    <span className="campaign-pill">
+                      Channels: {contentItems.some(item => item.campaign_id === selectedCampaign.id && item.intended_channel)
+                        ? [...new Set(contentItems
+                          .filter(item => item.campaign_id === selectedCampaign.id && item.intended_channel)
+                          .map(item => item.intended_channel || '')
+                          .filter(Boolean))]
+                          .join(', ')
+                        : 'n/a'}
+                    </span>
+                  </div>
+                  <div className="campaign-status-grid">
+                    <span className="campaign-status-chip">Draft {selectedCampaignStats?.draft || 0}</span>
+                    <span className="campaign-status-chip">Review {selectedCampaignStats?.needsReview || 0}</span>
+                    <span className="campaign-status-chip">Unclaimed {selectedCampaignStats?.unclaimed || 0}</span>
+                    <span className="campaign-status-chip">Claimed {selectedCampaignStats?.claimed || 0}</span>
+                    <span className="campaign-status-chip">Posted {selectedCampaignStats?.posted || 0}</span>
+                  </div>
+                </>
+              )}
+              <div className="campaign-tab-row" role="tablist" aria-label="Campaign workspace tabs">
+                <Link href={SECTION_TO_ROUTE.list} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'list' ? ' active' : '')}>Overview</Link>
+                <Link href={SECTION_TO_ROUTE.content} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'content' ? ' active' : '')}>Content</Link>
+                <Link href={SECTION_TO_ROUTE.review} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'review' ? ' active' : '')}>Review</Link>
+                <Link href={SECTION_TO_ROUTE.calendar} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'calendar' ? ' active' : '')}>Calendar</Link>
+                <Link href={SECTION_TO_ROUTE.reminders} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'reminders' ? ' active' : '')}>Reminders</Link>
+                <Link href={SECTION_TO_ROUTE.reports} className={'btn btn--secondary btn--sm' + (activeSidebarSection === 'reports' ? ' active' : '')}>Reports</Link>
+              </div>
+            </section>
           )}
           {reasonModalState && (
             <div
@@ -3010,6 +3524,59 @@ export default function CampaignsPage() {
             <section id="campaigns-list" className="campaign-section">
             <h2 className="campaign-section-title">Campaigns</h2>
             <p className="campaign-section-subtitle">Create and maintain campaign strategy records.</p>
+            {campaigns.length > 0 && (
+              <div className="campaign-grid campaign-grid-wide campaign-detail-slices">
+                <article className="card campaign-card">
+                  <h3 className="campaign-card-title">Next Actions</h3>
+                  <p className="campaign-card-copy">Operational priorities to move this workspace forward.</p>
+                  {nextActions.length === 0 ? (
+                    <p className="campaign-card-copy">No immediate queue blockers detected.</p>
+                  ) : (
+                    <ul className="campaign-detail-list">
+                      {nextActions.map(action => (
+                        <li key={action.id} className="campaign-detail-list-item">
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={action.run}
+                          >
+                            {action.label}
+                          </button>
+                          <span>{action.detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+                <article className="card campaign-card">
+                  <h3 className="campaign-card-title">Recent Activity</h3>
+                  <p className="campaign-card-copy">
+                    {selectedCampaign ? `Latest events for ${selectedCampaign.name}.` : 'Select a campaign to view activity.'}
+                  </p>
+                  {!selectedCampaign && (
+                    <p className="campaign-card-copy">No campaign selected.</p>
+                  )}
+                  {selectedCampaign && selectedCampaignActivity.length === 0 && (
+                    <p className="campaign-card-copy">No recent activity for this campaign.</p>
+                  )}
+                  {selectedCampaign && selectedCampaignActivity.length > 0 && (
+                    <ul className="campaign-detail-list">
+                      {selectedCampaignActivity.slice(0, 6).map(log => (
+                        <li key={`next-activity-${log.id}`} className="campaign-detail-list-item">
+                          <div className="campaign-detail-activity-copy">
+                            <span>{humanizeActionType(log.action_type)}</span>
+                            <span className="campaign-card-copy">
+                              By {log.performed_by || 'system'} · {log.entity_type}
+                            </span>
+                          </div>
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              </div>
+            )}
             <form
               className="card campaign-form"
               onSubmit={(event) => {
@@ -3297,7 +3864,7 @@ export default function CampaignsPage() {
                                       <button
                                         type="button"
                                         className="btn btn--secondary btn--sm"
-                                        onClick={() => focusContentFromInput(item.id)}
+                                      onClick={() => openContentPanelFromInput(item.id)}
                                       >
                                         {item.title}
                                       </button>
@@ -3321,7 +3888,7 @@ export default function CampaignsPage() {
                                 <button
                                   type="button"
                                   className="btn btn--secondary btn--sm"
-                                  onClick={() => focusContentFromInput(item.id)}
+                                  onClick={() => openContentPanelFromInput(item.id)}
                                 >
                                   {item.title}
                                 </button>
@@ -3342,7 +3909,7 @@ export default function CampaignsPage() {
                                 <button
                                   type="button"
                                   className="btn btn--secondary btn--sm"
-                                  onClick={() => focusContentFromInput(item.id)}
+                                  onClick={() => openContentPanelFromInput(item.id)}
                                 >
                                   {item.title}
                                 </button>
@@ -3711,7 +4278,11 @@ export default function CampaignsPage() {
               const postUrlValid = !postUrlDraft.trim() || isHttpUrl(postUrlDraft)
               const scheduleDraft = scheduleDraftByContentId[item.id] ?? toDateTimeLocalValue(item.scheduled_for)
               const scheduleIso = localDateTimeToIso(scheduleDraft)
-              const canManageClaim = item.status === 'claimed' && (item.posting_owner_id === appUser?.user_id || isAdmin)
+              const canManageClaim = capabilityMatrix.canReleaseClaim(item)
+              const canClaimItem = capabilityMatrix.canClaim(item)
+              const canSubmitOwnDraft =
+                capabilityMatrix.canEditOwnDraft(item)
+                || (item.status === 'unclaimed' && item.created_by === appUser?.user_id)
               const canUpdatePostUrl = (item.status === 'claimed' || item.status === 'posted') && (item.posting_owner_id === appUser?.user_id || isAdmin)
               return (
                 <article key={item.id} className={'card campaign-card' + (contentFocusId === item.id ? ' campaign-card-focus' : '')}>
@@ -3868,26 +4439,26 @@ export default function CampaignsPage() {
                     >
                       Copy Body
                     </button>
-                    {item.status === 'draft' && item.created_by === appUser?.user_id && (
+                    {canSubmitOwnDraft && (
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
                         onClick={() => {
                           void submitReviewFromInput({ contentId: item.id }).catch(() => {})
                         }}
-                        disabled={schemaMissing || policyBlocked}
+                        disabled={policyBlocked}
                       >
                         Submit for Review
                       </button>
                     )}
-                    {item.status === 'unclaimed' && (
+                    {canClaimItem && (
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
                         onClick={() => {
                           void claimFromInput({ contentId: item.id, intendedChannel: item.intended_channel || 'linkedin' }).catch(() => {})
                         }}
-                        disabled={schemaMissing || policyBlocked}
+                        disabled={!canClaimItem || schemaMissing || policyBlocked}
                       >
                         Claim
                       </button>
@@ -3916,7 +4487,7 @@ export default function CampaignsPage() {
                         Unclaim
                       </button>
                     )}
-                    {isAdmin && (
+                    {capabilityMatrix.canAdminOverride && (
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
@@ -3936,9 +4507,9 @@ export default function CampaignsPage() {
           {shouldRenderSection('review') && (
             <section id="campaigns-review" className="campaign-section">
             <h2 className="campaign-section-title">Review Queue</h2>
-            <p className="campaign-section-subtitle">Approve or reject content that is waiting for review.</p>
-            {!isAdmin && <div className="card">Review actions are admin-only.</div>}
-            {isAdmin && (
+            <p className="campaign-section-subtitle">Operational queue with urgency filters, ownership cues, and fast actions.</p>
+            {!capabilityMatrix.canReview && <div className="card">Review actions are admin-only.</div>}
+            {capabilityMatrix.canReview && (
               <article className="card campaign-card">
                 <h3 className="campaign-card-title">Review Queue Controls</h3>
                 <div className="campaign-form-grid">
@@ -3955,9 +4526,25 @@ export default function CampaignsPage() {
                       <option value="topic">Topic</option>
                     </select>
                   </label>
+                  <label className="campaign-filter-control">
+                    <span className="campaign-card-copy">Queue Filter</span>
+                    <select
+                      className="input"
+                      value={reviewQueueFilter}
+                      onChange={(event) => setReviewQueueFilter(event.target.value as ReviewQueueFilter)}
+                    >
+                      <option value="needs-review">Needs Review</option>
+                      <option value="all">All Operational</option>
+                      <option value="unclaimed">Unclaimed</option>
+                      <option value="assigned-to-me">Assigned To Me</option>
+                      <option value="changes-requested">Changes Requested</option>
+                      <option value="approved-unscheduled">Approved-Unscheduled</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </label>
                   <div className="campaign-review-summary">
                     <p className="campaign-card-copy">
-                      Selected {selectedReviewIds.length} of {sortedReviewQueue.length}
+                      Selected {selectedReviewIds.length} of {reviewQueueNeedsReviewRows.length} needs-review rows
                     </p>
                   </div>
                 </div>
@@ -3966,7 +4553,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={selectAllReviewFromInput}
-                    disabled={schemaMissing || policyBlocked || reviewBulkRunning || sortedReviewQueue.length === 0}
+                    disabled={schemaMissing || policyBlocked || reviewBulkRunning || reviewQueueNeedsReviewRows.length === 0}
                   >
                     Select All
                   </button>
@@ -4075,12 +4662,20 @@ export default function CampaignsPage() {
                 </div>
               </div>
             )}
-            {sortedReviewQueue.length === 0 && <div className="card">No content is waiting for review.</div>}
-            {sortedReviewQueue.map(item => (
+            {sortedReviewQueue.length === 0 && (
+              <div className="card">
+                {reviewQueueFilter === 'needs-review'
+                  ? 'No content is waiting for review.'
+                  : 'No queue rows match current review filter.'}
+              </div>
+            )}
+            {sortedReviewQueue.map(item => {
+              const canonicalStatus = canonicalStatusFromItem(item)
+              return (
               <article key={item.id} className="card campaign-card">
                 <div className="campaign-row-head">
                   <div className="campaign-review-title">
-                    {isAdmin && (
+                    {capabilityMatrix.canReview && item.status === 'needs_review' && (
                       <label className="campaign-review-select">
                         <input
                           type="checkbox"
@@ -4094,9 +4689,51 @@ export default function CampaignsPage() {
                     )}
                     <h3 className="campaign-card-title">{item.title}</h3>
                   </div>
-                  <span className="campaign-pill">needs_review</span>
+                  <span className={'campaign-pill'
+                    + (item.status === 'unclaimed' ? ' campaign-pill-open' : '')
+                    + (item.status === 'claimed' && item.scheduled_for && new Date(item.scheduled_for).getTime() < Date.now() ? ' campaign-pill-overdue' : '')
+                  }>
+                    {item.status === 'unclaimed'
+                      ? 'approved-unscheduled'
+                      : `${formatCanonicalStatusLabel(canonicalStatus)} (${item.status})`}
+                  </span>
                 </div>
-                <p className="campaign-card-copy">{item.topic} · by {item.created_by}</p>
+                <p className="campaign-card-copy">{item.topic} · submitted by {item.created_by}</p>
+                <p className="campaign-card-copy">
+                  Lifecycle: {formatCanonicalStatusLabel(canonicalStatus)}
+                  {' · '}
+                  Review: {item.review_status || (canonicalStatus === 'in_review' ? 'in_review' : canonicalStatus === 'changes_requested' ? 'changes_requested' : 'approved')}
+                  {item.review_submitted_at ? ` · Submitted: ${new Date(item.review_submitted_at).toLocaleString()}` : ''}
+                </p>
+                <p className="campaign-card-copy">
+                  Campaign: {item.campaign_id ? (campaignNameById.get(item.campaign_id) || item.campaign_id) : 'Unassigned'}
+                  {' · '}
+                  Channel: {item.intended_channel || 'linkedin'}
+                </p>
+                <p className="campaign-card-copy">
+                  Claimed by: {item.posting_owner_id || 'Unassigned'}
+                  {' · '}
+                  Time in review: {item.status === 'needs_review'
+                    ? `${Math.max(0, Math.floor((Date.now() - new Date(item.updated_at || item.created_at || 0).getTime()) / (1000 * 60 * 60)))}h`
+                    : 'n/a'}
+                  {' · '}
+                  Due: {item.scheduled_for ? new Date(item.scheduled_for).toLocaleString() : 'Not scheduled'}
+                </p>
+                <p className="campaign-card-copy">
+                  Priority: {item.status === 'claimed' && item.scheduled_for && new Date(item.scheduled_for).getTime() < Date.now()
+                    ? 'Overdue'
+                    : item.status === 'needs_review'
+                      ? 'Waiting review'
+                      : item.status === 'unclaimed'
+                        ? 'Ready to schedule'
+                        : 'Normal'}
+                </p>
+                {item.rejection_reason && (
+                  <p className="campaign-card-rejection">{item.rejection_reason}</p>
+                )}
+                {!item.rejection_reason && item.review_feedback_summary && (
+                  <p className="campaign-card-rejection">{item.review_feedback_summary}</p>
+                )}
                 <p className="campaign-card-copy">
                   Created: {item.created_at ? new Date(item.created_at).toLocaleString() : 'n/a'}
                   {item.campaign_id ? ` · Campaign: ${campaignNameById.get(item.campaign_id) || item.campaign_id}` : ''}
@@ -4105,10 +4742,17 @@ export default function CampaignsPage() {
                   <button
                     type="button"
                     className="btn btn--secondary btn--sm"
+                    onClick={() => openContentPanelFromInput(item.id)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
                     onClick={() => {
                       void approveFromInput({ contentId: item.id }).catch(() => {})
                     }}
-                    disabled={!isAdmin || schemaMissing || policyBlocked || reviewBulkRunning}
+                    disabled={!capabilityMatrix.canReview || schemaMissing || policyBlocked || reviewBulkRunning || item.status !== 'needs_review'}
                   >
                     Approve
                   </button>
@@ -4118,20 +4762,82 @@ export default function CampaignsPage() {
                     onClick={() => {
                       openReasonModalFromInput('review-reject', item)
                     }}
-                    disabled={!isAdmin || schemaMissing || policyBlocked || reviewBulkRunning || reasonModalRunning}
+                    disabled={!capabilityMatrix.canReview || schemaMissing || policyBlocked || reviewBulkRunning || reasonModalRunning || item.status !== 'needs_review'}
                   >
                     Reject
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      const scheduledIso = localDateTimeToIso(scheduleDraftByContentId[item.id] || '')
+                      void claimFromInput({
+                        contentId: item.id,
+                        intendedChannel: item.intended_channel || 'linkedin',
+                        scheduledFor: scheduledIso || new Date().toISOString(),
+                      }).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked || !capabilityMatrix.canClaim(item)}
+                  >
+                    {item.status === 'unclaimed' ? 'Claim & Schedule' : 'Schedule Approved Item'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      openReasonModalFromInput('content-unclaim', item)
+                    }}
+                    disabled={schemaMissing || policyBlocked || reasonModalRunning || !capabilityMatrix.canReleaseClaim(item)}
+                  >
+                    Release Claim
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      void reassignClaimToMeFromInput(item.id).catch(() => {})
+                    }}
+                    disabled={!capabilityMatrix.canReassignToMe(item) || schemaMissing || policyBlocked}
+                  >
+                    Reassign To Me
+                  </button>
                 </div>
+                {(item.status === 'unclaimed' || item.status === 'claimed') && (
+                  <label className="campaign-filter-control">
+                    <span className="campaign-card-copy">{item.status === 'claimed' ? 'Reschedule' : 'Schedule'}</span>
+                    <div className="campaign-card-actions">
+                      <input
+                        className="input campaign-inline-input"
+                        type="datetime-local"
+                        value={scheduleDraftByContentId[item.id] || toDateTimeLocalValue(item.scheduled_for)}
+                        onChange={(event) => setScheduleDraftByContentId(prev => ({ ...prev, [item.id]: event.target.value }))}
+                      />
+                      {item.status === 'claimed' && (
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => {
+                            const iso = localDateTimeToIso(scheduleDraftByContentId[item.id] || '')
+                            if (!iso) return
+                            void updateScheduleFromInput({ contentId: item.id, scheduledFor: iso }).catch(() => {})
+                          }}
+                          disabled={schemaMissing || policyBlocked}
+                        >
+                          Reschedule
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                )}
               </article>
-            ))}
+            )})}
             </section>
           )}
 
           {shouldRenderSection('calendar') && (
             <section id="campaigns-calendar" className="campaign-section">
             <h2 className="campaign-section-title">Calendar and Reminders</h2>
-            <p className="campaign-section-subtitle">Date-grouped visibility for claimed, posted, missed, and open-slot coverage.</p>
+            <p className="campaign-section-subtitle">Date-grouped visibility for scheduled, posted, missed, plus approved-unscheduled operations.</p>
             <article className="card campaign-card">
               <h3 className="campaign-card-title">Calendar Filters</h3>
               <div className="campaign-form-grid">
@@ -4345,13 +5051,68 @@ export default function CampaignsPage() {
             </article>
 
             <article className="card campaign-card">
+              <h3 className="campaign-card-title">Approved-Unscheduled Lane</h3>
+              <p className="campaign-card-copy">
+                Items approved into queue but not yet scheduled. Use quick schedule controls to close gaps.
+              </p>
+              {approvedUnscheduledRows.length === 0 && (
+                <p className="campaign-card-copy">No approved-unscheduled items for current campaign/channel filters.</p>
+              )}
+              {approvedUnscheduledRows.map(item => (
+                <article key={`unscheduled-${item.id}`} className="campaign-schedule-row">
+                  <div>
+                    <p className="campaign-schedule-title">{item.title}</p>
+                    <p className="campaign-schedule-meta">
+                      {item.campaign_id ? (campaignNameById.get(item.campaign_id) || item.campaign_id) : 'Unassigned'}
+                      {' · '}
+                      {item.intended_channel || 'linkedin'}
+                    </p>
+                  </div>
+                  <div className="campaign-card-actions">
+                    <input
+                      className="input campaign-inline-input"
+                      type="datetime-local"
+                      value={scheduleDraftByContentId[item.id] || toDateTimeLocalValue(item.scheduled_for)}
+                      onChange={(event) => setScheduleDraftByContentId(prev => ({ ...prev, [item.id]: event.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => {
+                        const iso = localDateTimeToIso(scheduleDraftByContentId[item.id] || '')
+                        if (!iso) return
+                        void claimFromInput({
+                          contentId: item.id,
+                          intendedChannel: item.intended_channel || 'linkedin',
+                          scheduledFor: iso,
+                        }).catch(() => {})
+                      }}
+                      disabled={schemaMissing || policyBlocked || !capabilityMatrix.canClaim(item)}
+                    >
+                      Schedule & Claim
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => openContentPanelFromInput(item.id)}
+                    >
+                      Open Content
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </article>
+
+            <article className="card campaign-card">
               <h3 className="campaign-card-title">My Claimed Queue</h3>
               {myClaimed.length === 0 && <p className="campaign-card-copy">No claimed content assigned to you.</p>}
               {myClaimed.length > 0 && sortedMyClaimed.length === 0 && (
                 <p className="campaign-card-copy">No claimed content matches current calendar filters.</p>
               )}
             </article>
-            {sortedMyClaimed.map(item => (
+            {sortedMyClaimed.map(item => {
+              const canManageClaim = capabilityMatrix.canReleaseClaim(item)
+              return (
               <article key={item.id} className="card campaign-card">
                 <div className="campaign-row-head">
                   <h3 className="campaign-card-title">{item.title}</h3>
@@ -4390,9 +5151,222 @@ export default function CampaignsPage() {
                     onClick={() => {
                       void markPostedFromInput({ contentId: item.id, postUrl: item.post_url || undefined }).catch(() => {})
                     }}
-                    disabled={schemaMissing || policyBlocked}
+                    disabled={schemaMissing || policyBlocked || !canManageClaim}
                   >
                     Mark Posted
+                  </button>
+                </div>
+                <div className="campaign-card-actions">
+                  <input
+                    className="input campaign-inline-input"
+                    type="datetime-local"
+                    value={scheduleDraftByContentId[item.id] || toDateTimeLocalValue(item.scheduled_for)}
+                    onChange={(event) => setScheduleDraftByContentId(prev => ({ ...prev, [item.id]: event.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      const iso = localDateTimeToIso(scheduleDraftByContentId[item.id] || '')
+                      if (!iso) return
+                      void updateScheduleFromInput({ contentId: item.id, scheduledFor: iso }).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked || !canManageClaim}
+                  >
+                    Reschedule
+                  </button>
+                </div>
+              </article>
+            )})}
+            </section>
+          )}
+
+          {shouldRenderSection('reminders') && (
+            <section id="campaigns-reminders" className="campaign-section">
+            <h2 className="campaign-section-title">Reminders Workspace</h2>
+            <p className="campaign-section-subtitle">Task-style reminder operations with quick create/edit/complete/snooze/delete actions.</p>
+
+            <article className="card campaign-card">
+              <h3 className="campaign-card-title">Create or Edit Reminder</h3>
+              <div className="campaign-form-grid">
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Content</span>
+                  <select
+                    className="input"
+                    value={reminderEditor.contentId}
+                    onChange={(event) => setReminderEditor(prev => ({ ...prev, contentId: event.target.value }))}
+                  >
+                    <option value="">Select Content</option>
+                    {contentItems.map(item => (
+                      <option key={item.id} value={item.id}>{item.title}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Assigned User</span>
+                  <select
+                    className="input"
+                    value={reminderEditor.userId}
+                    onChange={(event) => setReminderEditor(prev => ({ ...prev, userId: event.target.value }))}
+                  >
+                    <option value="">Select User</option>
+                    {reminderAssignableUsers.map(userId => (
+                      <option key={userId} value={userId}>{userId}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Reminder Type</span>
+                  <select
+                    className="input"
+                    value={reminderEditor.reminderType}
+                    onChange={(event) => setReminderEditor(prev => ({ ...prev, reminderType: event.target.value as CampaignReminder['reminder_type'] }))}
+                  >
+                    <option value="in-app">In-App</option>
+                    <option value="ics">ICS</option>
+                    <option value="email">Email</option>
+                    <option value="slack">Slack</option>
+                  </select>
+                </label>
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Due</span>
+                  <input
+                    className="input"
+                    type="datetime-local"
+                    value={reminderEditor.scheduledFor}
+                    onChange={(event) => setReminderEditor(prev => ({ ...prev, scheduledFor: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <div className="campaign-card-actions">
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    const iso = localDateTimeToIso(reminderEditor.scheduledFor || '')
+                    if (!iso || !reminderEditor.contentId || !reminderEditor.userId) return
+                    void addReminderFromInput({
+                      contentId: reminderEditor.contentId,
+                      scheduledFor: iso,
+                      reminderType: reminderEditor.reminderType,
+                    }).catch(() => {})
+                  }}
+                  disabled={schemaMissing || policyBlocked || !reminderEditor.contentId || !reminderEditor.userId}
+                >
+                  Create Reminder
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    setReminderEditor({
+                      contentId: '',
+                      userId: appUser?.user_id || '',
+                      reminderType: 'in-app',
+                      scheduledFor: '',
+                    })
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </article>
+
+            {reminderRows.length === 0 && (
+              <article className="card campaign-card">
+                <h3 className="campaign-card-title">Reminder Rows</h3>
+                <p className="campaign-card-copy">No reminders yet. Create one above to start managing follow-ups.</p>
+              </article>
+            )}
+
+            {reminderRows.map(row => (
+              <article
+                key={row.reminder.id}
+                className={'card campaign-card' + (row.isOverdue ? ' campaign-warning-card' : '') + (row.reminder.status === 'sent' ? ' campaign-reminder-complete' : '')}
+              >
+                <div className="campaign-row-head">
+                  <h3 className="campaign-card-title">{row.content?.title || `Content ${row.reminder.content_id}`}</h3>
+                  <span className={'campaign-pill' + (row.isOverdue ? ' campaign-pill-overdue' : '')}>
+                    {row.isOverdue ? 'overdue' : row.reminder.status}
+                  </span>
+                </div>
+                <p className="campaign-card-copy">
+                  Campaign: {row.campaignLabel}
+                  {' · '}
+                  Assigned: {row.reminder.user_id}
+                  {' · '}
+                  Type: {row.reminder.reminder_type}
+                </p>
+                <p className="campaign-card-copy">
+                  Due: {new Date(row.reminder.scheduled_for).toLocaleString()}
+                  {' · '}
+                  Notes: {row.reminder.failure_reason || 'None'}
+                </p>
+                <div className="campaign-card-actions">
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      void updateReminderFromInput(row.reminder.id, {
+                        status: 'sent',
+                        sentAt: new Date().toISOString(),
+                        failureReason: null,
+                      }).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked || row.reminder.status === 'sent'}
+                  >
+                    Mark Complete
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      const due = new Date(row.reminder.scheduled_for)
+                      due.setHours(due.getHours() + 24)
+                      void updateReminderFromInput(row.reminder.id, {
+                        scheduledFor: due.toISOString(),
+                        status: 'pending',
+                        sentAt: null,
+                        failureReason: null,
+                      }).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked}
+                  >
+                    Snooze +24h
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      void updateReminderFromInput(row.reminder.id, { userId: appUser?.user_id || row.reminder.user_id }).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked || !appUser?.user_id}
+                  >
+                    Reassign To Me
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      void deleteReminderFromInput(row.reminder.id).catch(() => {})
+                    }}
+                    disabled={schemaMissing || policyBlocked}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      setReminderEditor({
+                        contentId: row.reminder.content_id,
+                        userId: row.reminder.user_id,
+                        reminderType: row.reminder.reminder_type,
+                        scheduledFor: toDateTimeLocalValue(row.reminder.scheduled_for),
+                      })
+                    }}
+                  >
+                    Edit Draft
                   </button>
                 </div>
               </article>
@@ -4480,7 +5454,7 @@ export default function CampaignsPage() {
                   type="button"
                   className="btn btn--secondary btn--sm"
                   onClick={applyReportFilters}
-                  disabled={schemaMissing || policyBlocked || syncState === 'syncing' || !!reportFilterDateError}
+                  disabled={!!reportFilterDateError}
                 >
                   Apply Filters
                 </button>
@@ -4488,7 +5462,7 @@ export default function CampaignsPage() {
                   type="button"
                   className="btn btn--secondary btn--sm"
                   onClick={resetReportFilters}
-                  disabled={schemaMissing || policyBlocked || syncState === 'syncing'}
+                  disabled={false}
                 >
                   Reset Filters
                 </button>
@@ -4504,31 +5478,63 @@ export default function CampaignsPage() {
                 <p className="campaign-card-copy">Refreshing server summary…</p>
               )}
             </article>
-            <div className="campaign-grid">
+            {reportFilteredContentItems.length === 0 && (
               <article className="card campaign-card">
-                <h3 className="campaign-card-title">Created</h3>
-                <p className="campaign-metric">{reportSummary.created_count}</p>
+                <h3 className="campaign-card-title">No Reporting Data In Range</h3>
+                <p className="campaign-card-copy">
+                  No content matches the current selection. Reset filters or expand the date range to generate campaign progress output.
+                </p>
               </article>
-              <article className="card campaign-card">
-                <h3 className="campaign-card-title">Waiting Review</h3>
-                <p className="campaign-metric">{reportSummary.waiting_review_count}</p>
-              </article>
-              <article className="card campaign-card">
-                <h3 className="campaign-card-title">Unclaimed</h3>
-                <p className="campaign-metric">{reportSummary.unclaimed_count}</p>
-              </article>
-              <article className="card campaign-card">
-                <h3 className="campaign-card-title">Claimed</h3>
-                <p className="campaign-metric">{reportSummary.claimed_count}</p>
-              </article>
-              <article className="card campaign-card">
-                <h3 className="campaign-card-title">Posted</h3>
-                <p className="campaign-metric">{reportSummary.posted_count}</p>
-              </article>
-              <article className="card campaign-card">
-                <h3 className="campaign-card-title">Missed</h3>
-                <p className="campaign-metric">{reportSummary.missed_count}</p>
-              </article>
+            )}
+
+            <div className="card campaign-card">
+              <h3 className="campaign-card-title">Campaign Progress</h3>
+              <div className="campaign-grid">
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Created</h4>
+                  <p className="campaign-metric">{reportSummary.created_count}</p>
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Submitted</h4>
+                  <p className="campaign-metric">{reportSummary.submitted_count}</p>
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Approved</h4>
+                  <p className="campaign-metric">{reportSummary.approved_count}</p>
+                </article>
+              </div>
+            </div>
+
+            <div className="card campaign-card">
+              <h3 className="campaign-card-title">Review Operations</h3>
+              <div className="campaign-grid">
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Waiting Review</h4>
+                  <p className="campaign-metric">{reportSummary.waiting_review_count}</p>
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Unclaimed</h4>
+                  <p className="campaign-metric">{reportSummary.unclaimed_count}</p>
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Claimed</h4>
+                  <p className="campaign-metric">{reportSummary.claimed_count}</p>
+                </article>
+              </div>
+            </div>
+
+            <div className="card campaign-card">
+              <h3 className="campaign-card-title">Publishing</h3>
+              <div className="campaign-grid">
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Posted</h4>
+                  <p className="campaign-metric">{reportSummary.posted_count}</p>
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Missed</h4>
+                  <p className="campaign-metric">{reportSummary.missed_count}</p>
+                </article>
+              </div>
             </div>
 
             <article className="card campaign-card">
@@ -4614,7 +5620,7 @@ export default function CampaignsPage() {
               ))}
             </article>
 
-            {isAdmin && (
+            {capabilityMatrix.canRunJobs && (
               <article className="card campaign-card">
                 <h3 className="campaign-card-title">Automation Jobs</h3>
                 <p className="campaign-card-copy">
@@ -4625,7 +5631,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('dispatch-reminders', true) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Dry Run Reminders
                   </button>
@@ -4633,7 +5639,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('dispatch-reminders', false) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Run Reminders
                   </button>
@@ -4641,7 +5647,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('detect-missed', true) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Dry Run Missed
                   </button>
@@ -4649,7 +5655,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('detect-missed', false) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Run Missed Detection
                   </button>
@@ -4657,7 +5663,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('all', true) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Dry Run All
                   </button>
@@ -4665,7 +5671,7 @@ export default function CampaignsPage() {
                     type="button"
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void runJobsFromInput('all', false) }}
-                    disabled={jobRunning || schemaMissing || policyBlocked}
+                    disabled={!capabilityMatrix.canRunJobs || jobRunning || schemaMissing || policyBlocked}
                   >
                     Run All Jobs
                   </button>
@@ -4681,6 +5687,223 @@ export default function CampaignsPage() {
               </article>
             )}
             </section>
+          )}
+          {contentPanelItem && (
+            <div
+              className="campaign-content-panel-backdrop"
+              onMouseDown={(event) => {
+                if (event.target !== event.currentTarget) return
+                setContentPanelId('')
+              }}
+            >
+              <aside
+                className="campaign-content-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Campaign content panel"
+              >
+                <div className="campaign-row-head">
+                  <div>
+                    <h3 className="campaign-card-title">{contentPanelItem.title}</h3>
+                    <p className="campaign-card-copy">{contentPanelPrimaryAction}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => setContentPanelId('')}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="campaign-chip-row">
+                  <span className="campaign-pill">{contentPanelItem.status}</span>
+                  <span className="campaign-pill">{contentPanelItem.content_type}</span>
+                  <span className="campaign-pill">{contentPanelItem.intended_channel || 'linkedin'}</span>
+                  <span className="campaign-pill campaign-pill-open">{contentPanelPrimaryAction}</span>
+                  {contentPanelIsOverdue && (
+                    <span className="campaign-pill campaign-pill-overdue">Overdue</span>
+                  )}
+                  {contentPanelMissingMetadata.length > 0 && (
+                    <span className="campaign-pill campaign-pill-open">
+                      Missing: {contentPanelMissingMetadata.join(', ')}
+                    </span>
+                  )}
+                </div>
+                <p className="campaign-card-copy">
+                  Campaign: {contentPanelItem.campaign_id ? (campaignNameById.get(contentPanelItem.campaign_id) || contentPanelItem.campaign_id) : 'Unassigned'}
+                  {' · '}
+                  Owner: {contentPanelItem.posting_owner_id || 'Unassigned'}
+                  {' · '}
+                  Creator: {contentPanelItem.created_by}
+                </p>
+                <p className="campaign-card-copy">
+                  Updated: {contentPanelItem.updated_at ? new Date(contentPanelItem.updated_at).toLocaleString() : 'n/a'}
+                  {contentPanelItem.scheduled_for ? ` · Scheduled ${new Date(contentPanelItem.scheduled_for).toLocaleString()}` : ''}
+                </p>
+                {contentPanelIsOverdue && (
+                  <p className="campaign-card-rejection">
+                    Scheduled date is overdue. Re-schedule or release claim.
+                  </p>
+                )}
+                {contentPanelMissingMetadata.length > 0 && (
+                  <p className="campaign-card-rejection">
+                    Missing metadata: {contentPanelMissingMetadata.join(', ')}.
+                  </p>
+                )}
+                <label className="campaign-filter-control">
+                  <span className="campaign-card-copy">Draft Body</span>
+                  <textarea
+                    className="ta"
+                    rows={10}
+                    value={contentPanelDraftBody}
+                    onChange={(event) => setContentPanelDraftBody(event.target.value)}
+                    disabled={!capabilityMatrix.canEditOwnDraft(contentPanelItem) || contentPanelSaving}
+                  />
+                </label>
+                {!capabilityMatrix.canEditOwnDraft(contentPanelItem) && (
+                  <p className="campaign-card-copy">Draft body editing is limited to the draft owner while status is Draft.</p>
+                )}
+                <div className="campaign-card-actions">
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => { void copyToClipboard(contentPanelItem.body || '') }}
+                  >
+                    Copy Body
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      setContentPanelId('')
+                      focusContentFromInput(contentPanelItem.id)
+                    }}
+                  >
+                    Open in Library
+                  </button>
+                  {capabilityMatrix.canEditOwnDraft(contentPanelItem) && (
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      onClick={() => { void saveContentPanelDraftFromInput() }}
+                      disabled={contentPanelSaving || schemaMissing || policyBlocked || !contentPanelDraftBody.trim()}
+                    >
+                      {contentPanelSaving ? 'Saving…' : 'Save Draft Body'}
+                    </button>
+                  )}
+                  {capabilityMatrix.canEditOwnDraft(contentPanelItem) && contentPanelItem.status === 'draft' && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => {
+                        void submitReviewFromInput({ contentId: contentPanelItem.id }).catch(() => {})
+                      }}
+                      disabled={policyBlocked || !contentPanelDraftBody.trim()}
+                    >
+                      Submit for Review
+                    </button>
+                  )}
+                  {capabilityMatrix.canReview && contentPanelItem.status === 'needs_review' && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          void approveFromInput({ contentId: contentPanelItem.id }).catch(() => {})
+                        }}
+                        disabled={schemaMissing || policyBlocked}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => openReasonModalFromInput('review-reject', contentPanelItem)}
+                        disabled={schemaMissing || policyBlocked || reasonModalRunning}
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {capabilityMatrix.canClaim(contentPanelItem) && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => {
+                        void claimFromInput({
+                          contentId: contentPanelItem.id,
+                          intendedChannel: contentPanelItem.intended_channel || 'linkedin',
+                        }).catch(() => {})
+                      }}
+                      disabled={schemaMissing || policyBlocked}
+                    >
+                      Claim
+                    </button>
+                  )}
+                  {capabilityMatrix.canReleaseClaim(contentPanelItem) && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          void markPostedFromInput({ contentId: contentPanelItem.id, postUrl: contentPanelItem.post_url || undefined }).catch(() => {})
+                        }}
+                        disabled={schemaMissing || policyBlocked}
+                      >
+                        Mark Posted
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => openReasonModalFromInput('content-unclaim', contentPanelItem)}
+                        disabled={schemaMissing || policyBlocked || reasonModalRunning}
+                      >
+                        Unclaim
+                      </button>
+                    </>
+                  )}
+                </div>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Review Thread</h4>
+                  {contentPanelItem.rejection_reason && (
+                    <p className="campaign-card-rejection">Latest Feedback: {contentPanelItem.rejection_reason}</p>
+                  )}
+                  {contentPanelReviewThread.length === 0 ? (
+                    <p className="campaign-card-copy">No review-thread events yet.</p>
+                  ) : (
+                    <ul className="campaign-detail-list">
+                      {contentPanelReviewThread.map(log => (
+                        <li key={`panel-review-${log.id}`} className="campaign-detail-list-item">
+                          <div className="campaign-detail-activity-copy">
+                            <span>{humanizeActionType(log.action_type)}</span>
+                            <span className="campaign-card-copy">By {log.performed_by || 'system'}</span>
+                          </div>
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+                <article className="card campaign-card">
+                  <h4 className="campaign-card-title">Recent Item Activity</h4>
+                  {contentPanelActivity.length === 0 ? (
+                    <p className="campaign-card-copy">No activity events logged for this content item.</p>
+                  ) : (
+                    <ul className="campaign-detail-list">
+                      {contentPanelActivity.map(log => (
+                        <li key={`panel-activity-${log.id}`} className="campaign-detail-list-item">
+                          <div className="campaign-detail-activity-copy">
+                            <span>{humanizeActionType(log.action_type)}</span>
+                            <span className="campaign-card-copy">By {log.performed_by || 'system'}</span>
+                          </div>
+                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              </aside>
+            </div>
           )}
         </main>
       </div>

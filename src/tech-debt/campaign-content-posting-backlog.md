@@ -48,6 +48,18 @@ Implementation execution started on 2026-04-25 with the following delivered foun
 38. Added chatbot parity upgrades for campaign quick-open commands (content/review/calendar/reports routing) and admin-override flow coverage so chat-triggered navigation mirrors click-path behavior.
 39. Synced campaign user-story statuses from `Not Started` to `Done`/`In Progress` to align backlog metadata with delivered campaign implementation.
 40. Added campaign query/rollout/DoD gate documentation (`campaign-rollout-and-dod-gates.md`) with explain-plan procedure, slow-query thresholds, rollout controls, and manual signoff checklist coverage.
+41. Expanded review queue operations with parity filters (`all/unclaimed/assigned-to-me/changes-requested/approved-unscheduled/overdue`), urgency metadata, and inline fast actions (open/approve/request-changes/claim-schedule/reassign/release).
+42. Added calendar approved-unscheduled lane plus inline reschedule controls on claimed queue rows to close scheduling gaps directly from calendar workspace.
+43. Added dedicated reminders workspace route (`/campaigns/reminders`) and task-row UX with create/edit draft, complete, snooze, reassign, and delete actions backed by reminder list/update/delete data APIs.
+44. Restructured reports workspace into explicit `Campaign Progress`, `Review Operations`, and `Publishing` sections with no-data guidance and session-backed filter persistence across route/tab switches.
+45. Added persistent campaign workspace context shell with selected-campaign state, status/date/channel context chips, lifecycle rollups, and route-backed tab controls across Overview/Content/Review/Calendar/Reminders/Reports.
+46. Added overview prioritization surfaces with `Next Actions` (review/unscheduled/reminder/metadata priorities) and `Recent Activity` (ordered campaign event feed) including empty-state messaging.
+47. Added right-side content detail side panel opened from operational queues, with compact metadata, quick lifecycle actions, editable draft body for allowed actors, and close behavior via escape/click-outside.
+48. Applied centralized capability-gated UI controls (`capabilityMatrix`) across campaign actions to align ownership/admin/reviewer affordances with permission expectations and reduce false-action affordances.
+49. Completed PAR-E1 story close-out by adding side-panel primary next-action labeling, review-thread context, missing-metadata/overdue flags, and list-surface panel opens to preserve workspace context without route loss.
+50. Added PAR-E2 backend migration scaffold (`016_campaign_workflow_status_normalization_and_review_durability.sql`) introducing canonical lifecycle status, durable review metadata fields, compatibility sync trigger, review comments model, and migration-safe rollout view.
+51. Updated review transition RPCs to persist normalized review metadata and review comments while maintaining legacy status compatibility (`status` + `lifecycle_status`) during rollout.
+52. Updated review queue UX labels to surface canonical lifecycle + review metadata context with legacy fallback, and moved `US-CMP-FE-1303` to `Done`.
 
 Remaining tickets below continue to be source-of-truth for completion and hardening.
 

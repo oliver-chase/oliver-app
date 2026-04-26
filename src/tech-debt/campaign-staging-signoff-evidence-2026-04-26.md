@@ -30,10 +30,10 @@ Scope: Campaign Content Posting module (`/campaigns`)
 
 | Suite | Command | Status | Result summary | Evidence artifact |
 | --- | --- | --- | --- | --- |
-| Campaign e2e | `npm run test:smoke:campaigns` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
-| Campaign smoke slice | `npm run test:smoke:campaigns:frontend` with staging API endpoint config | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
-| Frontend smoke (campaign cases) | `npm run test:smoke:campaigns:frontend` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
-| Mobile clickpaths | `npm run test:smoke:campaigns:mobile` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Campaign e2e | `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:external` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Campaign smoke slice | `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:frontend:external` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Frontend smoke (campaign cases) | `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:frontend:external` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
+| Mobile clickpaths | `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:mobile:external` | `BLOCKED` | `Awaiting staging environment signoff credentials and seed window` | `TBD` |
 
 ## Local execution log
 
@@ -43,6 +43,12 @@ Scope: Campaign Content Posting module (`/campaigns`)
 - 2026-04-26: Added staging execution matrix for pinned Playwright port (`:3002`) and staged all pending manual checks in this evidence file.
 - 2026-04-26T10:48:12Z: `npm run test:smoke:campaigns` -> blocked by local sandbox; Playwright webServer failed with `EPERM listen 0.0.0.0:3002`.
 - 2026-04-26T10:54:22Z: `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs` -> passed (`13 passed, 0 failed`) and captured as local contract evidence.
+- 2026-04-26: Added external campaign smoke command set (`test:smoke:campaigns:external`, `test:smoke:campaigns:frontend:external`, `test:smoke:campaigns:mobile:external`, `test:smoke:campaigns:staging`) to support staging execution without local webserver bind.
+- 2026-04-26T11:42:59Z: reran `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs` -> passed (`13 passed, 0 failed`).
+- 2026-04-26T11:48:39Z: ran `npm run test:smoke:campaigns:staging:list` -> confirmed campaign-only suite scope (`23 + 4 + 2` tests) without executing browser flows.
+- 2026-04-26T12:07:30Z: reran campaign-focused contracts and staging suite preflight after FE parity updates:
+  - `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs tests/contracts/campaign-style-token-compliance.test.mjs` -> passed (`14 passed, 0 failed`),
+  - `npm run test:smoke:campaigns:staging:list` -> passed (`23 + 4 + 2` tests listed).
 
 ## Campaign API / Job Execution Checklist
 
@@ -73,10 +79,10 @@ Scope: Campaign Content Posting module (`/campaigns`)
 
 ## Local-only verification evidence
 
-- `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs`
+- `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs tests/contracts/campaign-style-token-compliance.test.mjs`
   - status: passed
-  - artifacts: command output only (`13 passed, 0 failed`)
-  - timestamp: `2026-04-26T10:54:22Z`
+  - artifacts: command output only (`14 passed, 0 failed`)
+  - timestamp: `2026-04-26T12:07:30Z` (latest rerun; prior pass at `2026-04-26T11:42:59Z`)
   - relevance: supports `US-CMP-QA-1113` contract assertions and `US-CMP-QA-1114` readiness evidence (non-staging scope).
 
 ## Current Blocker Log

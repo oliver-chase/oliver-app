@@ -89,6 +89,7 @@ type BuildCampaignFlowsContext = {
     ownership?: 'all' | 'mine'
     timing?: 'all' | 'overdue' | 'today' | 'next-7' | 'unscheduled'
   }) => void
+  openReminders: () => void
   openReports: () => void
 }
 
@@ -775,6 +776,16 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
       run: async () => {
         ctx.openCalendar({ ownership: 'all' })
         return 'Opened posting calendar.'
+      },
+    },
+    {
+      id: 'open-reminders',
+      label: 'Open Reminders',
+      aliases: ['reminders', 'task reminders', 'follow-up queue'],
+      steps: [],
+      run: async () => {
+        ctx.openReminders()
+        return 'Opened reminders workspace.'
       },
     },
     {

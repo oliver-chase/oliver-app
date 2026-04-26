@@ -213,6 +213,7 @@ test.describe('mobile click-path audit', () => {
       { path: '/campaigns/content', expectedUrl: /\/campaigns\/content\/?$/ },
       { path: '/campaigns/review-queue', expectedUrl: /\/campaigns\/review-queue\/?$/ },
       { path: '/campaigns/calendar', expectedUrl: /\/campaigns\/calendar\/?$/ },
+      { path: '/campaigns/reminders', expectedUrl: /\/campaigns\/reminders\/?$/ },
       { path: '/campaigns/reports', expectedUrl: /\/campaigns\/reports\/?$/ },
     ]
 
@@ -234,6 +235,7 @@ test.describe('mobile click-path audit', () => {
       { name: 'Content Library', expectedUrl: /\/campaigns\/content\/?$/ },
       { name: 'Review Queue', expectedUrl: /\/campaigns\/review-queue\/?$/ },
       { name: 'Calendar', expectedUrl: /\/campaigns\/calendar\/?$/ },
+      { name: 'Reminders', expectedUrl: /\/campaigns\/reminders\/?$/ },
       { name: 'Reports', expectedUrl: /\/campaigns\/reports\/?$/ },
     ]
 
