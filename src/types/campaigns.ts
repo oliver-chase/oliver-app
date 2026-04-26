@@ -1,6 +1,14 @@
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived'
 
 export type CampaignContentStatus = 'draft' | 'needs_review' | 'unclaimed' | 'claimed' | 'posted'
+export type CampaignAdminOverrideAction = 'reset-draft' | 'force-unclaimed' | 'force-posted'
+export type CampaignTransitionErrorCode = 'CMP_PERMISSION_DENIED' | 'CMP_NOT_FOUND' | 'CMP_INVALID_STATE' | 'CMP_VALIDATION_FAILED' | 'CMP_CONFLICT' | 'CMP_UNKNOWN'
+
+export interface CampaignTransitionError {
+  code: CampaignTransitionErrorCode
+  reason: string
+  rawMessage: string
+}
 
 export type CampaignContentType =
   | 'linkedin-post'
@@ -191,6 +199,19 @@ export interface CreateCampaignInput {
   status?: CampaignStatus
 }
 
+export interface UpdateCampaignInput {
+  name?: string
+  description?: string
+  offer_definition?: string
+  target_audience?: string
+  primary_cta?: string
+  keywords?: string[]
+  start_date?: string | null
+  end_date?: string | null
+  cadence_rule?: Record<string, unknown> | null
+  status?: CampaignStatus
+}
+
 export interface CreateCampaignContentDraftInput {
   title: string
   body: string
@@ -233,4 +254,11 @@ export interface AddCampaignMetricsInput {
   conversion_count?: number | null
   engagement_rate?: number | null
   metadata?: Record<string, unknown>
+}
+
+export interface CampaignAdminOverrideInput {
+  action: CampaignAdminOverrideAction
+  reason: string
+  post_url?: string | null
+  posted_at?: string | null
 }
