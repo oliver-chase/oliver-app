@@ -791,6 +791,160 @@ test.describe('campaign module report and automation flows', () => {
     expect(estimateCalls.length).toBeGreaterThan(0)
   })
 
+  test('segment builder clone and archive actions persist status changes', async ({ page }) => {
+    const campaignPatchBodies: Record<string, unknown>[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+      if (method === 'PATCH') {
+        const body = request.postDataJSON() as Record<string, unknown>
+        campaignPatchBodies.push(body)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            id: 'campaign-segment-2',
+            name: 'Segment Campaign Clone',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: body.cadence_rule || null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          }]),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-segment-2',
+            name: 'Segment Campaign Clone',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: {
+              preset: 'weekly',
+              posts_per_week: 3,
+              segment_definitions: [
+                {
+                  id: 'segment-existing-1',
+                  name: 'Existing Segment',
+                  description: 'Existing description',
+                  status: 'ready',
+                  schema_version: 1,
+                  campaign_id: 'campaign-segment-2',
+                  rule_groups: [
+                    {
+                      id: 'group-existing-1',
+                      logic: 'and',
+                      rules: [
+                        {
+                          id: 'rule-existing-1',
+                          domain: 'contact_profile',
+                          field: 'role',
+                          operator: 'equals',
+                          value: 'admin',
+                        },
+                      ],
+                    },
+                  ],
+                  estimated_count: 12,
+                  estimate_confidence: 'estimated',
+                  estimate_generated_at: '2026-04-26T14:00:00.000Z',
+                  created_at: '2026-04-20T00:00:00.000Z',
+                  created_by: 'qa-admin-user',
+                  updated_at: '2026-04-20T00:00:00.000Z',
+                  updated_by: 'qa-admin-user',
+                },
+              ],
+            },
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+    const automation = page.locator('#campaigns-automation')
+    const segmentCard = automation.locator('article').filter({ hasText: 'Audience Segment Builder' }).first()
+
+    const existingCard = segmentCard.locator('article').filter({ hasText: 'Existing Segment' }).first()
+    await existingCard.getByRole('button', { name: 'Clone' }).click()
+    await expect.poll(() => campaignPatchBodies.length).toBeGreaterThanOrEqual(1)
+    const clonePatch = campaignPatchBodies[0] || {}
+    const cloneCadenceRule = (clonePatch.cadence_rule || {}) as Record<string, unknown>
+    const clonedDefinitions = Array.isArray(cloneCadenceRule.segment_definitions) ? cloneCadenceRule.segment_definitions : []
+    expect(clonedDefinitions.length).toBe(2)
+
+    const refreshedExistingCard = segmentCard.locator('article').filter({ hasText: 'Existing Segment' }).first()
+    await refreshedExistingCard.getByRole('button', { name: 'Archive' }).click()
+    await expect.poll(() => campaignPatchBodies.length).toBeGreaterThanOrEqual(2)
+    const archivePatch = campaignPatchBodies[1] || {}
+    const archiveCadenceRule = (archivePatch.cadence_rule || {}) as Record<string, unknown>
+    const archivedDefinitions = Array.isArray(archiveCadenceRule.segment_definitions)
+      ? archiveCadenceRule.segment_definitions as Array<Record<string, unknown>>
+      : []
+    const archivedOriginal = archivedDefinitions.find(row => row.id === 'segment-existing-1')
+    expect(archivedOriginal?.status).toBe('archived')
+  })
+
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
     const campaignApiBodies: CampaignApiBody[] = []
 
