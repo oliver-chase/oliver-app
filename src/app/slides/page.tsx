@@ -3889,7 +3889,7 @@ export default function SlidesPage() {
                   </section>
                 </div>
 
-                {result && (
+                  {result && (
                   <div className="slides-results">
                     <p className="slides-summary">
                       Canvas: {result.canvas.width} × {result.canvas.height} · Components: {result.components.length} · Selected: {selectedComponentIds.length}
@@ -3905,7 +3905,10 @@ export default function SlidesPage() {
                           title="Undo"
                           aria-label="Undo"
                         >
-                          ↶
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M3 7v6h6" />
+                            <path d="M21 12A9 9 0 0 1 5.6 6.8l-2.6 2.6" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3915,7 +3918,10 @@ export default function SlidesPage() {
                           title="Redo"
                           aria-label="Redo"
                         >
-                          ↷
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M21 7v6h-6" />
+                            <path d="M3 12a9 9 0 0 1 15.4-5.2l2.6 2.6" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3925,7 +3931,11 @@ export default function SlidesPage() {
                           title="Align Left"
                           aria-label="Align Left"
                         >
-                          ≡▏
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 5h10" />
+                            <path d="M4 12h16" />
+                            <path d="M4 19h10" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3935,7 +3945,11 @@ export default function SlidesPage() {
                           title="Align Center"
                           aria-label="Align Center"
                         >
-                          ≡¦
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M6 5h12" />
+                            <path d="M10 12h4" />
+                            <path d="M6 19h12" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3945,7 +3959,11 @@ export default function SlidesPage() {
                           title="Align Right"
                           aria-label="Align Right"
                         >
-                          ▕≡
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 5h10" />
+                            <path d="M10 12h10" />
+                            <path d="M4 19h10" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3955,7 +3973,11 @@ export default function SlidesPage() {
                           title="Align Top"
                           aria-label="Align Top"
                         >
-                          ▔≡
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 2v14" />
+                            <path d="M4 8h16" />
+                            <path d="M4 16h16" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3965,7 +3987,11 @@ export default function SlidesPage() {
                           title="Align Middle"
                           aria-label="Align Middle"
                         >
-                          ═≡
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 8h16" />
+                            <path d="M12 4v16" />
+                            <path d="M4 16h16" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3975,7 +4001,11 @@ export default function SlidesPage() {
                           title="Align Bottom"
                           aria-label="Align Bottom"
                         >
-                          ≡▁
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 5h16" />
+                            <path d="M4 12h10" />
+                            <path d="M12 22V10" />
+                          </svg>
                         </button>
                         <button
                           type="button"
@@ -3984,7 +4014,13 @@ export default function SlidesPage() {
                           title="Distribute Horizontally"
                           aria-label="Distribute Horizontally"
                         >
-                          ⇆≡
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 12h16" />
+                            <path d="M9 8l-4 4 4 4" />
+                            <path d="M15 8l4 4-4 4" />
+                            <path d="M2 12h2" />
+                            <path d="M22 12h-2" />
+                          </svg>
                         </button>
                       <button
                         type="button"
@@ -3993,7 +4029,13 @@ export default function SlidesPage() {
                         title="Distribute Vertically"
                         aria-label="Distribute Vertically"
                       >
-                        ⇅≡
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M12 4v16" />
+                          <path d="M8 9l4-4 4 4" />
+                          <path d="M8 15l4 4 4-4" />
+                          <path d="M12 2v2" />
+                          <path d="M12 22v-2" />
+                        </svg>
                       </button>
                       <button
                         type="button"
@@ -4003,7 +4045,10 @@ export default function SlidesPage() {
                         title="Send Back"
                         aria-label="Send Back"
                       >
-                        ⤌
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M9 18V6l-6 6 6 6" />
+                          <path d="M7 12h13" />
+                        </svg>
                       </button>
                       <button
                         type="button"
@@ -4013,7 +4058,10 @@ export default function SlidesPage() {
                         title="Bring Forward"
                         aria-label="Bring Forward"
                       >
-                        ⤍
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M15 6v12l6-6-6-6" />
+                          <path d="M17 12H5" />
+                        </svg>
                       </button>
                       <button
                         type="button"
@@ -4023,7 +4071,10 @@ export default function SlidesPage() {
                         title="Send to Back"
                         aria-label="Send to Back"
                       >
-                        ↘
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m3 21 18-18" />
+                          <path d="M3 3h9v9" />
+                        </svg>
                       </button>
                       <button
                         type="button"
@@ -4033,7 +4084,10 @@ export default function SlidesPage() {
                         title="Bring to Front"
                         aria-label="Bring to Front"
                       >
-                        ↗
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m21 3-18 18" />
+                          <path d="M12 3h9v9" />
+                        </svg>
                       </button>
                     </div>
 
