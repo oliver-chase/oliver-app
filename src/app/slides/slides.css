@@ -853,8 +853,99 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   margin-bottom: var(--spacing-xs);
 }
 
+.slides-template-preview-empty {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-2xs);
+  text-align: center;
+  padding: var(--spacing-sm);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-bg-muted) 0,
+    var(--color-bg-muted) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}
+
+.slides-template-preview-empty--large {
+  min-height: 420px;
+}
+
 .slides-template-search-summary {
   margin-top: calc(var(--spacing-sm) * -1);
+}
+
+.slides-template-skeleton-list {
+  display: grid;
+  gap: var(--spacing-sm);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.slides-template-skeleton-preview {
+  width: 220px;
+  height: 124px;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-muted) 25%,
+      var(--color-bg-page) 37%,
+      var(--color-bg-muted) 63%
+    );
+  background-size: 400% 100%;
+  animation: slides-template-skeleton-shimmer 1200ms linear infinite;
+}
+
+.slides-template-skeleton-line {
+  width: 95%;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-muted) 25%,
+      var(--color-bg-page) 37%,
+      var(--color-bg-muted) 63%
+    );
+  background-size: 400% 100%;
+  animation: slides-template-skeleton-shimmer 1200ms linear infinite;
+}
+
+.slides-template-skeleton-line-sm {
+  width: 68%;
+}
+
+.slides-template-skeleton-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.slides-template-skeleton-btn {
+  flex: 1 1 auto;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-muted) 25%,
+      var(--color-bg-page) 37%,
+      var(--color-bg-muted) 63%
+    );
+  background-size: 400% 100%;
+  animation: slides-template-skeleton-shimmer 1200ms linear infinite;
+}
+
+@keyframes slides-template-skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
 
 .slides-template-rank-note[data-rank='top'] {

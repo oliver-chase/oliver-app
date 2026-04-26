@@ -94,8 +94,8 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 
 The following dedicated backlog bundle captures the full Slides V1 completion scope plus V2 and V3 expansion requirements:
 
-- `.github/user-stories/oliver-app/backlog/slides-module-v1-completion-v2-expansion-2026-04-25/README.md`
-- `.github/user-stories/oliver-app/backlog/slides-module-v1-completion-v2-expansion-2026-04-25/SLD-V1-V2-V3-program-spec.md`
+- `/.github/oliver-app/modules/slides-module/README.md`
+- `/.github/oliver-app/modules/slides-module/SLD-V1-V2-V3-program-spec.md`
 - `US-SLD-050`..`US-SLD-058` (V1 completion, including intake validation, warning taxonomy, editability normalization contract, and sample parity gate)
 - `US-SLD-060`..`US-SLD-065` (V2 templates/themes/layout-aware/editor expansion)
 - `US-SLD-070` (V3 responsive + aspect ratio intelligent repositioning)

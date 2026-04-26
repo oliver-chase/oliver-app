@@ -999,6 +999,18 @@ test.describe('slides regression', () => {
             created_at: '2026-04-23T10:00:00.000Z',
             updated_at: '2026-04-23T10:00:00.000Z',
           },
+          {
+            id: 'template-no-preview',
+            owner_user_id: 'qa-admin-user',
+            name: 'No Preview Template',
+            description: 'Template missing visual content.',
+            is_shared: true,
+            canvas: { width: 1920, height: 1080 },
+            components: [],
+            metadata: {},
+            created_at: '2026-04-22T10:00:00.000Z',
+            updated_at: '2026-04-22T10:00:00.000Z',
+          },
         ],
         collaborators: [],
         approvals: [],
@@ -1030,6 +1042,19 @@ test.describe('slides regression', () => {
 
     await page.getByRole('button', { name: 'My Slides' }).click()
     await expect(page.getByText('Executive QBR Outline (Copy)')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Template Library' }).click()
+    const noPreviewCard = page.locator('.slides-library-card', { hasText: 'No Preview Template' }).first()
+    await expect(noPreviewCard).toBeVisible()
+    await expect(noPreviewCard.getByText('No preview components')).toBeVisible()
+    await expect(noPreviewCard.getByText('Preview missing: no visible components captured.')).toBeVisible()
+    await expect(noPreviewCard.getByRole('button', { name: 'Refresh Preview' })).toBeVisible()
+
+    await noPreviewCard.getByRole('button', { name: 'Quick Preview' }).click()
+    const noPreviewDialog = page.getByRole('dialog', { name: 'Quick Preview: No Preview Template' })
+    await expect(noPreviewDialog).toBeVisible()
+    await expect(noPreviewDialog.getByText('No preview components')).toBeVisible()
+    await noPreviewDialog.getByRole('button', { name: 'Close Preview' }).click()
   })
 
   test('SLD-FE-400 and SLD-BE-400 support visibility controls and template ownership governance', async ({ page }) => {
