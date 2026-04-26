@@ -680,6 +680,14 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   font-weight: var(--font-weight-semibold);
   line-height: 1;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slides-toolbar-icon svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .slides-component-grid-header,
