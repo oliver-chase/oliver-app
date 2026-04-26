@@ -100,6 +100,7 @@ Status: In Progress
 - [ ] Confirm migrations `014` and `015` present and healthy.
 - [ ] Confirm module visibility flags in staging/prod env config.
 - [ ] Record evidence in `campaign-staging-signoff-evidence-2026-04-26.md`.
+- [ ] Execute with fixed-port commands in blocked environments if needed (`npm run test:smoke:campaigns`, `npm run test:smoke:campaigns:frontend`, `npm run test:smoke:campaigns:mobile`).
 
 ## US-CMP-QA-1112 MVP DoD verification checklist
 

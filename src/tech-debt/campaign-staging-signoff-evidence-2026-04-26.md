@@ -20,10 +20,10 @@ Scope: Campaign Content Posting module (`/campaigns`)
 
 | Suite | Command | Status | Result summary | Evidence artifact |
 | --- | --- | --- | --- | --- |
-| Campaign e2e | `npm run test:smoke -- tests/e2e/campaigns-module.spec.ts` | `BLOCKED` | `EPERM while Playwright webServer start: listen 0.0.0.0:3001` | `N/A in this env` |
-| Campaign smoke slice | `npm run test:smoke -- tests/e2e/campaigns-module.spec.ts` with staging API endpoint config | `TODO` | `Not executed locally` | `TBD` |
-| Frontend smoke (campaign cases) | `npm run test:smoke -- tests/e2e/frontend-smoke.spec.ts` | `BLOCKED` | `EPERM while Playwright webServer start: listen 0.0.0.0:3001` | `N/A in this env` |
-| Mobile clickpaths | `npm run test:smoke:mobile -- tests/e2e/mobile-clickpaths.spec.ts` | `BLOCKED` | `EPERM while Playwright webServer start: listen 0.0.0.0:3001` | `N/A in this env` |
+| Campaign e2e | `npm run test:smoke:campaigns` | `TODO` | `Ready to run; command now pins Playwright port to 3002` | `TBD` |
+| Campaign smoke slice | `npm run test:smoke:campaigns:frontend` with staging API endpoint config | `TODO` | `Ready to run; command now pins Playwright port to 3002` | `TBD` |
+| Frontend smoke (campaign cases) | `npm run test:smoke:campaigns:frontend` | `TODO` | `Ready to run; command now pins Playwright port to 3002` | `TBD` |
+| Mobile clickpaths | `npm run test:smoke:campaigns:mobile` | `TODO` | `Ready to run; command now pins Playwright port to 3002` | `N/A until staging run`
 
 ## Local execution log
 
@@ -38,7 +38,7 @@ Scope: Campaign Content Posting module (`/campaigns`)
 | `/api/campaigns` export idempotency dry-run/live | Manual staging capture using signed-in admin | `TODO` | `TBD` |
 | `campaign_jobs` dry-run and live modes | Manual staging capture using signed-in admin | `TODO` | `TBD` |
 | Permission/gating matrix | Admin/editor/reviewer role smoke checks | `TODO` | `TBD` |
-| Module visibility flag parity | `NEXT_PUBLIC_DISABLED_MODULES`, `NEXT_PUBLIC_ENABLED_MODULES`, `NEXT_PUBLIC_HUB_VISIBLE_MODULES` | `TODO` | `TBD` |
+| Module visibility flag parity | `NEXT_PUBLIC_DISABLED_MODULES=campaigns`, `NEXT_PUBLIC_ENABLED_MODULES=campaigns`, `NEXT_PUBLIC_HUB_VISIBLE_MODULES=campaigns` | `TODO` | `TBD` |
 
 ## Staging Rollout Checkboxes (Signed Off)
 
