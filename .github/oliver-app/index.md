@@ -1,5 +1,19 @@
 # Oliver App User Stories
 
+## Backlog Organization Standard
+
+- Backlog tracking is module-specific: each module/workstream lives in its own folder under `/.github/oliver-app/modules/<module-folder>/`.
+- Each module folder contains a planning file named `<module>-backlog.md` that inventories stories and scope.
+- Cross-cutting workstreams follow the same naming pattern (`<workstream>-backlog.md`) under `general-platform/...` as needed.
+- PRD/user-story/map artifacts should be stored in the same module folder and linked from one backlog hub (no duplicates).
+- Do not combine unrelated module backlogs (for example, slides + campaign) inside the same folder/list.
+
+## Canonical Location Policy
+
+- `docs/modules/*.md` are module reference docs (stable specs, architecture, module intent).
+- `/.github/oliver-app/modules/*` are planning artifacts (backlogs, PRDs, user-story maps, QA/audits).
+- If a PRD or story artifact is module-specific, it belongs in its module folder, not in `docs/`.
+
 ## Staging Workstream Groups
 
 These groups mirror the active `staging` delivery structure and are the
@@ -23,11 +37,28 @@ index table yet.
 
 | Bundle | Scope | Story IDs |
 | --- | --- | --- |
-| oliver-requirements-2026-04-24 | Validated net-new requirements and directional changes | US-O8..US-O17 |
-| admin-design-system-parity-2026-04-25 | Admin hub/navigation restructuring, design-system parity, editing, and QA hardening | US-O18..US-O24 |
-| outstanding-build-priorities-2026-04-25 | Outstanding build plan for component governance, Slides lifecycle, resilience, startup performance, and E2E certification | US-O25..US-O34 |
-| oliver-ux-audit-2026-04-24 | UX audit findings and cross-repo clarifications | US-O1..US-O7 |
-| slides-module-ux-be-backlog-2026-04-24 | Slide module backfill, UX hardening, FE/BE foundation, and integration roadmap | US-SLD-001..US-SLD-039 |
+| general-platform | General-purpose and cross-cutting planning (`oliver-requirements`, `ux-audit`, `build priorities`, `wip`, platform governance) | US-O1..US-O34, US-AUTH-001..US-AUTH-012, AUTH-101..AUTH-606 |
+| campaigns-module | Campaign module execution + spec parity + QA gates across content, scheduling, and ops | US-CMP-ARCH-001..US-CMP-ARCH-1702, US-CMP-BE-1010..US-CMP-QA-1115 |
+| slides-module | All slide module backlog and roadmap (V1 completion, V2 expansion, V3 evolution) | US-SLD-001..US-SLD-070, SLD-BE-150..SLD-BE-510 |
+
+## Backlog Subproject Folders
+
+Every backlog subproject is a dedicated folder with local scope boundaries (module or workstream).
+- Module-specific stories should live in that module folder.
+- Shared/cross-module stories belong in shared workstream folders.
+- PRD artifacts should link to one folder only to avoid duplication.
+
+| Subproject Folder | Scope |
+| --- | --- |
+| accounts-module | Accounts module backlog |
+| campaigns-module | Campaigns module backlog (content posting + parity spec + rollout evidence) |
+| chatbot-module | Shared chatbot/runtime consistency work |
+| crm-module | CRM-only stories |
+| general-platform | General and cross-cutting workstreams (`oliver-requirements`, `ux-audit`, `build priorities`, `wip`, platform governance) |
+| hr-module | HR module stories |
+| reviews-module | Reviews module stories |
+| sdr-module | SDR module stories |
+| slides-module | Slides module backlog (V1, UX/BE, V2/V3 expansion) |
 
 Backlog protocol reminder: planning files are the active work queue. Completed stories must be transitioned to `Done`, marked `Verified` when evidence is in git, and removed from active backlog files immediately. This is enforced by the global [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md).
 

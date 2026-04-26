@@ -26,7 +26,7 @@
 
 ## Slides Canonicalization Update (2026-04-24)
 
-- Added slide module backlog bundle: `backlog/slides-module-ux-be-backlog-2026-04-24`.
+- Added slide module backlog bundle: `slides-module`.
 - Added canonical slide backfill/cleanup stories:
   - `US-SLD-001` Backfill Slide Module Shell and Access Contract
   - `US-SLD-002` Backfill HTML Import Command and Flow Contract

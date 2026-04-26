@@ -13,7 +13,7 @@ So topbar context remains stable and placeholder behavior is unambiguous.
 Current state:
 - Topbar now intentionally keeps stable context text (`Account Strategy`) in [Topbar.tsx](/Users/oliver/projects/oliver-app/src/components/layout/Topbar.tsx).
 - Editable account short/long names are in page header fields in [AccountView.tsx](/Users/oliver/projects/oliver-app/src/components/accounts/AccountView.tsx).
-- This request is superseded by [US-O10](/Users/oliver/projects/oliver-app/.github/user-stories/oliver-app/backlog/oliver-requirements-2026-04-24/US-O10-account-naming-source-of-truth.md).
+- This request is superseded by [US-O10](/.github/oliver-app/modules/general-platform/oliver-requirements/US-O10-account-naming-source-of-truth.md).
 
 Acceptance Criteria:
 - [x] Topbar does not carry editable account-name placeholder behavior.

@@ -20,10 +20,10 @@ Acceptance Criteria:
 
 Implementation evidence (2026-04-26):
 - Added canonical journey matrix:
-  - `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/cross-module-journey-matrix-US-O33.md`
+- `/.github/oliver-app/modules/general-platform/outstanding-build-priorities/cross-module-journey-matrix-US-O33.md`
   - Maps Hub/Admin/Design System/Slides/chatbot critical flows to concrete happy/denied/failure/recovery coverage and click-path assertions.
 - Added required promotion checklist:
-  - `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/staging-to-main-release-checklist-US-O33.md`
+- `/.github/oliver-app/modules/general-platform/outstanding-build-priorities/staging-to-main-release-checklist-US-O33.md`
   - Requires explicit matrix command pass before staging-to-main promotion.
 - Added missing admin failure+recovery e2e slice:
   - `tests/e2e/frontend-smoke.spec.ts`

@@ -63,10 +63,10 @@ Artifacts from local browser runs are transient and must not be committed:
 
 After the local gates pass, review the living docs before calling the pass complete:
 
-- `.github/user-stories/_index.md`
-- `.github/user-stories/oliver-app/audits/_coverage-audit.md`
-- `.github/user-stories/oliver-app/audits/_traceability-matrix.md`
-- `.github/user-stories/oliver-app/audits/_verification-audit.md`
+- `/.github/oliver-app/index.md`
+- `/.github/oliver-app/audits/_coverage-audit.md`
+- `/.github/oliver-app/audits/_traceability-matrix.md`
+- `/.github/oliver-app/audits/_verification-audit.md`
 - `src/tech-debt/STATE.md`
 - `src/tech-debt/locked.md`
 
@@ -117,8 +117,8 @@ A deep QA pass is only complete when the result names:
 
 Before any staging-to-main promotion for cross-module work, complete:
 
-- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/cross-module-journey-matrix-US-O33.md`
-- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/staging-to-main-release-checklist-US-O33.md`
+- `/.github/oliver-app/modules/general-platform/outstanding-build-priorities/cross-module-journey-matrix-US-O33.md`
+- `/.github/oliver-app/modules/general-platform/outstanding-build-priorities/staging-to-main-release-checklist-US-O33.md`
 
 Promotion is blocked unless every required command in that checklist is green and results are logged in `src/tech-debt/release-traceability.md`.
 
@@ -130,4 +130,4 @@ For Hub startup and permission warm-path regressions, include the startup budget
 
 Budget source and metric definitions:
 
-- `.github/user-stories/oliver-app/backlog/outstanding-build-priorities-2026-04-25/startup-budget-and-gate-US-O32.md`
+- `/.github/oliver-app/modules/general-platform/outstanding-build-priorities/startup-budget-and-gate-US-O32.md`

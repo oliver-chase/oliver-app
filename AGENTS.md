@@ -29,3 +29,15 @@ Do this before editing module code.
 - Before push/PR, run `npm run check-epic-size`; if thresholds are exceeded, squash into clean epic milestone commit(s).
 - If assessment/audit work uncovers additional outstanding items that may be active in another terminal/session, document them but keep them out of the current commit scope.
 - Use the global [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md) for backlog intake, completion criteria, and verified readiness before pushing.
+
+## Session reminder
+- At session start, run through the [story-lifecycle-gate](/Users/oliver/.codex/skills/story-lifecycle-gate/SKILL.md): backlog-first planning, test/evidence requirements, module-separated backlogs, and PRD story-map source-of-truth discipline.
+
+## Story/doc hygiene
+- Keep PRD-to-execution story flow as single-source:
+  - move long user story maps from PRDs to module backlog files
+  - keep PRD content as a short link/reference
+- Preserve module backlog separation:
+  - one module folder per workstream in `/.github/oliver-app/modules/`
+  - one README inventory per module folder
+  - no mixing slide stories in campaign folders and vice versa
