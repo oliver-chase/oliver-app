@@ -20,3 +20,4 @@ Acceptance Criteria:
 Evidence:
 - Single-slide current export, warning surfacing, and download behavior are validated by `tests/e2e/slides-regression.spec.ts` (`SLD-FE-500 exports current slide to PPTX and surfaces unsupported-component warnings`).
 - Multi-select My Slides export with selected-count button state and `export-pptx` activity recording is validated by `tests/e2e/slides-regression.spec.ts` (`SLD-FE-500 exports selected My Slides rows to one PPTX and records export-pptx activity`).
+- Export orchestration now calls backend PPTX job contract before artifact download (`requestPptxExportJob` / `downloadPptxExportJob`) and merges backend warnings into UI report in `src/app/slides/page.tsx` (`runPptxExport`).

@@ -31,9 +31,17 @@ This register ensures every known slide-module gap is explicitly mapped to a bac
 | Precision canvas snapping and visual alignment guides | `SLD-FE-340` | S2.7 | Code Present |
 | Unsaved-change/discard telemetry instrumentation and metrics | `SLD-FE-150`, `SLD-BE-150` | S1.5 | Backlog Defined |
 | Approval aging SLA indicators and stale-request escalation | `SLD-FE-440` | S3.4 | Done |
-| Approval escalation routing and admin notification targets/channels | `SLD-BE-440` | S3.4 | In Progress |
+| Approval escalation routing and admin notification targets/channels | `SLD-BE-440` | S3.4 | Done |
 | Saved audit filter presets and long-range asynchronous compliance exports | `SLD-FE-430`, `SLD-BE-430` | S3.5 | Code Present |
-| Native PPTX export (single + multi) with warnings report and async job orchestration | `SLD-FE-500`, `SLD-BE-500`, `SLD-BE-510` | S4 | Backlog Defined |
+| Native PPTX export (single + multi) with warnings report and async job orchestration | `SLD-FE-500`, `SLD-BE-500`, `SLD-BE-510` | S4 | Done |
+| DOM→PPTX computed-style mapping fidelity baseline for modern CSS | `US-SLD-080` | S4.1 | Backlog Defined |
+| Flexbox layout parity for PPTX coordinate projection | `US-SLD-081` | S4.1 | Backlog Defined |
+| Gradients, shadows, and rounded-image artifact prevention in PPTX | `US-SLD-082` | S4.2 | Backlog Defined |
+| Editable-output guardrail (no screenshot fallback for supported nodes) | `US-SLD-083` | S4.2 | Backlog Defined |
+| Auto-font embedding from CSS/font-face assets into PPTX package | `US-SLD-084` | S4.3 | Backlog Defined |
+| Reveal/fragment HTML animation mapping to native PPT effects | `US-SLD-085` | S4.3 | Backlog Defined |
+| SVG/table/canvas dashboard export parity | `US-SLD-086` | S4.4 | Backlog Defined |
+| DOM→PPTX edge-case corpus and reproducible issue-intake workflow | `US-SLD-087` | S4.5 | Backlog Defined |
 | Slides page orchestration decomposition for maintainability | `SLD-FE-610` | S6 | Backlog Defined |
 | Slide and Template Data Model + RLS | `US-SLD-030` | S3 | Done |
 | Save API + autosave state contract | `US-SLD-031` | S3 | Done |

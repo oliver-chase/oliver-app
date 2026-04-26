@@ -5,6 +5,9 @@ import type {
   SlideAuditEvent,
   SlideAuditFilterPreset,
   SlideAuditPresetScope,
+  SlidePptxExportJob,
+  SlidePptxExportObject,
+  SlidePptxExportWarning,
   SlideRecord,
   SlideSaveInput,
   SlideSaveResponse,
@@ -18,6 +21,7 @@ import type {
 
 const FORCE_LOCAL_MODE = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === '1'
 const LOCAL_STORAGE_KEY = 'oliver-slides-store-v1'
+const LOCAL_ESCALATION_CHANNELS = ['in-app'] as const
 
 interface LocalSlidesStore {
   slides: SlideRecord[]
@@ -28,6 +32,7 @@ interface LocalSlidesStore {
   audits: SlideAuditEvent[]
   auditPresets: SlideAuditFilterPreset[]
   auditExportJobs: SlideAuditExportJob[]
+  pptxExportJobs: SlidePptxExportJob[]
   nextAuditId: number
   nextApprovalId: number
 }
@@ -117,6 +122,26 @@ export interface SlideAuditExportJobRequest {
   entityType?: 'slide' | 'template' | 'all'
   dateFrom?: string
   dateTo?: string
+}
+
+export interface SlidePptxExportQueryOptions {
+  limit?: number
+  offset?: number
+  status?: SlidePptxExportJob['status'] | 'all'
+}
+
+export interface SlidePptxExportJobRequest {
+  slideIds: string[]
+  slides: Array<{
+    id: string
+    title: string
+    canvas: SlideRecord['canvas']
+    components: SlideRecord['components']
+  }>
+  filenamePrefix?: string
+  includeHidden?: boolean
+  idempotencyKey?: string
+  maxAttempts?: number
 }
 
 type SlideFailureClass =
@@ -436,6 +461,25 @@ function normalizeActor(actor: SlideActor): SlideActor {
   }
 }
 
+function resolveLocalEscalationRouting(payload: Record<string, unknown>) {
+  const targetUserId = typeof payload.target_user_id === 'string' ? payload.target_user_id.trim() : ''
+  const targetUserEmail = typeof payload.target_user_email === 'string' ? payload.target_user_email.trim().toLowerCase() : ''
+  const targets = targetUserId || targetUserEmail
+    ? [{ user_id: targetUserId || null, user_email: targetUserEmail || null }]
+    : []
+  return {
+    channels: [...LOCAL_ESCALATION_CHANNELS],
+    targets,
+    adapters: {
+      in_app_enabled: true,
+      email_enabled: false,
+      email_from: null,
+      slack_enabled: false,
+      slack_webhook_configured: false,
+    },
+  }
+}
+
 function initialTemplates(actor: SlideActor): SlideTemplateRecord[] {
   const timestamp = nowIso()
   return [
@@ -528,6 +572,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       audits: [],
       auditPresets: [],
       auditExportJobs: [],
+      pptxExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -544,6 +589,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       audits: [],
       auditPresets: [],
       auditExportJobs: [],
+      pptxExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -563,6 +609,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
     if (!Array.isArray(parsed.audits)) parsed.audits = []
     if (!Array.isArray(parsed.auditPresets)) parsed.auditPresets = []
     if (!Array.isArray(parsed.auditExportJobs)) parsed.auditExportJobs = []
+    if (!Array.isArray(parsed.pptxExportJobs)) parsed.pptxExportJobs = []
     if (!Number.isFinite(parsed.nextAuditId) || parsed.nextAuditId < 1) parsed.nextAuditId = 1
     if (!Number.isFinite(parsed.nextApprovalId) || parsed.nextApprovalId < 1) parsed.nextApprovalId = 1
     return parsed
@@ -576,6 +623,7 @@ function readLocalStore(actor: SlideActor): LocalSlidesStore {
       audits: [],
       auditPresets: [],
       auditExportJobs: [],
+      pptxExportJobs: [],
       nextAuditId: 1,
       nextApprovalId: 1,
     }
@@ -671,10 +719,78 @@ function normalizeAuditExportStatus(
   return 'all'
 }
 
+function normalizePptxExportStatus(
+  value: string | undefined,
+): SlidePptxExportJob['status'] | 'all' {
+  if (value === 'queued' || value === 'running' || value === 'succeeded' || value === 'failed') return value
+  return 'all'
+}
+
 function normalizePresetDateValue(value: string | undefined): string {
   if (!value) return ''
   const trimmed = value.trim()
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : ''
+}
+
+function mapComponentToLocalPptxObject(
+  slideId: string,
+  component: SlideRecord['components'][number],
+): { object: SlidePptxExportObject | null; warning: SlidePptxExportWarning | null } {
+  const componentType = String(component.type || 'unknown')
+  const base = {
+    slide_id: slideId,
+    component_id: component.id || 'unknown-component',
+    component_type: componentType,
+  }
+
+  if (['heading', 'subheading', 'tag-line', 'text'].includes(componentType)) {
+    return {
+      object: { ...base, native_kind: 'text', editable: true },
+      warning: null,
+    }
+  }
+  if (['shape', 'button', 'card', 'panel', 'row', 'stat'].includes(componentType)) {
+    return {
+      object: { ...base, native_kind: 'shape', editable: true },
+      warning: null,
+    }
+  }
+  if (componentType === 'image' || componentType === 'logo') {
+    return {
+      object: { ...base, native_kind: 'image', editable: false },
+      warning: {
+        code: 'image_rasterized',
+        message: `Component "${component.id}" was exported as an image fallback.`,
+        ...base,
+      },
+    }
+  }
+
+  return {
+    object: null,
+    warning: {
+      code: 'unsupported_component',
+      message: `Component type "${componentType}" is not natively supported and was skipped.`,
+      ...base,
+    },
+  }
+}
+
+function buildLocalPptxProjection(
+  slides: Array<{ id: string; components: SlideRecord['components'] }>,
+): { warnings: SlidePptxExportWarning[]; nativeObjects: SlidePptxExportObject[] } {
+  const warnings: SlidePptxExportWarning[] = []
+  const nativeObjects: SlidePptxExportObject[] = []
+
+  for (const slide of slides) {
+    for (const component of slide.components || []) {
+      const mapped = mapComponentToLocalPptxObject(slide.id, component)
+      if (mapped.object) nativeObjects.push(mapped.object)
+      if (mapped.warning) warnings.push(mapped.warning)
+    }
+  }
+
+  return { warnings, nativeObjects }
 }
 
 function filterLocalAudits(
@@ -795,7 +911,15 @@ function shouldFallbackToLocal(error: unknown): boolean {
   return false
 }
 
-async function withLocalFallback<T>(remoteCall: () => Promise<T>, localCall: () => Promise<T> | T): Promise<T> {
+interface LocalFallbackOptions {
+  suppressDegradedState?: boolean
+}
+
+async function withLocalFallback<T>(
+  remoteCall: () => Promise<T>,
+  localCall: () => Promise<T> | T,
+  options: LocalFallbackOptions = {},
+): Promise<T> {
   if (FORCE_LOCAL_MODE) {
     return Promise.resolve(localCall())
   }
@@ -806,7 +930,9 @@ async function withLocalFallback<T>(remoteCall: () => Promise<T>, localCall: () 
     return response
   } catch (error) {
     if (shouldFallbackToLocal(error)) {
-      markRuntimeDegraded(error)
+      if (!options.suppressDegradedState) {
+        markRuntimeDegraded(error)
+      }
       return Promise.resolve(localCall())
     }
     throw error
@@ -1281,6 +1407,172 @@ export async function downloadAuditExportJob(
         filename: job.file_name || 'slide-audit-export.csv',
         content: job.csv_content,
       }
+    },
+  )
+}
+
+export async function listPptxExportJobs(
+  actorInput: SlideActor,
+  options: SlidePptxExportQueryOptions = {},
+): Promise<SlidePptxExportJob[]> {
+  const actor = normalizeActor(actorInput)
+  const limitRaw = Number.isFinite(options.limit) ? Number(options.limit) : 30
+  const offsetRaw = Number.isFinite(options.offset) ? Number(options.offset) : 0
+  const limit = Math.max(1, Math.min(200, limitRaw))
+  const offset = Math.max(0, offsetRaw)
+  const status = normalizePptxExportStatus(options.status)
+
+  return withLocalFallback(
+    async () => {
+      const params = new URLSearchParams({
+        resource: 'pptx-export-jobs',
+        user_id: actor.user_id,
+        limit: String(limit),
+        offset: String(offset),
+      })
+      if (actor.user_email) params.set('user_email', actor.user_email)
+      if (status !== 'all') params.set('status', status)
+      const response = await requestJson<{ items: SlidePptxExportJob[] }>(`/api/slides?${params.toString()}`)
+      return response.items || []
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const rows = store.pptxExportJobs
+        .filter((job) => (actor.role === 'admin' ? true : job.requested_by_user_id === actor.user_id))
+        .filter((job) => (status === 'all' ? true : job.status === status))
+        .sort((a, b) => b.requested_at.localeCompare(a.requested_at))
+      return rows.slice(offset, offset + limit)
+    },
+  )
+}
+
+export async function requestPptxExportJob(
+  actorInput: SlideActor,
+  input: SlidePptxExportJobRequest,
+): Promise<SlidePptxExportJob> {
+  const actor = normalizeActor(actorInput)
+  const slideIds = Array.from(new Set((input.slideIds || []).map((value) => value.trim()).filter(Boolean)))
+  const slides = Array.isArray(input.slides) ? input.slides : []
+  if (slides.length === 0) throw new SlideApiError('At least one slide is required for PPTX export.', 400)
+
+  const filenamePrefix = (input.filenamePrefix || 'slides-export').trim() || 'slides-export'
+  const includeHidden = !!input.includeHidden
+  const idempotencyKey = (input.idempotencyKey || '').trim() || null
+  const maxAttempts = Number.isFinite(input.maxAttempts) ? Math.max(1, Math.min(5, Number(input.maxAttempts))) : 3
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ job: SlidePptxExportJob }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'request-pptx-export-job',
+          actor,
+          slide_ids: slideIds,
+          slides,
+          filename_prefix: filenamePrefix,
+          include_hidden: includeHidden,
+          idempotency_key: idempotencyKey || undefined,
+          max_attempts: maxAttempts,
+        }),
+      })
+      if (!response.job) throw new SlideApiError('PPTX export job request failed.', 500)
+      return response.job
+    },
+    () => {
+      const store = readLocalStore(actor)
+      if (idempotencyKey) {
+        const existing = store.pptxExportJobs.find((entry) =>
+          entry.requested_by_user_id === actor.user_id &&
+          entry.idempotency_key === idempotencyKey &&
+          (entry.status === 'queued' || entry.status === 'running' || entry.status === 'succeeded'),
+        )
+        if (existing) return existing
+      }
+
+      const stamp = nowIso()
+      const safeStamp = stamp.replace(/[:.]/g, '-')
+      const { warnings, nativeObjects } = buildLocalPptxProjection(
+        slides.map((slide) => ({ id: slide.id, components: slide.components })),
+      )
+      const token = safeRandomId('pptx-download-token')
+      const job: SlidePptxExportJob = {
+        id: safeRandomId('pptx-export-job'),
+        requested_by_user_id: actor.user_id,
+        requested_by_email: actor.user_email || null,
+        status: 'succeeded',
+        slide_ids: slideIds,
+        options: {
+          filename_prefix: filenamePrefix,
+          include_hidden: includeHidden,
+        },
+        attempts: 1,
+        max_attempts: maxAttempts,
+        warning_count: warnings.length,
+        warnings,
+        native_objects: nativeObjects,
+        artifact: {
+          file_name: `${filenamePrefix.replace(/\s+/g, '-').toLowerCase()}-${safeStamp}.pptx`,
+          expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          download_token: token,
+        },
+        requested_at: stamp,
+        started_at: stamp,
+        completed_at: stamp,
+        updated_at: stamp,
+        error_message: null,
+        idempotency_key: idempotencyKey,
+      }
+      store.pptxExportJobs.unshift(job)
+      if (store.pptxExportJobs.length > 100) {
+        store.pptxExportJobs = store.pptxExportJobs.slice(0, 100)
+      }
+      for (const slideId of slideIds) {
+        makeAuditEvent(store, actor, 'export-pptx', 'success', 'slide', slideId, {
+          job_id: job.id,
+          warning_count: warnings.length,
+        })
+      }
+      writeLocalStore(store)
+      return job
+    },
+  )
+}
+
+export async function downloadPptxExportJob(
+  actorInput: SlideActor,
+  jobId: string,
+): Promise<SlidePptxExportJob> {
+  const actor = normalizeActor(actorInput)
+  const trimmedId = jobId.trim()
+  if (!trimmedId) throw new SlideApiError('PPTX export job id is required.', 400)
+
+  return withLocalFallback(
+    async () => {
+      const response = await requestJson<{ job: SlidePptxExportJob }>('/api/slides', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'download-pptx-export-job',
+          actor,
+          job_id: trimmedId,
+        }),
+      })
+      if (!response.job) throw new SlideApiError('PPTX export job download failed.', 500)
+      return response.job
+    },
+    () => {
+      const store = readLocalStore(actor)
+      const job = store.pptxExportJobs.find((entry) => entry.id === trimmedId)
+      if (!job) throw new SlideApiError('PPTX export job not found.', 404)
+      const canRead = actor.role === 'admin' || job.requested_by_user_id === actor.user_id
+      if (!canRead) throw new SlideApiError('Forbidden. Cannot access this PPTX export job.', 403)
+      if (job.status !== 'succeeded') {
+        throw new SlideApiError('PPTX export job is not ready for download.', 409)
+      }
+      const expiresAt = job.artifact?.expires_at ? Date.parse(job.artifact.expires_at) : NaN
+      if (Number.isFinite(expiresAt) && Date.now() > expiresAt) {
+        throw new SlideApiError('PPTX export artifact has expired. Request a new export.', 410)
+      }
+      return job
     },
   )
 }
@@ -1936,6 +2228,7 @@ export async function listTemplateApprovals(
       if (actor.role !== 'admin') rows = rows.filter((entry) => entry.requested_by_user_id === actor.user_id)
       return rows.sort((a, b) => b.created_at.localeCompare(a.created_at))
     },
+    { suppressDegradedState: true },
   )
 }
 
@@ -2149,6 +2442,7 @@ export async function escalateTemplateApproval(
       }
 
       const payload = approval.payload && typeof approval.payload === 'object' ? approval.payload : {}
+      const routing = resolveLocalEscalationRouting(payload as Record<string, unknown>)
       const existingEscalations = Array.isArray((payload as { escalations?: unknown }).escalations)
         ? (payload as { escalations: Array<Record<string, unknown>> }).escalations
         : []
@@ -2156,6 +2450,7 @@ export async function escalateTemplateApproval(
         escalated_by_user_id: actor.user_id,
         escalated_by_email: actor.user_email || null,
         reason: trimmedReason || null,
+        routing,
         created_at: nowIso(),
       }
       const nextPayload = {
@@ -2174,6 +2469,8 @@ export async function escalateTemplateApproval(
         approval_id: approval.id,
         approval_type: approval.approval_type,
         escalation_count: existingEscalations.length + 1,
+        routing_channels: routing.channels,
+        routing_targets: routing.targets,
       })
       writeLocalStore(store)
       return updated
@@ -2227,6 +2524,7 @@ export async function runTemplateApprovalEscalationSweep(
         }
 
         const payload = approval.payload && typeof approval.payload === 'object' ? approval.payload : {}
+        const routing = resolveLocalEscalationRouting(payload as Record<string, unknown>)
         const existingEscalations = Array.isArray((payload as { escalations?: unknown }).escalations)
           ? (payload as { escalations: Array<Record<string, unknown>> }).escalations
           : []
@@ -2249,6 +2547,7 @@ export async function runTemplateApprovalEscalationSweep(
             escalated_by_email: actor.user_email || null,
             reason: 'SLA overdue escalation sweep',
             automated: true,
+            routing,
             created_at: nowIso(),
           }
           const updated: SlideTemplateApproval = {
@@ -2268,6 +2567,8 @@ export async function runTemplateApprovalEscalationSweep(
             approval_type: approval.approval_type,
             escalation_count: existingEscalations.length + 1,
             automated: true,
+            routing_channels: routing.channels,
+            routing_targets: routing.targets,
           })
         }
 

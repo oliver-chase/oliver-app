@@ -29,6 +29,7 @@ const FLOW_MEDIA_TAGS = new Set(['img', 'picture', 'svg', 'canvas', 'video'])
 const IMPORT_STYLE_PROPERTIES = [
   'color',
   'background-color',
+  'background',
   'font-size',
   'font-weight',
   'font-style',
@@ -49,7 +50,11 @@ const IMPORT_STYLE_PROPERTIES = [
   'border-right',
   'border-bottom',
   'border-left',
+  'border-color',
+  'border-width',
+  'border-style',
   'border-radius',
+  'box-shadow',
 ] as const
 
 interface ParsedLength {
@@ -323,6 +328,23 @@ function normalizeColor(value: string | undefined): string | undefined {
   return normalized
 }
 
+function normalizeBackgroundFill(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim()
+  if (!normalized) return undefined
+  const lowered = normalized.toLowerCase()
+  if (
+    lowered === 'none' ||
+    lowered === 'transparent' ||
+    lowered === 'rgba(0, 0, 0, 0)' ||
+    lowered === 'rgba(0,0,0,0)'
+  ) {
+    return undefined
+  }
+  if (/url\(\s*javascript:/i.test(lowered)) return undefined
+  return normalized
+}
+
 function hasRenderedBorder(style: CSSStyleDeclaration): boolean {
   const widths = [
     style.borderTopWidth,
@@ -532,6 +554,19 @@ function normalizeTextAlign(value: string | undefined): SlideComponentStyle['tex
   return undefined
 }
 
+function parsePxLength(value: string | undefined): number | undefined {
+  const parsed = parseLength(value)
+  if (!parsed || !isPxLike(parsed)) return undefined
+  return parsed.value
+}
+
+function normalizeBorderStyle(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (!normalized || normalized === 'none' || normalized === 'hidden') return undefined
+  return normalized
+}
+
 function extractStyle(
   styleMap: Record<string, string>,
   computedStyle: CSSStyleDeclaration | null,
@@ -541,6 +576,13 @@ function extractStyle(
   const fontWeight = parseFontWeight(computedStyle?.fontWeight || styleMap['font-weight'])
   const color = normalizeColor(computedStyle?.color || styleMap.color)
   const backgroundColor = normalizeColor(computedStyle?.backgroundColor || styleMap['background-color'])
+  const backgroundFill = normalizeBackgroundFill(computedStyle?.background || styleMap.background)
+  const borderColor = normalizeColor(computedStyle?.borderColor || styleMap.border || styleMap['border-color'])
+  const borderWidth = parsePxLength(computedStyle?.borderWidth || styleMap['border-width'])
+  const borderStyle = normalizeBorderStyle(computedStyle?.borderStyle || styleMap['border-style'])
+  const borderRadius = parsePxLength(computedStyle?.borderRadius || styleMap['border-radius'])
+  const shadowRaw = (computedStyle?.boxShadow || styleMap['box-shadow'] || '').trim()
+  const boxShadow = shadowRaw && shadowRaw.toLowerCase() !== 'none' ? shadowRaw : undefined
   const fontStyleRaw = (computedStyle?.fontStyle || styleMap['font-style'] || '').trim().toLowerCase()
   const fontStyle = fontStyleRaw === 'italic' ? 'italic' : undefined
   const textAlign = normalizeTextAlign(computedStyle?.textAlign || styleMap['text-align'])
@@ -553,6 +595,12 @@ function extractStyle(
     fontFamily,
     color,
     backgroundColor,
+    backgroundFill,
+    borderColor,
+    borderWidth: typeof borderWidth === 'number' && borderWidth > 0 ? borderWidth : undefined,
+    borderStyle,
+    borderRadius: typeof borderRadius === 'number' && borderRadius > 0 ? borderRadius : undefined,
+    boxShadow,
     fontStyle,
     lineHeight: lineHeightLength && isPxLike(lineHeightLength) ? lineHeightLength.value : undefined,
     textAlign,
@@ -860,6 +908,12 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
     const computedRootStyle = readComputedStyleSafe(renderSnapshot.root || root)
     const computedCanvasWidth = parseLength(computedRootStyle?.width || '')?.value
     const computedCanvasHeight = parseLength(computedRootStyle?.height || '')?.value
+    const canvasBackground = normalizeBackgroundFill(
+      computedRootStyle?.background ||
+      rootStyle.background ||
+      computedRootStyle?.backgroundColor ||
+      rootStyle['background-color'],
+    )
 
     const absoluteNodes = allNodes.filter((node) => {
       const nodeId = node.getAttribute('data-import-node-id') || ''
@@ -975,6 +1029,7 @@ export async function convertHtmlToSlideComponents(html: string): Promise<SlideI
       canvas: {
         width: sourceCanvasWidth,
         height: sourceCanvasHeight,
+        ...(canvasBackground ? { background: canvasBackground } : {}),
       },
       components,
       warnings: Array.from(new Set(warnings)),

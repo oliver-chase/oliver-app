@@ -11,7 +11,7 @@ Scope: `/slides` HTML import, persistence, exports, and Oliver Dock workflows.
 | Edit imported slide | Scaled 16:9 canvas renderer, resize handles, inline text editing, bounded drag/nudge controls, and live snapping guides for drag/resize are available. | No grid-step snapping presets yet for teams that need strict spacing systems (4px/8px/etc.). | SLD-FE-340 |
 | Save + leave safely | Save, conflict handling, draft recovery, autosave, retry queue/backoff, and browser history guardrails now exist. | No unsaved-change telemetry/analytics to quantify discard-risk trends. | SLD-FE-150, SLD-BE-150 |
 | Template publishing | Publish from My Slides supports private/shared visibility, ownership transfer handoff, collaborator role controls (editor/reviewer/viewer), approval request/resolution workflow, and idempotent scheduled SLA escalation automation for stale requests. | Escalation notification channel fan-out (Slack/email) is still optional backlog, but governance escalation itself is now automated. | SLD-FE-440, SLD-BE-440 |
-| Export for client delivery | HTML and print-to-PDF flows exist. PPTX export now supports current-slide and multi-slide selection with warnings surfaced in UI. | Async job orchestration and richer backend-native asset fallback pipeline are still missing for long-running enterprise exports. | SLD-FE-500, SLD-BE-500, SLD-BE-510 |
+| Export for client delivery | HTML and print-to-PDF flows exist. PPTX export now supports current-slide and multi-slide selection with backend job orchestration, warnings, and downloadable artifact metadata. | Richer backend-native asset fidelity and worker-scale throughput hardening remain for future optimization. | SLD-FE-500, SLD-BE-500, SLD-BE-510 |
 | Audit and compliance | Save/export/delete actions are logged and now support server-side filtered activity paging, saved filter presets, and queued audit export jobs with downloadable CSV artifacts. | Background worker orchestration and retention controls for very large compliance exports are still open. | SLD-FE-430, SLD-BE-430, SLD-BE-510 |
 
 ## Dead / Incomplete / Debt Findings
@@ -70,9 +70,9 @@ KPI: Export completion rate >= 99% and support incidents for export mismatches d
 
 | Ticket | Title | Layer | Priority | Status | Acceptance Criteria |
 | --- | --- | --- | --- | --- | --- |
-| SLD-FE-500 | PPTX export UX (single + multi-select) | Frontend | P1 | In Progress (2026-04-25) | Current-slide and selected My Slides exports are shipped; continue hardening status/warnings and selection UX. |
-| SLD-BE-500 | PPTX generation service (native objects + fallback images) | Backend | P1 | In Progress (2026-04-25) | Native text/shape mapping with warnings is shipped in current export path; image/logo fallback mapping remains. |
-| SLD-BE-510 | Export job model for long-running conversions | Backend | P2 | Backlog | Async jobs track status, retries, and downloadable artifacts. |
+| SLD-FE-500 | PPTX export UX (single + multi-select) | Frontend | P1 | Done (2026-04-26) | Current-slide and selected My Slides exports are shipped; backend warnings and job orchestration status are reflected in export flow. |
+| SLD-BE-500 | PPTX generation service (native objects + fallback images) | Backend | P1 | Done (2026-04-26) | API maps supported component types to native object projections and emits explicit fallback warnings. |
+| SLD-BE-510 | Export job model for long-running conversions | Backend | P2 | Done (2026-04-26) | Async-oriented job contract supports lifecycle status, bounded retry/idempotency, artifact metadata expiry, and query/download endpoints. |
 
 ## EPIC SLD-E6: Maintainability and Decomposition
 Goal: Reduce coupling and improve change safety in the slide module.
@@ -84,11 +84,9 @@ KPI: PR cycle time and regression rework decrease across slide feature iteration
 
 ## Next Features In Line
 
-1. SLD-FE-500 + SLD-BE-500 + SLD-BE-510: Add native PPTX export with async orchestration and warnings reporting.
-2. SLD-FE-210 + SLD-BE-210: Expand template preview flow with quick-preview picker and backend thumbnail asset generation.
-3. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
-4. SLD-FE-610: Decompose `src/app/slides/page.tsx` into bounded feature modules.
-5. SLD-BE-510: Expand async job/retry orchestration for export + compliance retention.
+1. SLD-FE-210 + SLD-BE-210: Expand template preview flow with quick-preview picker and backend thumbnail asset generation.
+2. SLD-FE-150 + SLD-BE-150: Add unsaved-change risk telemetry and reliability analytics.
+3. SLD-FE-610: Decompose `src/app/slides/page.tsx` into bounded feature modules.
 
 ## Program Backlog Addendum (2026-04-25)
 

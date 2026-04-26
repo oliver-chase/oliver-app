@@ -20,8 +20,15 @@ function serializeStyle(component: SlideComponent): string {
   if (typeof component.height === 'number') chunks.push(`height:${component.height}px`)
   if (component.style.fontSize) chunks.push(`font-size:${component.style.fontSize}px`)
   if (component.style.fontWeight) chunks.push(`font-weight:${component.style.fontWeight}`)
+  if (component.style.fontFamily) chunks.push(`font-family:${component.style.fontFamily}`)
   if (component.style.color) chunks.push(`color:${component.style.color}`)
+  if (component.style.backgroundFill) chunks.push(`background:${component.style.backgroundFill}`)
   if (component.style.backgroundColor) chunks.push(`background-color:${component.style.backgroundColor}`)
+  if (component.style.borderColor) chunks.push(`border-color:${component.style.borderColor}`)
+  if (component.style.borderWidth) chunks.push(`border-width:${component.style.borderWidth}px`)
+  if (component.style.borderStyle) chunks.push(`border-style:${component.style.borderStyle}`)
+  if (component.style.borderRadius) chunks.push(`border-radius:${component.style.borderRadius}px`)
+  if (component.style.boxShadow) chunks.push(`box-shadow:${component.style.boxShadow}`)
   if (component.style.fontStyle) chunks.push(`font-style:${component.style.fontStyle}`)
   if (component.style.lineHeight) chunks.push(`line-height:${component.style.lineHeight}px`)
   if (component.style.textAlign) chunks.push(`text-align:${component.style.textAlign}`)
@@ -41,6 +48,7 @@ function sanitizeContent(content: string): string {
 function buildPrintSafeStyles(canvas: SlideCanvas): string {
   const safeWidth = Number.isFinite(canvas.width) && canvas.width > 0 ? Math.max(1, Math.round(canvas.width)) : 1920
   const safeHeight = Number.isFinite(canvas.height) && canvas.height > 0 ? Math.max(1, Math.round(canvas.height)) : 1080
+  const safeBackground = typeof canvas.background === 'string' && canvas.background.trim() ? canvas.background.trim() : '#fff'
 
   return [
     '@media print{',
@@ -53,7 +61,7 @@ function buildPrintSafeStyles(canvas: SlideCanvas): string {
     'height:100%;',
     'margin:0;',
     'padding:0;',
-    'background:#fff;',
+    `background:${safeBackground};`,
     '}',
     '*{',
     'print-color-adjust:exact;',
@@ -71,7 +79,7 @@ function buildPrintSafeStyles(canvas: SlideCanvas): string {
     'height:100%;',
     'margin:0;',
     'padding:0;',
-    'background:#fff;',
+    `background:${safeBackground};`,
     'display:flex;',
     'align-items:flex-start;',
     'justify-content:flex-start;',
@@ -83,14 +91,14 @@ function buildPrintSafeStyles(canvas: SlideCanvas): string {
     'width:100%;',
     'height:100%;',
     'overflow:hidden;',
-    'background:#fff;',
+    `background:${safeBackground};`,
     '}',
     '.slide-canvas{',
     'position:relative;',
     `width:${safeWidth}px;`,
     `height:${safeHeight}px;`,
     'overflow:hidden;',
-    'background:#fff;',
+    `background:${safeBackground};`,
     '}',
   ].join('')
 }
@@ -135,7 +143,7 @@ export function convertSlideComponentsToHtml(input: {
     '<body>',
   ].join('\n')
   const rootOpen =
-    `<div class="slides-export-root"><div class="slide-canvas" data-slide-root="1" data-oliver-export-version="1" data-oliver-source="${escapeAttribute(source)}" data-oliver-slide-id="${escapeAttribute(slideId)}" data-oliver-revision="${escapeAttribute(revision)}" data-oliver-exported-at="${escapeAttribute(exportedAt)}" style="position:relative;width:${canvas.width}px;height:${canvas.height}px;overflow:hidden;">`
+    `<div class="slides-export-root"><div class="slide-canvas" data-slide-root="1" data-oliver-export-version="1" data-oliver-source="${escapeAttribute(source)}" data-oliver-slide-id="${escapeAttribute(slideId)}" data-oliver-revision="${escapeAttribute(revision)}" data-oliver-exported-at="${escapeAttribute(exportedAt)}" style="position:relative;width:${canvas.width}px;height:${canvas.height}px;overflow:hidden;${canvas.background ? `background:${escapeAttribute(canvas.background)};` : ''}">`
   const body = components.map(componentToHtml).join('\n')
   const rootClose = '</div></div>'
   const footer = '</body></html>'

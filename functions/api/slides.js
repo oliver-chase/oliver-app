@@ -1,6 +1,6 @@
 // /api/slides — slide persistence, template library, and audit operations.
 //
-// GET /api/slides?resource=slides|templates|audits|audit-presets|audit-export-jobs|template-collaborators|template-approvals&search=&limit=&offset=
+// GET /api/slides?resource=slides|templates|audits|audit-presets|audit-export-jobs|pptx-export-jobs|template-collaborators|template-approvals&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
 import { jsonResponse } from './_shared/ai.js';
@@ -14,9 +14,19 @@ const TEMPLATE_COLLABORATOR_ROLES = ['editor', 'reviewer', 'viewer'];
 const TEMPLATE_APPROVAL_TYPES = ['transfer-template', 'upsert-collaborator', 'remove-collaborator'];
 const TEMPLATE_APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
 const MAX_APPROVAL_ESCALATION_REASON_LENGTH = 280;
+const DEFAULT_ESCALATION_CHANNELS = ['in-app'];
+const SUPPORTED_ESCALATION_CHANNELS = ['in-app', 'email', 'slack'];
 const AUDIT_PRESET_SCOPES = ['personal', 'shared'];
 const AUDIT_EXPORT_JOB_STATUSES = ['queued', 'running', 'completed', 'failed'];
+const PPTX_EXPORT_JOB_STATUSES = ['queued', 'running', 'succeeded', 'failed'];
 const MAX_AUDIT_EXPORT_ROWS = 10000;
+const MAX_PPTX_EXPORT_SLIDES = 50;
+const MAX_PPTX_EXPORT_WARNINGS = 500;
+const MAX_PPTX_EXPORT_ATTEMPTS = 5;
+const PPTX_EXPORT_ARTIFACT_TTL_MINUTES = 30;
+const PPTX_NATIVE_TEXT_COMPONENT_TYPES = new Set(['heading', 'subheading', 'tag-line', 'text']);
+const PPTX_NATIVE_SHAPE_COMPONENT_TYPES = new Set(['shape', 'card', 'button', 'panel', 'row', 'stat']);
+const PPTX_IMAGE_COMPONENT_TYPES = new Set(['image', 'logo']);
 const SLIDES_SWEEP_HEARTBEAT_ENTITY_ID = 'approval-sla-sweep';
 const DEFAULT_SWEEP_MIN_INTERVAL_MINUTES = 60;
 const AUDIT_ACTIONS = [
@@ -40,6 +50,11 @@ const AUDIT_ACTIONS = [
 const AUDIT_OUTCOMES = ['success', 'failure'];
 const AUDIT_ENTITY_TYPES = ['slide', 'template'];
 const MAX_ERROR_MESSAGE_LENGTH = 320;
+const pptxExportJobsById = new Map();
+const pptxExportJobIdsByRequestedAt = [];
+const PPTX_FLEX_JUSTIFY_VALUES = new Set(['flex-start', 'flex-end', 'center', 'space-between', 'space-around']);
+const PPTX_FLEX_ALIGN_VALUES = new Set(['flex-start', 'flex-end', 'center', 'stretch']);
+const PPTX_FLEX_DIRECTION_VALUES = new Set(['row', 'row-reverse', 'column', 'column-reverse']);
 
 function generateCorrelationId() {
   const random = Math.random().toString(36).slice(2, 10);
@@ -376,7 +391,13 @@ function sanitizeCanvas(rawCanvas) {
   const height = Number(rawCanvas.height);
   if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
   if (width <= 0 || height <= 0) return null;
-  return { width, height };
+  const rawBackground = typeof rawCanvas.background === 'string' ? rawCanvas.background.trim() : '';
+  const background = rawBackground && rawBackground.length <= 512 ? rawBackground : null;
+  return {
+    width,
+    height,
+    ...(background ? { background } : {}),
+  };
 }
 
 function sanitizeComponents(rawComponents) {
@@ -426,6 +447,86 @@ function sanitizeEscalationReason(value) {
   const trimmed = value.trim();
   if (trimmed.length > MAX_APPROVAL_ESCALATION_REASON_LENGTH) return null;
   return trimmed;
+}
+
+function parseCsvList(value, normalizeItem) {
+  if (typeof value !== 'string') return [];
+  const parsed = value
+    .split(',')
+    .map((item) => normalizeItem(item))
+    .filter(Boolean);
+  return Array.from(new Set(parsed));
+}
+
+function resolveEscalationChannels(env) {
+  const configured = parseCsvList(
+    env.SLIDES_APPROVAL_ESCALATION_CHANNELS || env.SLIDES_ESCALATION_CHANNELS || '',
+    (item) => String(item || '').trim().toLowerCase(),
+  ).filter((channel) => SUPPORTED_ESCALATION_CHANNELS.includes(channel));
+  if (configured.length > 0) return configured;
+  return [...DEFAULT_ESCALATION_CHANNELS];
+}
+
+function resolveEscalationTargets(env, ownerPolicy) {
+  const configuredUserIds = parseCsvList(
+    env.SLIDES_APPROVAL_ESCALATION_TARGET_USER_IDS || '',
+    (item) => normalizeUserId(item),
+  );
+  const configuredEmails = parseCsvList(
+    env.SLIDES_APPROVAL_ESCALATION_TARGET_EMAILS || '',
+    (item) => normalizeEmail(item),
+  );
+
+  const targetKeys = new Set();
+  const targets = [];
+  const pushTarget = (userId, email) => {
+    const normalizedUserId = normalizeUserId(userId || '');
+    const normalizedEmail = normalizeEmail(email || '');
+    if (!normalizedUserId && !normalizedEmail) return;
+    const key = `${normalizedUserId}::${normalizedEmail}`;
+    if (targetKeys.has(key)) return;
+    targetKeys.add(key);
+    targets.push({
+      user_id: normalizedUserId || null,
+      user_email: normalizedEmail || null,
+    });
+  };
+
+  for (const userId of configuredUserIds) pushTarget(userId, '');
+  for (const email of configuredEmails) pushTarget('', email);
+
+  if (targets.length === 0 && ownerPolicy) {
+    for (const ownerUserId of ownerPolicy.ownerUserIds || []) {
+      pushTarget(ownerUserId, '');
+    }
+    for (const ownerEmail of ownerPolicy.ownerEmails || []) {
+      pushTarget('', ownerEmail);
+    }
+  }
+
+  return targets;
+}
+
+function resolveEscalationRoutingConfig(env) {
+  const ownerPolicy = parseOwnerPolicy(env);
+  const channels = resolveEscalationChannels(env);
+  const targets = resolveEscalationTargets(env, ownerPolicy);
+  const emailFrom = normalizeEmail(env.SLIDES_APPROVAL_ESCALATION_EMAIL_FROM || '');
+  const slackWebhook = typeof env.SLIDES_APPROVAL_ESCALATION_SLACK_WEBHOOK_URL === 'string'
+    ? env.SLIDES_APPROVAL_ESCALATION_SLACK_WEBHOOK_URL.trim()
+    : '';
+
+  return {
+    channels,
+    targets,
+    adapters: {
+      in_app_enabled: channels.includes('in-app'),
+      email_enabled: channels.includes('email'),
+      email_from: emailFrom || null,
+      slack_enabled: channels.includes('slack'),
+      slack_webhook_configured: !!slackWebhook,
+    },
+  };
 }
 
 function sanitizeAuditPresetScope(value, fallback = 'personal') {
@@ -604,6 +705,566 @@ function normalizeAuditExportJobRow(row) {
   };
 }
 
+function normalizePptxExportStatus(value, fallback = 'queued') {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim().toLowerCase();
+  if (!PPTX_EXPORT_JOB_STATUSES.includes(trimmed)) return fallback;
+  return trimmed;
+}
+
+function sanitizePptxExportSlides(rawSlides) {
+  if (!Array.isArray(rawSlides) || rawSlides.length === 0) return null;
+  if (rawSlides.length > MAX_PPTX_EXPORT_SLIDES) return null;
+
+  const sanitized = [];
+  for (const entry of rawSlides) {
+    if (!isObject(entry)) return null;
+    const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : null;
+    const title = typeof entry.title === 'string' && entry.title.trim() ? entry.title.trim() : 'Untitled Slide';
+    const canvas = sanitizeCanvas(entry.canvas);
+    const components = sanitizeComponents(entry.components);
+    if (!id || !canvas || !components) return null;
+    sanitized.push({ id, title, canvas, components });
+  }
+  return sanitized;
+}
+
+function sanitizePptxSlideIds(rawSlideIds) {
+  if (!Array.isArray(rawSlideIds)) return [];
+  const ids = rawSlideIds
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter(Boolean);
+  return Array.from(new Set(ids)).slice(0, MAX_PPTX_EXPORT_SLIDES);
+}
+
+function sanitizePptxFilenamePrefix(value) {
+  if (typeof value !== 'string') return 'slides-export';
+  const trimmed = value.trim();
+  if (!trimmed) return 'slides-export';
+  return trimmed.slice(0, 120);
+}
+
+function sanitizePptxIdempotencyKey(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, 160);
+}
+
+function sanitizePptxMaxAttempts(value) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 3;
+  return Math.max(1, Math.min(parsed, MAX_PPTX_EXPORT_ATTEMPTS));
+}
+
+function normalizeCssTextToken(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function extractStyleBag(component) {
+  const style = isObject(component?.style) ? component.style : {};
+  const computed = isObject(component?.computed_style) ? component.computed_style : {};
+  return {
+    ...computed,
+    ...style,
+  };
+}
+
+function readStyleValue(styleBag, keys) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(styleBag, key)) {
+      const value = styleBag[key];
+      if (value !== null && value !== undefined) return value;
+    }
+  }
+  return undefined;
+}
+
+function parseCssNumber(value, fallback = 0) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return fallback;
+  const match = value.trim().match(/^-?\d*\.?\d+/);
+  if (!match) return fallback;
+  const parsed = Number.parseFloat(match[0]);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function splitCssArgs(value) {
+  if (typeof value !== 'string') return [];
+  const tokens = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === '(') depth += 1;
+    if (char === ')') depth = Math.max(0, depth - 1);
+    if (char === ',' && depth === 0) {
+      tokens.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  tokens.push(value.slice(start).trim());
+  return tokens.filter(Boolean);
+}
+
+function parseCssColor(value) {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim().toLowerCase();
+  if (!raw) return null;
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return { hex: raw.slice(1).toUpperCase(), alpha: 1 };
+  if (/^#[0-9a-f]{3}$/i.test(raw)) {
+    const [, r, g, b] = raw;
+    return { hex: `${r}${r}${g}${g}${b}${b}`.toUpperCase(), alpha: 1 };
+  }
+  if (/^#[0-9a-f]{8}$/i.test(raw)) {
+    const rgb = raw.slice(1, 7).toUpperCase();
+    const alpha = Number.parseInt(raw.slice(7), 16) / 255;
+    return {
+      hex: rgb,
+      alpha: Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1,
+    };
+  }
+  const rgbMatch = raw.match(/^rgba?\(([^,]+),\s*([^,]+),\s*([^,\)]+)(?:,\s*([^\)]+))?\)$/i);
+  if (!rgbMatch) return null;
+  const channels = [rgbMatch[1], rgbMatch[2], rgbMatch[3]].map((item) => Number.parseInt(item.trim(), 10));
+  if (!channels.every((entry) => Number.isFinite(entry) && entry >= 0 && entry <= 255)) return null;
+  const alphaRaw = rgbMatch[4] ? Number.parseFloat(rgbMatch[4].trim()) : 1;
+  if (!Number.isFinite(alphaRaw)) return null;
+  return {
+    hex: channels.map((entry) => entry.toString(16).padStart(2, '0')).join('').toUpperCase(),
+    alpha: Math.max(0, Math.min(1, alphaRaw)),
+  };
+}
+
+function parseGradientStops(rawStops) {
+  const stops = [];
+  for (let index = 0; index < rawStops.length; index += 1) {
+    const token = rawStops[index];
+    const posMatch = token.match(/(-?\d*\.?\d+)%\s*$/);
+    const colorToken = posMatch ? token.slice(0, posMatch.index).trim() : token.trim();
+    const color = parseCssColor(colorToken);
+    if (!color) continue;
+    const inferredPos = rawStops.length <= 1 ? 0 : Math.round((index / (rawStops.length - 1)) * 100);
+    const explicitPos = posMatch ? Math.max(0, Math.min(100, Math.round(Number.parseFloat(posMatch[1])))) : inferredPos;
+    stops.push({ color: color.hex, alpha: color.alpha, position_percent: explicitPos });
+  }
+  return stops.length >= 2 ? stops : null;
+}
+
+function parseGradientFill(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const linear = trimmed.match(/^linear-gradient\(([\s\S]+)\)$/i);
+  if (linear) {
+    const args = splitCssArgs(linear[1] || '');
+    if (args.length < 2) return null;
+    let angleDeg = 180;
+    let stopStart = 0;
+    const first = normalizeCssTextToken(args[0]);
+    if (/^-?\d*\.?\d+deg$/.test(first)) {
+      angleDeg = Number.parseFloat(first.replace('deg', ''));
+      stopStart = 1;
+    }
+    const stops = parseGradientStops(args.slice(stopStart));
+    if (!stops) return null;
+    return {
+      type: 'linear',
+      angle_deg: Number.isFinite(angleDeg) ? angleDeg : 180,
+      stops,
+    };
+  }
+
+  const radial = trimmed.match(/^radial-gradient\(([\s\S]+)\)$/i);
+  if (radial) {
+    const args = splitCssArgs(radial[1] || '');
+    if (args.length < 2) return null;
+    let stopStart = 0;
+    const first = normalizeCssTextToken(args[0]);
+    if (/^(circle|ellipse|closest-side|closest-corner|farthest-side|farthest-corner|at )/.test(first)) {
+      stopStart = 1;
+    }
+    const stops = parseGradientStops(args.slice(stopStart));
+    if (!stops) return null;
+    return {
+      type: 'radial',
+      stops,
+    };
+  }
+  return null;
+}
+
+function parseShadow(value) {
+  if (typeof value !== 'string') return null;
+  const parts = splitCssArgs(value);
+  if (parts.length > 1) return { unsupported: true, reason: 'multiple-shadows' };
+  const candidate = parts[0] || '';
+  if (!candidate || /\binset\b/i.test(candidate)) {
+    return candidate ? { unsupported: true, reason: 'inset-shadow' } : null;
+  }
+  const colorMatch = candidate.match(/(rgba?\([^\)]*\)|#[0-9a-fA-F]{3,8})/);
+  const color = parseCssColor(colorMatch?.[1] || '');
+  if (!color) return { unsupported: true, reason: 'invalid-shadow-color' };
+  const clean = candidate.replace(colorMatch?.[1] || '', ' ');
+  const lengths = clean.match(/-?\d*\.?\d+px/g) || [];
+  if (lengths.length < 2) return { unsupported: true, reason: 'invalid-shadow-lengths' };
+  const x = parseCssNumber(lengths[0], 0);
+  const y = parseCssNumber(lengths[1], 0);
+  const blur = lengths[2] ? Math.max(0, parseCssNumber(lengths[2], 0)) : 0;
+  return {
+    x_px: x,
+    y_px: y,
+    blur_px: blur,
+    color: color.hex,
+    alpha: color.alpha,
+  };
+}
+
+function parseBorderRadiusValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/%/.test(trimmed)) return { unsupported: true, reason: 'percent-radius' };
+  const parsed = parseCssNumber(trimmed, NaN);
+  if (!Number.isFinite(parsed)) return { unsupported: true, reason: 'invalid-radius' };
+  return Math.max(0, parsed);
+}
+
+function normalizeComponentOrder(components) {
+  return [...components].sort((left, right) => {
+    const yDelta = parseCssNumber(left?.y, 0) - parseCssNumber(right?.y, 0);
+    if (Math.abs(yDelta) > 0.01) return yDelta;
+    const xDelta = parseCssNumber(left?.x, 0) - parseCssNumber(right?.x, 0);
+    if (Math.abs(xDelta) > 0.01) return xDelta;
+    const leftId = typeof left?.id === 'string' ? left.id : '';
+    const rightId = typeof right?.id === 'string' ? right.id : '';
+    return leftId.localeCompare(rightId);
+  });
+}
+
+function mapLayoutProjection(component, styleBag) {
+  const display = normalizeCssTextToken(String(readStyleValue(styleBag, ['display']) || ''));
+  const isFlex = display === 'flex' || display === 'inline-flex';
+  const layout = {
+    x: parseCssNumber(component?.x, 0),
+    y: parseCssNumber(component?.y, 0),
+    width: Math.max(0, parseCssNumber(component?.width, 0)),
+    height: Math.max(0, parseCssNumber(component?.height, 0)),
+    order_index: Number.parseInt(String(component?.order_index ?? component?.order ?? 0), 10) || 0,
+    display: isFlex ? 'flex' : 'absolute',
+  };
+  if (!isFlex) {
+    return { layout, warnings: [] };
+  }
+
+  const justifyRaw = normalizeCssTextToken(String(
+    readStyleValue(styleBag, ['justifyContent', 'justify-content']) || 'flex-start',
+  ));
+  const alignRaw = normalizeCssTextToken(String(
+    readStyleValue(styleBag, ['alignItems', 'align-items']) || 'stretch',
+  ));
+  const directionRaw = normalizeCssTextToken(String(
+    readStyleValue(styleBag, ['flexDirection', 'flex-direction']) || 'row',
+  ));
+  const wrapRaw = normalizeCssTextToken(String(
+    readStyleValue(styleBag, ['flexWrap', 'flex-wrap']) || 'nowrap',
+  ));
+  const gap = Math.max(0, parseCssNumber(readStyleValue(styleBag, ['gap', 'columnGap', 'column-gap']), 0));
+  const warnings = [];
+
+  if (!PPTX_FLEX_JUSTIFY_VALUES.has(justifyRaw)) {
+    warnings.push({ code: 'unsupported_flex_behavior', reason: `justify-content=${justifyRaw || 'unknown'}` });
+  }
+  if (!PPTX_FLEX_ALIGN_VALUES.has(alignRaw)) {
+    warnings.push({ code: 'unsupported_flex_behavior', reason: `align-items=${alignRaw || 'unknown'}` });
+  }
+  if (!PPTX_FLEX_DIRECTION_VALUES.has(directionRaw)) {
+    warnings.push({ code: 'unsupported_flex_behavior', reason: `flex-direction=${directionRaw || 'unknown'}` });
+  }
+  if (wrapRaw && wrapRaw !== 'nowrap') {
+    warnings.push({ code: 'unsupported_flex_behavior', reason: `flex-wrap=${wrapRaw}` });
+  }
+
+  layout.flex = {
+    justify_content: PPTX_FLEX_JUSTIFY_VALUES.has(justifyRaw) ? justifyRaw : 'flex-start',
+    align_items: PPTX_FLEX_ALIGN_VALUES.has(alignRaw) ? alignRaw : 'stretch',
+    direction: PPTX_FLEX_DIRECTION_VALUES.has(directionRaw) ? directionRaw : 'row',
+    gap_px: gap,
+    wrap: wrapRaw || 'nowrap',
+  };
+  return { layout, warnings };
+}
+
+function mapStyleProjection(component, styleBag) {
+  const content = typeof component?.content === 'string' ? component.content : '';
+  const fontSize = Math.max(0, parseCssNumber(readStyleValue(styleBag, ['fontSize', 'font-size']), 0));
+  const fontWeight = Math.max(0, parseCssNumber(readStyleValue(styleBag, ['fontWeight', 'font-weight']), 400));
+  const lineHeight = Math.max(0, parseCssNumber(readStyleValue(styleBag, ['lineHeight', 'line-height']), 0));
+  const color = parseCssColor(String(readStyleValue(styleBag, ['color']) || ''));
+  const background = String(readStyleValue(styleBag, ['backgroundFill', 'background', 'backgroundColor', 'background-color']) || '');
+  const gradient = parseGradientFill(background);
+  const solidBackground = gradient ? null : parseCssColor(background);
+  const shadowValue = String(readStyleValue(styleBag, ['boxShadow', 'box-shadow']) || '');
+  const shadow = parseShadow(shadowValue);
+  const borderRadiusRaw = readStyleValue(styleBag, ['borderRadius', 'border-radius']);
+  const borderRadius = parseBorderRadiusValue(borderRadiusRaw);
+  const transform = normalizeCssTextToken(String(readStyleValue(styleBag, ['transform']) || ''));
+
+  const warnings = [];
+  const effects = {};
+  if (gradient) {
+    effects.fill = gradient;
+  } else if (solidBackground) {
+    effects.fill = {
+      type: 'solid',
+      color: solidBackground.hex,
+      alpha: solidBackground.alpha,
+    };
+  } else if (background && /gradient\(/i.test(background)) {
+    warnings.push({ code: 'unsupported_effect_combo', reason: 'gradient-syntax' });
+  }
+
+  if (shadow && shadow.unsupported) {
+    warnings.push({ code: 'unsupported_effect_combo', reason: shadow.reason || 'shadow' });
+  } else if (shadow) {
+    effects.shadow = shadow;
+  }
+
+  if (borderRadius && borderRadius.unsupported) {
+    warnings.push({ code: 'unsupported_effect_combo', reason: borderRadius.reason || 'border-radius' });
+  } else if (typeof borderRadius === 'number' && Number.isFinite(borderRadius)) {
+    effects.border_radius_px = borderRadius;
+  }
+
+  if (transform && transform !== 'none') {
+    const supportedTransform = /^matrix\([^\)]*\)$|^translate[xy]?\([^\)]*\)$/.test(transform);
+    if (!supportedTransform) {
+      warnings.push({ code: 'unsupported_transform', reason: transform });
+    }
+  }
+
+  return {
+    projection: {
+      text_length: content.length,
+      font_size_px: fontSize,
+      font_weight: fontWeight,
+      line_height_px: lineHeight,
+      color: color ? color.hex : null,
+      text_align: normalizeCssTextToken(String(readStyleValue(styleBag, ['textAlign', 'text-align']) || 'left')),
+      font_family: String(readStyleValue(styleBag, ['fontFamily', 'font-family']) || '').trim() || null,
+      effects,
+    },
+    warnings,
+  };
+}
+
+function mapComponentToPptxNativeObject(slideId, component) {
+  const componentType = typeof component?.type === 'string' ? component.type : 'unknown';
+  const componentId = typeof component?.id === 'string' && component.id.trim() ? component.id.trim() : 'unknown-component';
+  const styleBag = extractStyleBag(component);
+  const layoutProjection = mapLayoutProjection(component, styleBag);
+  const styleProjection = mapStyleProjection(component, styleBag);
+  const base = {
+    slide_id: slideId,
+    component_id: componentId,
+    component_type: componentType,
+  };
+  const warnings = [];
+  for (const warning of layoutProjection.warnings) {
+    warnings.push({
+      ...base,
+      code: warning.code,
+      message: `Flex behavior "${warning.reason}" is not fully supported and may drift in PPTX output.`,
+    });
+  }
+  for (const warning of styleProjection.warnings) {
+    warnings.push({
+      ...base,
+      code: warning.code,
+      message: `Style mapping "${warning.reason}" is not fully supported for component "${componentId}".`,
+    });
+  }
+
+  if (PPTX_NATIVE_TEXT_COMPONENT_TYPES.has(componentType)) {
+    return {
+      object: {
+        ...base,
+        native_kind: 'text',
+        editable: true,
+        layout: layoutProjection.layout,
+        style_projection: styleProjection.projection,
+      },
+      warnings,
+    };
+  }
+
+  if (PPTX_NATIVE_SHAPE_COMPONENT_TYPES.has(componentType)) {
+    return {
+      object: {
+        ...base,
+        native_kind: 'shape',
+        editable: true,
+        layout: layoutProjection.layout,
+        style_projection: styleProjection.projection,
+      },
+      warnings,
+    };
+  }
+
+  if (PPTX_IMAGE_COMPONENT_TYPES.has(componentType)) {
+    warnings.push({
+      ...base,
+      code: 'image_rasterized',
+      message: `Component "${componentId}" was exported as an image fallback.`,
+    });
+    return {
+      object: {
+        ...base,
+        native_kind: 'image',
+        editable: false,
+        layout: layoutProjection.layout,
+        style_projection: styleProjection.projection,
+      },
+      warnings,
+    };
+  }
+
+  warnings.push({
+    ...base,
+    code: 'unsupported_component',
+    message: `Component type "${componentType}" is not natively supported and was skipped.`,
+  });
+  return {
+    object: null,
+    warnings,
+  };
+}
+
+function buildPptxNativeProjection(slides) {
+  const warnings = [];
+  const nativeObjects = [];
+
+  for (const slide of slides) {
+    const components = normalizeComponentOrder(Array.isArray(slide.components) ? slide.components : []);
+    for (const component of components) {
+      const mapped = mapComponentToPptxNativeObject(slide.id, component);
+      if (mapped.object) nativeObjects.push(mapped.object);
+      if (Array.isArray(mapped.warnings)) {
+        for (const warning of mapped.warnings) {
+          warnings.push(warning);
+          if (warnings.length >= MAX_PPTX_EXPORT_WARNINGS) break;
+        }
+      }
+      if (warnings.length >= MAX_PPTX_EXPORT_WARNINGS) break;
+    }
+    if (warnings.length >= MAX_PPTX_EXPORT_WARNINGS) break;
+  }
+
+  return {
+    warnings,
+    native_objects: nativeObjects,
+    warning_summary: {
+      total_warnings: warnings.length,
+      unsupported_component_count: warnings.filter((warning) => warning.code === 'unsupported_component').length,
+      image_fallback_count: warnings.filter((warning) => warning.code === 'image_rasterized').length,
+    },
+  };
+}
+
+function storePptxExportJob(job) {
+  if (!job || typeof job.id !== 'string') return;
+  if (!pptxExportJobsById.has(job.id)) {
+    pptxExportJobIdsByRequestedAt.unshift(job.id);
+  }
+  pptxExportJobsById.set(job.id, job);
+  if (pptxExportJobIdsByRequestedAt.length > 500) {
+    const removed = pptxExportJobIdsByRequestedAt.pop();
+    if (removed) pptxExportJobsById.delete(removed);
+  }
+}
+
+function getPptxExportJobById(jobId) {
+  if (typeof jobId !== 'string' || !jobId.trim()) return null;
+  return pptxExportJobsById.get(jobId.trim()) || null;
+}
+
+function findExistingPptxJobByIdempotency(actor, idempotencyKey) {
+  if (!idempotencyKey) return null;
+  for (const jobId of pptxExportJobIdsByRequestedAt) {
+    const job = pptxExportJobsById.get(jobId);
+    if (!job) continue;
+    if (job.requested_by_user_id !== actor.user_id) continue;
+    if (job.idempotency_key !== idempotencyKey) continue;
+    if (job.status === 'queued' || job.status === 'running' || job.status === 'succeeded') return job;
+  }
+  return null;
+}
+
+function listPptxExportJobsForActor(actor, status, offset, limit) {
+  const items = [];
+  for (const jobId of pptxExportJobIdsByRequestedAt) {
+    const job = pptxExportJobsById.get(jobId);
+    if (!job) continue;
+    if (actor.role !== 'admin' && job.requested_by_user_id !== actor.user_id) continue;
+    if (status !== 'all' && job.status !== status) continue;
+    items.push(job);
+  }
+  return items.slice(offset, offset + limit);
+}
+
+function normalizePptxExportJobRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const slideIds = Array.isArray(row.slide_ids)
+    ? row.slide_ids.map((value) => (typeof value === 'string' ? value : '')).filter(Boolean)
+    : [];
+  const options = isObject(row.options) ? row.options : {};
+  const artifact = isObject(row.artifact) ? row.artifact : null;
+  const warnings = Array.isArray(row.warnings) ? row.warnings.filter((warning) => isObject(warning)).slice(0, MAX_PPTX_EXPORT_WARNINGS) : [];
+  const nativeObjects = Array.isArray(row.native_objects) ? row.native_objects.filter((entry) => isObject(entry)) : [];
+  return {
+    id: row.id,
+    requested_by_user_id: row.requested_by_user_id,
+    requested_by_email: row.requested_by_email || null,
+    status: normalizePptxExportStatus(row.status, 'queued'),
+    slide_ids: slideIds,
+    options: {
+      filename_prefix: typeof options.filename_prefix === 'string' && options.filename_prefix.trim()
+        ? options.filename_prefix
+        : 'slides-export',
+      include_hidden: options.include_hidden === true,
+    },
+    attempts: Number.isFinite(row.attempts) ? Math.max(0, Number(row.attempts)) : 0,
+    max_attempts: Number.isFinite(row.max_attempts) ? Math.max(1, Number(row.max_attempts)) : 3,
+    warning_count: Number.isFinite(row.warning_count) ? Math.max(0, Number(row.warning_count)) : warnings.length,
+    warnings,
+    warning_summary: isObject(row.warning_summary)
+      ? row.warning_summary
+      : {
+          total_warnings: warnings.length,
+          unsupported_component_count: warnings.filter((warning) => warning.code === 'unsupported_component').length,
+          image_fallback_count: warnings.filter((warning) => warning.code === 'image_rasterized').length,
+        },
+    native_objects: nativeObjects,
+    artifact: artifact
+      ? {
+          file_name: typeof artifact.file_name === 'string' ? artifact.file_name : null,
+          expires_at: typeof artifact.expires_at === 'string' ? artifact.expires_at : null,
+          download_token: typeof artifact.download_token === 'string' ? artifact.download_token : null,
+        }
+      : null,
+    requested_at: row.requested_at || row.created_at || null,
+    started_at: row.started_at || null,
+    completed_at: row.completed_at || null,
+    updated_at: row.updated_at || row.created_at || null,
+    error_message: typeof row.error_message === 'string' ? row.error_message : null,
+    idempotency_key: typeof row.idempotency_key === 'string' ? row.idempotency_key : null,
+    payload: isObject(row.payload) ? row.payload : {},
+  };
+}
+
 async function supabaseFetch(env, path, init = {}) {
   const supabaseUrl = resolveSupabaseUrl(env);
   const method = (init.method || 'GET').toUpperCase();
@@ -769,6 +1430,7 @@ async function executeApprovalEscalationSweep(env, actor, options = {}) {
   const dryRun = options?.dryRun === true;
   const force = options?.force === true;
   const sweepSource = options?.sweepSource === 'scheduled' ? 'scheduled' : 'manual';
+  const escalationRouting = resolveEscalationRoutingConfig(env);
   const nowMs = Date.now();
   const overdueThresholdMs = 48 * 60 * 60 * 1000;
   const escalationCooldownMs = 24 * 60 * 60 * 1000;
@@ -822,6 +1484,7 @@ async function executeApprovalEscalationSweep(env, actor, options = {}) {
       reason: 'SLA overdue escalation sweep',
       automated: true,
       sweep_source: sweepSource,
+      routing: escalationRouting,
       created_at: now,
     };
 
@@ -857,6 +1520,8 @@ async function executeApprovalEscalationSweep(env, actor, options = {}) {
           escalation_count: priorEscalations.length + 1,
           automated: true,
           sweep_source: sweepSource,
+          routing_channels: escalationRouting.channels,
+          routing_targets: escalationRouting.targets,
         },
       });
     }
@@ -879,6 +1544,8 @@ async function executeApprovalEscalationSweep(env, actor, options = {}) {
         processed: pending.length,
         escalated,
         skipped,
+        routing_channels: escalationRouting.channels,
+        routing_target_count: escalationRouting.targets.length,
       },
     });
   }
@@ -1895,11 +2562,13 @@ async function handleEscalateTemplateApprovalAction(env, actor, body) {
 
   const payload = isObject(approval.payload) ? approval.payload : {};
   const priorEscalations = Array.isArray(payload.escalations) ? payload.escalations : [];
+  const escalationRouting = resolveEscalationRoutingConfig(env);
   const now = new Date().toISOString();
   const escalationRecord = {
     escalated_by_user_id: actor.user_id,
     escalated_by_email: actor.email || null,
     reason: reason || null,
+    routing: escalationRouting,
     created_at: now,
   };
 
@@ -1935,6 +2604,8 @@ async function handleEscalateTemplateApprovalAction(env, actor, body) {
       approval_type: approval.approval_type,
       escalation_count: priorEscalations.length + 1,
       reason: reason || null,
+      routing_channels: escalationRouting.channels,
+      routing_targets: escalationRouting.targets,
     },
   });
 
@@ -2310,6 +2981,169 @@ async function handleDownloadAuditExportJobAction(env, actor, body) {
   });
 }
 
+async function handleRequestPptxExportJobAction(env, actor, body) {
+  const slides = sanitizePptxExportSlides(body?.slides);
+  if (!slides) {
+    return errorResponse('slides array is required for request-pptx-export-job and must contain valid slide payloads.', 400);
+  }
+
+  const slideIds = sanitizePptxSlideIds(body?.slide_ids);
+  const filenamePrefix = sanitizePptxFilenamePrefix(body?.filename_prefix);
+  const includeHidden = body?.include_hidden === true;
+  const idempotencyKey = sanitizePptxIdempotencyKey(body?.idempotency_key);
+  const maxAttempts = sanitizePptxMaxAttempts(body?.max_attempts);
+
+  for (const slideId of slideIds) {
+    const persisted = await readSlideById(env, slideId);
+    if (!persisted) {
+      return errorResponse(`Slide ${slideId} not found for PPTX export.`, 404);
+    }
+    if (actor.role !== 'admin' && persisted.owner_user_id !== actor.user_id) {
+      return errorResponse('Forbidden. Slide ownership is required for PPTX export.', 403);
+    }
+  }
+
+  const existing = findExistingPptxJobByIdempotency(actor, idempotencyKey);
+  if (existing) return jsonResponse({ job: normalizePptxExportJobRow(existing) }, 200);
+
+  const requestedAt = new Date().toISOString();
+  const baseJob = {
+    id: 'pptx-job-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36),
+    requested_by_user_id: actor.user_id,
+    requested_by_email: actor.email || null,
+    status: 'queued',
+    slide_ids: slideIds,
+    options: {
+      filename_prefix: filenamePrefix,
+      include_hidden: includeHidden,
+    },
+    attempts: 0,
+    max_attempts: maxAttempts,
+    warning_count: 0,
+    warnings: [],
+    warning_summary: {
+      total_warnings: 0,
+      unsupported_component_count: 0,
+      image_fallback_count: 0,
+    },
+    native_objects: [],
+    artifact: null,
+    requested_at: requestedAt,
+    started_at: null,
+    completed_at: null,
+    updated_at: requestedAt,
+    error_message: null,
+    idempotency_key: idempotencyKey,
+    payload: {
+      requester: {
+        user_id: actor.user_id,
+        user_email: actor.email || null,
+      },
+      slide_ids: slideIds,
+      options: {
+        filename_prefix: filenamePrefix,
+        include_hidden: includeHidden,
+      },
+      slides: slides.map((slide) => ({ id: slide.id, title: slide.title })),
+    },
+  };
+  storePptxExportJob(baseJob);
+
+  let completedJob = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const startedAt = new Date().toISOString();
+      const projection = buildPptxNativeProjection(slides);
+      const completedAt = new Date().toISOString();
+      const artifactStamp = completedAt.replace(/[:.]/g, '-');
+      const artifact = {
+        file_name: `${filenamePrefix.replace(/\s+/g, '-').toLowerCase()}-${artifactStamp}.pptx`,
+        expires_at: new Date(Date.now() + PPTX_EXPORT_ARTIFACT_TTL_MINUTES * 60 * 1000).toISOString(),
+        download_token: 'pptx-download-' + Math.random().toString(36).slice(2, 12),
+      };
+      completedJob = {
+        ...baseJob,
+        status: 'succeeded',
+        attempts: attempt,
+        warning_count: projection.warnings.length,
+        warnings: projection.warnings,
+        warning_summary: projection.warning_summary,
+        native_objects: projection.native_objects,
+        artifact,
+        started_at: startedAt,
+        completed_at: completedAt,
+        updated_at: completedAt,
+        error_message: null,
+      };
+      storePptxExportJob(completedJob);
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      const failedAt = new Date().toISOString();
+      const failedJob = {
+        ...baseJob,
+        status: 'failed',
+        attempts: attempt,
+        error_message: String(lastError || 'PPTX export generation failed.').slice(0, 320),
+        completed_at: failedAt,
+        updated_at: failedAt,
+      };
+      storePptxExportJob(failedJob);
+      if (attempt >= maxAttempts) {
+        completedJob = failedJob;
+      }
+    }
+  }
+
+  const outcome = completedJob?.status === 'succeeded' ? 'success' : 'failure';
+  for (const slideId of slideIds) {
+    try {
+      await insertAuditEvent(env, {
+        actor_user_id: actor.user_id,
+        actor_email: actor.email || null,
+        entity_type: 'slide',
+        entity_id: slideId,
+        action: 'export-pptx',
+        outcome,
+        error_class: outcome === 'failure' ? (completedJob?.error_message || lastError || 'pptx_export_failed') : null,
+        details: {
+          job_id: completedJob?.id || baseJob.id,
+          warning_count: completedJob?.warning_count || 0,
+        },
+      });
+    } catch (_) {
+      // Export should not fail if audit insert is temporarily unavailable.
+    }
+  }
+
+  if (!completedJob) return errorResponse('Failed to create PPTX export job.', 500);
+  const normalized = normalizePptxExportJobRow(completedJob);
+  if (!normalized) return errorResponse('Failed to normalize PPTX export job response.', 500);
+  return jsonResponse({ job: normalized }, 201);
+}
+
+async function handleDownloadPptxExportJobAction(env, actor, body) {
+  const jobId = typeof body.job_id === 'string' ? body.job_id.trim() : '';
+  if (!jobId) return errorResponse('job_id required for download-pptx-export-job.', 400);
+
+  const job = getPptxExportJobById(jobId);
+  if (!job) return errorResponse('PPTX export job not found.', 404);
+  if (actor.role !== 'admin' && job.requested_by_user_id !== actor.user_id) {
+    return errorResponse('Forbidden. Cannot access this PPTX export job.', 403);
+  }
+  if (job.status !== 'succeeded') {
+    return errorResponse('PPTX export job is not ready for download.', 409);
+  }
+  const expiresAt = job.artifact?.expires_at ? Date.parse(job.artifact.expires_at) : NaN;
+  if (Number.isFinite(expiresAt) && Date.now() > expiresAt) {
+    return errorResponse('PPTX export artifact has expired. Request a new export.', 410);
+  }
+  const normalized = normalizePptxExportJobRow(job);
+  if (!normalized) return errorResponse('Failed to normalize PPTX export job.', 500);
+  return jsonResponse({ job: normalized });
+}
+
 function addSearch(path, field, query) {
   const trimmed = (query || '').trim();
   if (!trimmed) return path;
@@ -2467,9 +3301,15 @@ export async function onRequestGet(context) {
     }
     path += '&limit=' + String(limit) + '&offset=' + String(offset);
 
-    const response = await supabaseFetch(env, path);
-    const rows = await response.json().catch(() => []);
-    const items = rows.map(normalizeTemplateApprovalRow).filter(Boolean);
+    let items = [];
+    try {
+      const response = await supabaseFetch(env, path);
+      const rows = await response.json().catch(() => []);
+      items = rows.map(normalizeTemplateApprovalRow).filter(Boolean);
+    } catch (_) {
+      // Keep Slides usable if approval infrastructure is temporarily unavailable.
+      items = [];
+    }
     return jsonResponse({ items });
   }
 
@@ -2516,6 +3356,14 @@ export async function onRequestGet(context) {
     return jsonResponse({ items });
   }
 
+  if (resource === 'pptx-export-jobs') {
+    const status = normalizePptxExportStatus(url.searchParams.get('status') || 'all', 'all');
+    const items = listPptxExportJobsForActor(actor, status, offset, limit)
+      .map(normalizePptxExportJobRow)
+      .filter(Boolean);
+    return jsonResponse({ items });
+  }
+
   if (resource === 'audits') {
     const action = (url.searchParams.get('action') || '').trim().toLowerCase();
     const outcome = (url.searchParams.get('outcome') || '').trim().toLowerCase();
@@ -2558,7 +3406,7 @@ export async function onRequestGet(context) {
     });
   }
 
-  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, archived-templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400);
+  return errorResponse('Unsupported resource for /api/slides. Use slides, templates, archived-templates, audits, audit-presets, audit-export-jobs, pptx-export-jobs, template-collaborators, or template-approvals.', 400);
   } catch (error) {
     return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.', {
       method: request.method || 'GET',
@@ -2625,6 +3473,8 @@ export async function onRequestPost(context) {
   if (action === 'delete-audit-preset') return handleDeleteAuditPresetAction(env, actor, body);
   if (action === 'request-audit-export-job') return handleRequestAuditExportJobAction(env, actor, body);
   if (action === 'download-audit-export-job') return handleDownloadAuditExportJobAction(env, actor, body);
+  if (action === 'request-pptx-export-job') return handleRequestPptxExportJobAction(env, actor, body);
+  if (action === 'download-pptx-export-job') return handleDownloadPptxExportJobAction(env, actor, body);
   if (action === 'record-export') return handleRecordExportAction(env, actor, body);
 
   return errorResponse('Unsupported action for /api/slides.', 400);
