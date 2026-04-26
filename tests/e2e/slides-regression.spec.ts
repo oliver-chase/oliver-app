@@ -293,6 +293,39 @@ test.describe('slides regression', () => {
     }).toBeGreaterThan(90)
   })
 
+  test('SLD-FE-307 surfaces warning taxonomy for pseudo-elements, animations, canvas, video, and unresolved stylesheets', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="./missing-theme.css" />
+        <style>
+          @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+          .slide-canvas { position: relative; width: 1600px; height: 900px; }
+          .title { position: absolute; left: 120px; top: 110px; width: 840px; font-size: 64px; animation: pulse 3s infinite; }
+          .title::before { content: ""; display: inline-block; width: 8px; height: 48px; background: #06b6d4; margin-right: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="slide-canvas">
+          <h1 class="title">Warning Taxonomy</h1>
+          <canvas width="320" height="160"></canvas>
+          <video src="https://example.com/sample.mp4"></video>
+        </div>
+      </body>
+    </html>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await expect(page.getByText(/unresolved external stylesheets may reduce import fidelity/i)).toBeVisible()
+    await expect(page.getByText(/pseudo-elements/i)).toBeVisible()
+    await expect(page.getByText(/css animations/i)).toBeVisible()
+    await expect(page.getByText(/canvas elements/i)).toBeVisible()
+    await expect(page.getByText(/video elements/i)).toBeVisible()
+  })
+
   test('SLD-FE-303 imports HTML with companion CSS files selected together', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

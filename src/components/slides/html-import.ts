@@ -659,8 +659,32 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
   }
 
   const warnings: string[] = []
-  if (doc.querySelector('link[rel~="stylesheet"]')) {
-    warnings.push('Detected linked stylesheet references. Import can only apply styles present in the uploaded HTML payload.')
+  const stylesheetLinks = Array.from(doc.querySelectorAll('link[rel~="stylesheet"][href]'))
+  if (stylesheetLinks.length > 0) {
+    warnings.push(
+      'Detected ' +
+      stylesheetLinks.length +
+      ' linked stylesheet reference' +
+      (stylesheetLinks.length === 1 ? '' : 's') +
+      '; unresolved external stylesheets may reduce import fidelity.',
+    )
+  }
+  const styleSources = Array.from(doc.querySelectorAll('style'))
+    .map((styleNode) => styleNode.textContent || '')
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+  if (styleSources.includes('::before') || styleSources.includes('::after')) {
+    warnings.push('Detected pseudo-elements (::before/::after); pseudo-element layers are not extracted and may require manual recreation.')
+  }
+  if (styleSources.includes('@keyframes') || /\banimation\s*:/.test(styleSources)) {
+    warnings.push('Detected CSS animations; animation effects are not imported and static styles are used.')
+  }
+  if (root.querySelector('canvas')) {
+    warnings.push('Detected canvas elements; canvas pixel content is not extracted into editable layers.')
+  }
+  if (root.querySelector('video')) {
+    warnings.push('Detected video elements; video playback layers are not imported as editable slide components.')
   }
   const renderSnapshot = buildRenderSnapshot(doc, root)
 
