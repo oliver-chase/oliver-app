@@ -18,3 +18,9 @@ Acceptance Criteria:
 - [x] Rollback playbook exists for function-level failures.
 - [x] Data backfill steps are documented where required.
 - [ ] Staging signoff checklist completed before production exposure.
+
+Blocker:
+- Staging signoff execution is blocked by missing manual staging evidence from `US-CMP-QA-1114`.
+
+Unblock action:
+- Complete all signoff checklist items in `US-CMP-QA-1114` on staging and record signed artifacts in `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md`.

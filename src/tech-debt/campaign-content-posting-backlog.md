@@ -1,7 +1,7 @@
 # Campaign Content & Posting Module Audit and Build Backlog
 
 Date: 2026-04-25  
-Source PRD: `vtwo_campaign_content_posting_module_prd.md`  
+Source PRD: `campaign-content-posting-module-prd.md`  
 Target app: `oliver-app` (Next.js static export + Supabase + Cloudflare Pages Functions)
 
 ## 0. Execution Status
@@ -10,7 +10,7 @@ Implementation execution started on 2026-04-25 with the following delivered foun
 
 1. Campaign module route scaffold (`/campaigns`) with sidebar/topbar shell and mobile-first responsive behavior.
 2. Shared auth/permission plumbing updates (`campaigns` permission across frontend/backend/chatbot guards).
-3. Story backlog generation under `.github/user-stories/oliver-app/backlog/campaign-content-posting-module-2026-04-25`.
+3. Story backlog generation under `/.github/oliver-app/modules/campaigns-module`.
 4. Supabase migration scaffold for campaign/content/activity/reminder/report tables.
 5. Frontend data helper layer for lifecycle actions, logging, reminders, ICS download, and markdown report export.
 6. Functional module workflows for create draft, submit review, approve/reject, self-claim, unclaim, schedule updates, mark posted, URL update, reminders, and summary reporting.
@@ -682,7 +682,7 @@ As a release owner, I want coverage for key contributor/reviewer/admin flows so 
 So rollout risk stays low.
 
 Acceptance Criteria:
-1. User stories added under `.github/user-stories/oliver-app/backlog/...` for new module.
+1. User stories added under `/.github/oliver-app/modules/...` for new module.
 2. Smoke tests cover create -> review -> claim -> post path.
 3. Permission tests cover unauthorized access attempts.
 4. Concurrency tests cover duplicate claim and conflicting review decisions.

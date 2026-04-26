@@ -23,3 +23,13 @@ Acceptance Criteria:
 Execution notes:
 - No new campaign-specific token conventions were required; existing token taxonomy in `src/tech-debt/design-system.md` remains authoritative.
 - Updated Campaign landing entry text and shell copy in `src/components/campaigns/CampaignsLanding.tsx` and styling in `src/app/campaigns/campaigns.css` to stabilize module entry expectation (`Campaign Execution Workspace`).
+
+Blocker:
+- Signed test artifacts for campaign shell/mobility checks are not yet attached in git-tracked evidence.
+
+Unblock action:
+- Re-run affected campaigns coverage (or provide log hash/artifacts) and link them from this story and `src/tech-debt/campaign-rollout-and-dod-gates.md`.
+
+Latest evidence:
+- 2026-04-26T10:54:22Z: `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs`  
+  Result: PASS (`13 passed, 0 failed`) — local contract scope, non-staging.

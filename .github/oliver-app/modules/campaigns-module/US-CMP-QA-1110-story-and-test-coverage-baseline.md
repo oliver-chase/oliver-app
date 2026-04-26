@@ -13,7 +13,7 @@ I want coverage for key contributor/reviewer/admin flows so regressions are caug
 So rollout risk stays low.
 
 Acceptance Criteria:
-- [ ] User stories added under `.github/user-stories/oliver-app/backlog/...` for new module.
+- [ ] User stories added under `/.github/oliver-app/modules/...` for new module.
 - [ ] Smoke tests cover create -> review -> claim -> post path.
 - [ ] Permission tests cover unauthorized access attempts.
 - [ ] Concurrency tests cover duplicate claim and conflicting review decisions.

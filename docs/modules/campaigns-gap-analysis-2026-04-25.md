@@ -187,4 +187,4 @@
 
 ## Implementation Story Pack
 - Prioritized themes, epics, and implementation-ready user stories are tracked in:
-  - `.github/user-stories/oliver-app/backlog/campaigns-spec-parity-prioritization-2026-04-25/README.md`
+- `/.github/oliver-app/modules/campaigns-module/README.md`

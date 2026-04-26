@@ -24,9 +24,19 @@ Acceptance Criteria:
    - Progress: external import checks are pending execution in shared QA environments.
    - Planned evidence capture target: signed artifacts + screenshots in `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` and `src/tech-debt/campaign-rollout-and-dod-gates.md`.
    - Staging execution evidence owner and timestamp are currently TBD.
+   - Local contract pre-check passed: 2026-04-26T10:54:22Z (`npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs`, `13 passed, 0 failed`).
 
 ## Pending Evidence Capture
 
 - [ ] macOS Calendar import smoke for `.ics` with title/body/deep-link verification.
 - [ ] Windows Outlook import smoke for `.ics` with title/body/deep-link verification.
 - [ ] Link evidence IDs in `src/tech-debt/campaign-rollout-and-dod-gates.md` and cross-link from `US-CMP-QA-1112`.
+
+Blocker:
+- External calendar client validation is blocked pending manual QA pass on Windows and macOS staging environments.
+
+Unblock action:
+- Execute both platform checks in one session, upload artifacts (screenshots + parsed event logs), then immediately update:
+  - `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md`
+  - `src/tech-debt/campaign-rollout-and-dod-gates.md`
+  - This file and `US-CMP-QA-1112` with identical evidence IDs.

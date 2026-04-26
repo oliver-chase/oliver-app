@@ -102,6 +102,10 @@ Status: In Progress
 - [ ] Record evidence in `campaign-staging-signoff-evidence-2026-04-26.md`.
 - [ ] Execute with fixed-port commands in blocked environments if needed (`npm run test:smoke:campaigns`, `npm run test:smoke:campaigns:frontend`, `npm run test:smoke:campaigns:mobile`).
 
+### Local unblock note
+
+- 2026-04-26: `npm run test:smoke:campaigns` could not start web server in this sandbox (`EPERM: listen 0.0.0.0:3002`), requires staging/manual execution environment.
+
 ## US-CMP-QA-1112 MVP DoD verification checklist
 
 Status: In Progress
@@ -119,3 +123,36 @@ Status: In Progress
 - Final staging release signoff capture. *(tracked by US-CMP-QA-1114, priority: High)*
 - Manual execution evidence for US-CMP-QA-1113 and US-CMP-QA-1114 must be logged in
   `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` and linked from each ticket file.
+### Local contract evidence
+
+- `npm run test:contracts -- tests/contracts/campaign-ics.contract.test.mjs tests/contracts/campaigns-api.contract.test.mjs`
+- Result: PASS (`13 passed, 0 failed`) — 2026-04-26T10:54:22Z.
+
+## US-CMP-QA-1115 Campaign UI hardening for locked component + token standards
+
+Status: In Progress
+
+- [x] Audit `src/app/campaigns/campaigns.css` and related modules for non-token values in spacing/radius/font-size/border widths where token alternatives exist.
+- [x] Replace remaining hard-coded values with established token-backed variables (`var(--spacing-*)`, `var(--font-size-*)`, `var(--radius-*)`, etc.).
+- [x] Update `src/tech-debt/design-system.md` (or `src/tech-debt/margin-scale.md`) if new campaign-specific conventions are required.
+- [x] Add/adjust at least one test assertion in `tests/e2e/mobile-clickpaths.spec.ts` or `tests/e2e/frontend-smoke.spec.ts` to guard against regression in campaign mobile shell overflow after token refactor.
+- [x] Execute and pass campaign test file(s) affected by style or shell changes.
+
+### Transition blocker
+
+- [ ] Attach signed test artifacts before moving this ticket to `Done`/`Verified`.
+
+## US-CMP-QA-1113 ICS import compatibility validation on desktop calendar clients
+
+Status: In Progress
+
+- [x] A representative ICS payload contains required iCalendar fields (`BEGIN:VCALENDAR`, `VERSION:2.0`, `PRODID`, `BEGIN:VEVENT`, `UID`, `DTSTAMP`, `DTSTART`, `DTEND`, `SUMMARY`, `DESCRIPTION`, `END:VEVENT`, `END:VCALENDAR`).
+- [x] ICS payload uses deterministic timezone policy and valid UTC timestamps.
+- [x] `src/lib/campaign-ics.js` owns reusable payload generation.
+- [x] Failure path includes troubleshooting and fallback guidance in `src/tech-debt/campaign-ics-troubleshooting.md`.
+- [ ] External import passes are captured for macOS Calendar and Windows Outlook.
+- [ ] Post-import metadata preservation is verified (title/body/deep-link) and signed with evidence IDs.
+
+### Blocked
+
+- Missing external desktop client artifacts (macOS and Windows) remain the only outstanding external dependency.
