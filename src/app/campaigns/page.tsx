@@ -1477,19 +1477,19 @@ export default function CampaignsPage() {
       setError('Campaign schema is not migrated yet. Run supabase/migrations/014_campaign_content_posting_foundation.sql.')
       return
     }
-    if (isCampaignsAccessDenied(exception)) {
-      setSchemaMissing(false)
-      setPolicyBlocked(true)
-      setRefreshRecommended(false)
-      setError(CAMPAIGNS_ACCESS_POLICY_MESSAGE)
-      return
-    }
     const transitionMessage = campaignTransitionMessageFromError(exception)
     if (transitionMessage) {
       setSchemaMissing(false)
       setPolicyBlocked(false)
       setRefreshRecommended(Boolean(transitionMessage.refreshRecommended))
       setError(transitionMessage.message)
+      return
+    }
+    if (isCampaignsAccessDenied(exception)) {
+      setSchemaMissing(false)
+      setPolicyBlocked(true)
+      setRefreshRecommended(false)
+      setError(CAMPAIGNS_ACCESS_POLICY_MESSAGE)
       return
     }
     setSchemaMissing(false)
