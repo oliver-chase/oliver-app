@@ -1,7 +1,7 @@
 ---
 ID: US-RVW-008
 Title: Enforce Chatbot Parity for Reviews Workflows
-Status: Not Started
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 ---
@@ -19,3 +19,12 @@ Acceptance Criteria:
 - [ ] Flow error replies preserve progress and provide immediate retry options.
 - [ ] Reviews chatbot intent aliases are documented and included in regression coverage.
 
+QA / Evidence:
+- [x] `npm run lint` passed (`/tmp/reviews-lint-2026-04-26.log`, exit_code=0).
+- [x] `npm run typecheck` passed (`/tmp/reviews-typecheck-2026-04-26.log`, exit_code=0).
+- [x] `npm run build` passed (`/tmp/reviews-build-2026-04-26.log`, exit_code=0).
+- [ ] Chatbot parity checks for all reviews create/update flows are pending in runtime session validation.
+- [ ] Playwright smoke execution blocked in this environment (`/tmp/reviews-smoke-desktop-2026-04-26.log`, EPERM bind).
+
+Outstanding Gate Notes:
+- Keep `In Progress` until command aliases, prompt parity, and error/retry semantics are runtime-verified.

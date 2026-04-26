@@ -467,19 +467,19 @@ export default function ReviewsPage() {
                   ))}
                 </div>
                 <input
-                  className="input"
+                  className="app-input"
                   placeholder="Goal title"
                   value={goalDraft.title}
                   onChange={event => setGoalDraft(prev => ({ ...prev, title: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Success metric"
                   value={goalDraft.successMetric}
                   onChange={event => setGoalDraft(prev => ({ ...prev, successMetric: event.target.value }))}
                 />
                 <input
-                  className="input"
+                  className="app-input"
                   type="date"
                   value={goalDraft.targetDate}
                   onChange={event => setGoalDraft(prev => ({ ...prev, targetDate: event.target.value }))}
@@ -574,13 +574,13 @@ export default function ReviewsPage() {
                   ))}
                 </div>
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="What happened?"
                   value={updateDraft.content}
                   onChange={event => setUpdateDraft(prev => ({ ...prev, content: event.target.value }))}
                 />
                 <input
-                  className="input"
+                  className="app-input"
                   placeholder="Evidence link (optional)"
                   value={updateDraft.evidenceLink}
                   onChange={event => setUpdateDraft(prev => ({ ...prev, evidenceLink: event.target.value }))}
@@ -618,25 +618,25 @@ export default function ReviewsPage() {
                 }}
               >
                 <input
-                  className="input"
+                  className="app-input"
                   placeholder="Cycle label (e.g. 2026-Q2)"
                   value={quarterlyDraft.cycleLabel}
                   onChange={event => setQuarterlyDraft(prev => ({ ...prev, cycleLabel: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Reflection summary"
                   value={quarterlyDraft.reflection}
                   onChange={event => setQuarterlyDraft(prev => ({ ...prev, reflection: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Blockers"
                   value={quarterlyDraft.blockers}
                   onChange={event => setQuarterlyDraft(prev => ({ ...prev, blockers: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Support needed"
                   value={quarterlyDraft.supportNeeded}
                   onChange={event => setQuarterlyDraft(prev => ({ ...prev, supportNeeded: event.target.value }))}
@@ -667,7 +667,7 @@ export default function ReviewsPage() {
                 }}
               >
                 <input
-                  className="input"
+                  className="app-input"
                   type="number"
                   min={2020}
                   max={2100}
@@ -675,19 +675,19 @@ export default function ReviewsPage() {
                   onChange={event => setAnnualDraft(prev => ({ ...prev, reviewYear: Number(event.target.value || new Date().getFullYear()) }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Self-summary"
                   value={annualDraft.selfSummary}
                   onChange={event => setAnnualDraft(prev => ({ ...prev, selfSummary: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Impact examples"
                   value={annualDraft.impactExamples}
                   onChange={event => setAnnualDraft(prev => ({ ...prev, impactExamples: event.target.value }))}
                 />
                 <textarea
-                  className="ta"
+                  className="app-textarea"
                   placeholder="Growth plan"
                   value={annualDraft.growthPlan}
                   onChange={event => setAnnualDraft(prev => ({ ...prev, growthPlan: event.target.value }))}
