@@ -1693,7 +1693,7 @@ export default function SlidesPage() {
     finalizeCanvasResize(event)
   }, [finalizeCanvasDrag, finalizeCanvasResize])
 
-  const parseHtmlSync = useCallback((html: string): SlideImportResult => {
+  const parseHtmlSync = useCallback(async (html: string): Promise<SlideImportResult> => {
     const pendingWarnings = pendingImportWarningsRef.current
     pendingImportWarningsRef.current = []
 
@@ -1705,7 +1705,7 @@ export default function SlidesPage() {
       throw new Error(preflight.message)
     }
 
-    const parsed = convertHtmlToSlideComponents(html)
+    const parsed = await convertHtmlToSlideComponents(html)
     const parsedValidation = validateParsedResult(parsed)
     if (parsedValidation) {
       setImportError(parsedValidation)
@@ -1771,7 +1771,7 @@ export default function SlidesPage() {
       await delay(120)
       if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
-      parseHtmlSync(html)
+      await parseHtmlSync(html)
       setParseProgress(100)
       setParseMessage('Parse complete.')
     } catch (error) {
