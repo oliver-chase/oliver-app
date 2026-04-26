@@ -91,6 +91,7 @@ type BuildCampaignFlowsContext = {
   }) => void
   openReminders: () => void
   openReports: () => void
+  openAutomation: () => void
 }
 
 export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[] {

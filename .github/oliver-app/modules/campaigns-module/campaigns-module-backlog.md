@@ -98,6 +98,12 @@ Global acceptance guardrails for all stories in Themes `CMP-T14` to `CMP-T17`:
 
 #### Epic CMP-E14A: Journey Builder and Timeline Views
 
+Execution status (2026-04-26):
+- In implementation on current branch, scoped to existing stack only.
+- Backend/API delivery: journey timeline query + journey timeline export (`csv`/`json`) through existing `campaign_report_exports` pipeline.
+- Frontend delivery: `/campaigns/automation` route with journey canvas editor/read-only mode, publish workflow, timeline filters, node highlight, and export actions.
+- QA delivery: contract and e2e coverage extended for automation route and journey timeline API actions.
+
 **Story US-CMP-FE-1901: Build campaign journey canvas with action/decision/condition nodes**
 As an admin, I want a visual journey canvas so I can understand and edit campaign automation flow without reading raw rules.
 

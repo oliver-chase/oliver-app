@@ -134,11 +134,108 @@ test.describe('campaign module report and automation flows', () => {
     await expect(sidebar.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', /\/campaigns\/calendar\/?$/)
     await expect(sidebar.getByRole('link', { name: 'Reminders' })).toHaveAttribute('href', /\/campaigns\/reminders\/?$/)
     await expect(sidebar.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', /\/campaigns\/reports\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Automation' })).toHaveAttribute('href', /\/campaigns\/automation\/?$/)
 
     await sidebar.getByRole('link', { name: 'Content Library' }).click()
     await expect(page).toHaveURL(/\/campaigns\/content\/?$/)
     await expect(page.locator('#campaigns-content')).toBeVisible()
     await expect(page.locator('#campaigns-list')).toHaveCount(0)
+  })
+
+  test('automation route renders journey canvas and requests execution timeline', async ({ page }) => {
+    const campaignApiBodies: CampaignApiBody[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-automation-1',
+            name: 'Automation Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        campaignApiBodies.push(body)
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              ok: true,
+              items: [{
+                id: 'timeline-automation-1',
+                campaign_id: 'campaign-automation-1',
+                node_id: 'node-action-1',
+                node_type: 'action',
+                branch_outcome: 'positive',
+                actor_type: 'system',
+                actor_user_id: null,
+                action_type: 'campaign-journey-node-executed',
+                message: 'Action executed',
+                timestamp: '2026-04-26T12:00:00.000Z',
+                metadata: {},
+              }],
+              hasMore: false,
+              generatedAt: '2026-04-26T12:00:01.000Z',
+            }),
+          })
+          return
+        }
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+
+    const automation = page.locator('#campaigns-automation')
+    await expect(automation.getByText('Journey Canvas')).toBeVisible()
+    await expect(automation.getByText('Execution Timeline')).toBeVisible()
+    await expect(automation.getByText('Action executed')).toBeVisible()
+
+    await expect.poll(() => campaignApiBodies.filter(body => body.action === 'get-journey-timeline').length).toBeGreaterThan(0)
   })
 
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
