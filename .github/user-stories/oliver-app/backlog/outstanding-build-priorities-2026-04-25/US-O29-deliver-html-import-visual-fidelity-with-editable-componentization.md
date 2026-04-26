@@ -26,6 +26,9 @@ Epic linkage:
 Tickets:
 - SLD-FE-310: Preserve `<style>` and `<link rel="stylesheet">` order during HTML import snapshotting.
 - SLD-TE-311: Add regression test for cascading order (`external stylesheet` + `inline style`) so later inline rules do not get accidentally overridden.
+- Ticket files:
+  - [SLD-FE-310-style-cascade-order-preservation-for-imported-html](/Users/oliver/projects/oliver-app/.github/user-stories/oliver-app/backlog/slides-module-ux-be-backlog-2026-04-24/SLD-FE-310-style-cascade-order-preservation-for-imported-html.md)
+  - [SLD-TE-311-style-order-regression-coverage](/Users/oliver/projects/oliver-app/.github/user-stories/oliver-app/backlog/slides-module-ux-be-backlog-2026-04-24/SLD-TE-311-style-order-regression-coverage.md)
 
 Progress notes (2026-04-26):
 - Added HTML + companion CSS bundle import path in Slides (`.html` with optional `.css` selected together), inlining matched linked stylesheets before parse.
