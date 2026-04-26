@@ -93,6 +93,53 @@ test.describe('campaign module report and automation flows', () => {
     await mockCampaignSupabaseReads(page)
   })
 
+  test('sidebar links navigate to campaign subpages instead of in-page anchor jumps', async ({ page }) => {
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(0)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+
+    const sidebar = page.locator('#sidebar')
+    await expect(sidebar.getByRole('link', { name: 'Campaigns', exact: true })).toHaveAttribute('href', /\/campaigns\/campaigns\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Content Library' })).toHaveAttribute('href', /\/campaigns\/content\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Review Queue' })).toHaveAttribute('href', /\/campaigns\/review-queue\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', /\/campaigns\/calendar\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', /\/campaigns\/reports\/?$/)
+
+    await sidebar.getByRole('link', { name: 'Content Library' }).click()
+    await expect(page).toHaveURL(/\/campaigns\/content\/?$/)
+    await expect(page.locator('#campaigns-content')).toBeVisible()
+    await expect(page.locator('#campaigns-list')).toHaveCount(0)
+  })
+
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
     const campaignApiBodies: CampaignApiBody[] = []
 
@@ -166,6 +213,115 @@ test.describe('campaign module report and automation flows', () => {
     await expect(reports.getByText('Type: blog-post')).toBeVisible()
     await expect(reports.getByText('Report Breakdown')).toBeVisible()
     await expect(reports.getByText('campaign-xyz')).toBeVisible()
+  })
+
+  test('workspace still loads when campaign_assets table is missing in schema cache', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-assets-fallback-1',
+            name: 'Assets Fallback Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'content-assets-fallback-1',
+            title: 'Fallback Draft',
+            body: 'Body copy',
+            content_type: 'linkedin-post',
+            topic: 'general',
+            campaign_id: 'campaign-assets-fallback-1',
+            status: 'draft',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'PGRST205',
+          message: "Could not find the table 'public.campaign_assets' in the schema cache",
+          hint: "Perhaps you meant the table 'public.assignments'",
+        }),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+    await expect(contentSection.getByRole('heading', { name: 'Fallback Draft' })).toBeVisible()
+    await expect(page.getByText('Campaign schema is not migrated yet.')).toHaveCount(0)
   })
 
   test('content library filters narrow results by status and search', async ({ page }) => {
@@ -314,6 +470,707 @@ test.describe('campaign module report and automation flows', () => {
     await contentSection.getByLabel('Search content').fill('Claimed LinkedIn')
     await expect(contentSection.getByText('Showing 1 of 3 items.')).toBeVisible()
     await expect(contentSection.getByRole('heading', { name: 'Claimed LinkedIn Item' })).toBeVisible()
+  })
+
+  test('draft creation allows partial input with body only', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-partial-draft-1',
+            name: 'Partial Draft Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    const insertedBodies: Array<Record<string, unknown>> = []
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        })
+        return
+      }
+      if (request.method() === 'POST') {
+        const payload = request.postDataJSON() as Array<Record<string, unknown>> | Record<string, unknown>
+        const row = Array.isArray(payload) ? (payload[0] || {}) : (payload || {})
+        insertedBodies.push(row)
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'partial-draft-created',
+              title: row.title || '',
+              body: row.body || '',
+              content_type: row.content_type || 'linkedin-post',
+              topic: row.topic || 'general',
+              campaign_id: row.campaign_id || null,
+              status: 'draft',
+              intended_channel: null,
+              attributed_author_id: null,
+              posting_owner_id: null,
+              reviewer_id: null,
+              scheduled_for: null,
+              posted_at: null,
+              post_url: null,
+              rejection_reason: null,
+              created_by: 'qa-admin-user',
+              created_at: '2026-04-25T00:00:00.000Z',
+              updated_at: '2026-04-25T00:00:00.000Z',
+              archived_at: null,
+            },
+          ]),
+        })
+        return
+      }
+      await route.fallback()
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(0)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+    const createForm = contentSection.locator('form').filter({ hasText: 'Create Content Draft' }).first()
+
+    await createForm.getByPlaceholder('Draft body').fill('Body-only draft for fallback title generation')
+    await createForm.getByRole('button', { name: 'Save Draft' }).click()
+
+    await expect.poll(() => insertedBodies.length).toBe(1)
+    expect(insertedBodies[0].topic).toBe('general')
+    expect(typeof insertedBodies[0].title).toBe('string')
+    expect(String(insertedBodies[0].title)).toContain('Body-only draft')
+    await expect(page.getByText('Draft created:')).toBeVisible()
+  })
+
+  test('content library defaults to action queue and hides posted until all-content view', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-default-view-1',
+            name: 'Default View Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: 'Ops teams',
+            primary_cta: 'Book a call',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'default-unclaimed',
+            title: 'Default Unclaimed',
+            body: 'Unclaimed body',
+            content_type: 'linkedin-post',
+            topic: 'Awareness',
+            campaign_id: 'campaign-default-view-1',
+            status: 'unclaimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'default-claimed-me',
+            title: 'Default Claimed by Me',
+            body: 'Claimed body',
+            content_type: 'linkedin-post',
+            topic: 'Pipeline',
+            campaign_id: 'campaign-default-view-1',
+            status: 'claimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-11T10:00:00.000Z',
+            updated_at: '2026-04-11T10:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'default-posted',
+            title: 'Default Posted',
+            body: 'Posted body',
+            content_type: 'linkedin-post',
+            topic: 'Results',
+            campaign_id: 'campaign-default-view-1',
+            status: 'posted',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: '2026-04-12T10:00:00.000Z',
+            post_url: 'https://example.com/post/default',
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-12T10:00:00.000Z',
+            updated_at: '2026-04-12T10:00:00.000Z',
+            archived_at: '2026-04-12T10:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(3)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+
+    await expect(contentSection.getByRole('button', { name: 'Action Queue', exact: true })).toHaveClass(/campaign-chip-active/)
+    await expect(contentSection.getByText('Showing 2 of 3 items.')).toBeVisible()
+    await expect(contentSection.getByRole('heading', { name: 'Default Posted' })).toHaveCount(0)
+
+    await contentSection.getByRole('button', { name: 'All Content' }).click()
+    await expect(contentSection.getByText('Showing 3 of 3 items.')).toBeVisible()
+    await expect(contentSection.getByRole('heading', { name: 'Default Posted' })).toBeVisible()
+  })
+
+  test('content filter chips are removable and reset individual filters', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-chip-1',
+            name: 'Chip Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'chip-needs-review',
+            title: 'Chip Needs Review',
+            body: 'Needs review body',
+            content_type: 'blog-post',
+            topic: 'Launch',
+            campaign_id: 'campaign-chip-1',
+            status: 'needs_review',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'chip-unclaimed',
+            title: 'Chip Unclaimed',
+            body: 'Unclaimed body',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-chip-1',
+            status: 'unclaimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-11T10:00:00.000Z',
+            updated_at: '2026-04-11T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(2)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+
+    await contentSection.getByLabel('Filter status').selectOption('needs_review')
+    await expect(contentSection.getByText('Showing 1 of 2 items.')).toBeVisible()
+    await expect(contentSection.getByRole('button', { name: /Status: needs_review/ })).toBeVisible()
+
+    await contentSection.getByRole('button', { name: /Status: needs_review/ }).click()
+    await expect(contentSection.getByLabel('Filter status')).toHaveValue('all')
+    await expect(contentSection.getByText('Showing 2 of 2 items.')).toBeVisible()
+  })
+
+  test('stale transition conflicts show refresh prompt and allow reload', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-conflict-1',
+            name: 'Conflict Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'conflict-draft-1',
+            title: 'Conflict Draft',
+            body: 'Draft body',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-conflict-1',
+            status: 'draft',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/rpc/campaign_submit_for_review', async route => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'P0001',
+          message: 'CMP_INVALID_STATE: only draft content can be submitted for review.',
+        }),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+    const conflictCard = contentSection.locator('article').filter({ hasText: 'Conflict Draft' }).first()
+    await conflictCard.getByRole('button', { name: 'Submit for Review' }).click()
+
+    const errorBanner = page.locator('.status-banner').filter({ hasText: 'Campaign data changed while this action was running. Refresh and retry.' }).first()
+    await expect(errorBanner).toBeVisible()
+    await errorBanner.getByRole('button', { name: 'Refresh Now' }).click()
+    await expect(contentSection.getByRole('heading', { name: 'Conflict Draft' })).toBeVisible()
+  })
+
+  test('admin override modal applies forced lifecycle transition with required reason', async ({ page }) => {
+    let overrideBody: Record<string, unknown> | null = null
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-admin-override-1',
+            name: 'Admin Override Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'admin-override-item-1',
+            title: 'Admin Override Item',
+            body: 'Claimed body',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-admin-override-1',
+            status: 'claimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: null,
+            scheduled_for: '2026-04-28T14:00:00.000Z',
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-20T00:00:00.000Z',
+            updated_at: '2026-04-20T00:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/rpc/campaign_admin_override', async route => {
+      overrideBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'admin-override-item-1',
+            title: 'Admin Override Item',
+            body: 'Claimed body',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-admin-override-1',
+            status: 'unclaimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-20T00:00:00.000Z',
+            updated_at: '2026-04-26T00:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+
+    const contentSection = page.locator('#campaigns-content')
+    const card = contentSection.locator('article').filter({ hasText: 'Admin Override Item' }).first()
+    await card.getByRole('button', { name: 'Admin Override' }).click()
+
+    await page.getByLabel('Admin override action').selectOption('force-unclaimed')
+    await page.getByLabel('Admin override reason').fill('Manual lifecycle correction for invalid claim state')
+    await page.getByRole('button', { name: 'Apply Override' }).click()
+
+    await expect.poll(() => overrideBody !== null).toBe(true)
+    if (!overrideBody) {
+      throw new Error('Expected admin override payload to be captured.')
+    }
+    const overridePayload = overrideBody
+    const overrideAction = overridePayload['p_action'] as string | undefined
+    const overrideReason = overridePayload['p_reason'] as string | undefined
+    expect(overrideAction).toBe('force-unclaimed')
+    expect(overrideReason).toBe('Manual lifecycle correction for invalid claim state')
+    await expect(page.getByText('Admin override applied: Admin Override Item is now unclaimed.')).toBeVisible()
   })
 
   test('campaign cards show lifecycle counts and cadence open-slot summary', async ({ page }) => {
@@ -527,6 +1384,18 @@ test.describe('campaign module report and automation flows', () => {
 
     const calendarSection = page.locator('#campaigns-calendar')
     await expect(calendarSection.getByLabel('Filter claimed campaign')).toHaveValue('campaign-slot-1')
+
+    await campaignCard.getByRole('button', { name: 'View Details' }).click()
+    const detailCard = page.locator('#campaigns-list article').filter({ hasText: 'Campaign Detail Workspace' }).first()
+    await expect(detailCard).toBeVisible()
+    await expect(detailCard.getByText('Lifecycle Groups')).toBeVisible()
+    await expect(detailCard.getByRole('heading', { name: 'Draft (1)', exact: true })).toBeVisible()
+    await expect(detailCard.getByRole('heading', { name: 'Needs Review (1)', exact: true })).toBeVisible()
+    await expect(detailCard.getByRole('heading', { name: 'Unclaimed (1)', exact: true })).toBeVisible()
+    await expect(detailCard.getByRole('heading', { name: 'Claimed (1)', exact: true })).toBeVisible()
+    await expect(detailCard.getByRole('heading', { name: 'Posted (1)', exact: true })).toBeVisible()
+    await expect(detailCard.getByText('Open slots this week: 1')).toBeVisible()
+    await expect(detailCard.getByRole('button', { name: 'Draft item' })).toBeVisible()
   })
 
   test('calendar filters prioritize overdue and support timing/channel refinement', async ({ page }) => {
@@ -1457,5 +2326,280 @@ test.describe('campaign module report and automation flows', () => {
 
     const downloadBody = campaignApiBodies.find(body => body.action === 'download-report-export')
     expect(downloadBody?.export_id).toBe('job-campaign-export-1')
+  })
+
+  test('campaign detail workspace edits and saves selected campaign strategy fields', async ({ page }) => {
+    const updateBodies: Record<string, unknown>[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'campaign-detail-1',
+              name: 'Detail Campaign',
+              description: 'Initial description',
+              offer_definition: 'Initial offer',
+              target_audience: 'Initial audience',
+              primary_cta: 'Initial CTA',
+              keywords: ['initial'],
+              start_date: '2026-04-01',
+              end_date: '2026-04-30',
+              cadence_rule: { preset: 'weekly', posts_per_week: 3 },
+              status: 'active',
+              created_by: 'qa-admin-user',
+              created_at: '2026-04-01T00:00:00.000Z',
+              updated_at: '2026-04-01T00:00:00.000Z',
+            },
+          ]),
+        })
+        return
+      }
+
+      if (request.method() === 'PATCH') {
+        const payload = request.postDataJSON() as Record<string, unknown>
+        updateBodies.push(payload)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'campaign-detail-1',
+              name: payload.name || 'Detail Campaign',
+              description: payload.description || 'Initial description',
+              offer_definition: payload.offer_definition || 'Initial offer',
+              target_audience: payload.target_audience || 'Initial audience',
+              primary_cta: payload.primary_cta || 'Initial CTA',
+              keywords: payload.keywords || ['initial'],
+              start_date: payload.start_date || '2026-04-01',
+              end_date: payload.end_date || '2026-04-30',
+              cadence_rule: payload.cadence_rule || { preset: 'weekly', posts_per_week: 3 },
+              status: payload.status || 'active',
+              created_by: 'qa-admin-user',
+              created_at: '2026-04-01T00:00:00.000Z',
+              updated_at: '2026-04-25T00:00:00.000Z',
+            },
+          ]),
+        })
+        return
+      }
+
+      await route.fallback()
+    })
+
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+
+    const campaignSection = page.locator('#campaigns-list')
+    const detailCard = campaignSection.locator('article').filter({ hasText: 'Campaign Detail Workspace' }).first()
+    await expect(detailCard).toBeVisible()
+    await detailCard.getByLabel('Name').fill('Detail Campaign Updated')
+    await detailCard.getByLabel('Primary CTA').fill('Book a 20-min call')
+    await detailCard.getByLabel('Keywords (comma separated)').fill('execution, reliability')
+    await detailCard.getByRole('button', { name: 'Save Campaign Detail' }).click()
+
+    await expect.poll(() => updateBodies.length).toBe(1)
+    expect(updateBodies[0]).toMatchObject({
+      name: 'Detail Campaign Updated',
+      primary_cta: 'Book a 20-min call',
+      keywords: ['execution', 'reliability'],
+    })
+    await expect(page.getByText('Campaign details saved.')).toBeVisible()
+  })
+
+  test('calendar timeline open content resets library filters and focuses content card', async ({ page }) => {
+    const scheduledFor = new Date().toISOString()
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-focus-1',
+            name: 'Focus Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'focus-claimed-item',
+            title: 'Focus Claimed Item',
+            body: 'Focus body text',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-focus-1',
+            status: 'claimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: 'qa-admin-user',
+            reviewer_id: null,
+            scheduled_for: scheduledFor,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+          {
+            id: 'focus-draft-item',
+            title: 'Focus Draft Item',
+            body: 'Draft body text',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-focus-1',
+            status: 'draft',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-09T10:00:00.000Z',
+            updated_at: '2026-04-09T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(2)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+
+    const contentSection = page.locator('#campaigns-content')
+    await contentSection.getByLabel('Filter status').selectOption('draft')
+    await expect(contentSection.getByText('Showing 1 of 2 items.')).toBeVisible()
+    await expect(contentSection.getByRole('heading', { name: 'Focus Claimed Item' })).toHaveCount(0)
+
+    const calendarSection = page.locator('#campaigns-calendar')
+    await calendarSection
+      .locator('.campaign-timeline-item')
+      .filter({ hasText: 'Focus Claimed Item' })
+      .getByRole('button', { name: 'Open Content' })
+      .click()
+
+    await expect(contentSection.getByText('Showing 2 of 2 items.')).toBeVisible()
+    await expect(contentSection.getByRole('heading', { name: 'Focus Claimed Item' })).toBeVisible()
+    await expect(contentSection.locator('article').filter({ hasText: 'Focus Claimed Item' }).first()).toHaveClass(/campaign-card-focus/)
   })
 })
