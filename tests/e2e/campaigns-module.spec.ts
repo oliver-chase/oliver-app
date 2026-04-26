@@ -1234,7 +1234,7 @@ test.describe('campaign module report and automation flows', () => {
             content_type: 'linkedin-post',
             topic: 'Ops',
             campaign_id: 'campaign-denied-1',
-            status: 'unclaimed',
+            status: 'draft',
             intended_channel: 'linkedin',
             attributed_author_id: null,
             posting_owner_id: null,
@@ -1265,7 +1265,7 @@ test.describe('campaign module report and automation flows', () => {
         body: JSON.stringify([]),
       })
     })
-    await page.route('**/rest/v1/rpc/campaign_claim_content', async route => {
+    await page.route('**/rest/v1/rpc/campaign_submit_for_review', async route => {
       await route.fulfill({
         status: 400,
         contentType: 'application/json',
@@ -1309,9 +1309,253 @@ test.describe('campaign module report and automation flows', () => {
     await gotoAndSettle(page, '/campaigns')
     const contentSection = page.locator('#campaigns-content')
     const unclaimedCard = contentSection.locator('article').filter({ hasText: 'Permission Unclaimed' }).first()
-    await unclaimedCard.getByRole('button', { name: 'Claim' }).click()
+    await unclaimedCard.getByRole('button', { name: 'Submit for Review' }).click()
 
     const errorBanner = page.locator('.status-banner').filter({ hasText: 'You do not have permission to perform this action right now.' }).first()
+    await expect(errorBanner).toBeVisible()
+  })
+
+  test('not found transition errors suggest refresh and retry', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-missing-1',
+            name: 'Not Found Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'missing-unclaimed-1',
+            title: 'Missing Draft',
+            body: 'Body for missing',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-missing-1',
+            status: 'draft',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/rpc/campaign_submit_for_review', async route => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'P0001',
+          message: 'CMP_NOT_FOUND: content item does not exist.',
+        }),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+    const missingCard = contentSection.locator('article').filter({ hasText: 'Missing Draft' }).first()
+    await missingCard.getByRole('button', { name: 'Submit for Review' }).click()
+
+    const errorBanner = page.locator('.status-banner').filter({ hasText: 'Campaign item not found or stale. Refresh and retry.' }).first()
+    await expect(errorBanner).toBeVisible()
+  })
+
+  test('validation failed transition errors show exact backend guidance', async ({ page }) => {
+    await page.route('**/rest/v1/campaigns*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-validation-1',
+            name: 'Validation Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_content_items*', async route => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'validation-unclaimed-1',
+            title: 'Validation Draft',
+            body: 'Body to validate',
+            content_type: 'linkedin-post',
+            topic: 'Ops',
+            campaign_id: 'campaign-validation-1',
+            status: 'unclaimed',
+            intended_channel: 'linkedin',
+            attributed_author_id: null,
+            posting_owner_id: null,
+            reviewer_id: null,
+            scheduled_for: null,
+            posted_at: null,
+            post_url: null,
+            rejection_reason: null,
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-10T10:00:00.000Z',
+            updated_at: '2026-04-10T10:00:00.000Z',
+            archived_at: null,
+          },
+        ]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_assets*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/campaign_activity_log*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+    await page.route('**/rest/v1/rpc/campaign_submit_for_review', async route => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'P0001',
+          message: 'CMP_VALIDATION_FAILED: reason_code is required.',
+        }),
+      })
+    })
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns')
+    const contentSection = page.locator('#campaigns-content')
+    const validationCard = contentSection.locator('article').filter({ hasText: 'Validation Draft' }).first()
+    await validationCard.getByRole('button', { name: 'Submit for Review' }).click()
+
+    const errorBanner = page.locator('.status-banner').filter({ hasText: 'Reason_code is required.' }).first()
     await expect(errorBanner).toBeVisible()
   })
 
