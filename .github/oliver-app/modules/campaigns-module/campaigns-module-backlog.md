@@ -198,6 +198,15 @@ Acceptance Criteria:
 
 #### Epic CMP-E15A: Segmentation and Contact Qualification
 
+Execution status (2026-04-26):
+- In build execution as next epic after `CMP-E14B`.
+- Phase-1 delivery on current branch:
+  - Segment builder workspace added in `/campaigns/automation`.
+  - Segment definitions persisted in `campaigns.cadence_rule.segment_definitions` with schema/version fields.
+  - Live segment estimate action added to `/api/campaigns` (`get-segment-estimate`) with audit logging.
+  - Save flow preserves existing campaign automation metadata (including journey graph/planning/focus payloads).
+  - Targeted e2e and contract coverage added for estimate + persistence paths.
+
 **Story US-CMP-BE-1910: Add dynamic segment engine for campaign audience entry**
 As a campaign owner, I want dynamic segment rules so contacts enter/exit campaigns based on changing attributes and behavior.
 

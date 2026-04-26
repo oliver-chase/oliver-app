@@ -220,6 +220,149 @@ function parseJourneyTimelineFilters(input) {
   };
 }
 
+function parseSegmentEstimateInput(input, campaignId) {
+  const source = input && typeof input === 'object' ? input : {};
+  const groups = Array.isArray(source.rule_groups) ? source.rule_groups : [];
+  return {
+    campaignId: asString(source.campaign_id || campaignId || ''),
+    rule_groups: groups
+      .map((group) => {
+        if (!group || typeof group !== 'object') return null;
+        const logic = asString(group.logic || 'and').toLowerCase() === 'or' ? 'or' : 'and';
+        const rules = Array.isArray(group.rules) ? group.rules : [];
+        const normalizedRules = rules
+          .map((rule) => {
+            if (!rule || typeof rule !== 'object') return null;
+            const domain = asString(rule.domain || '');
+            const field = asString(rule.field || '');
+            const operator = asString(rule.operator || '');
+            const value = asString(rule.value || '');
+            if (!domain || !field || !operator) return null;
+            return { domain, field, operator, value };
+          })
+          .filter(Boolean);
+        return {
+          logic,
+          rules: normalizedRules,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+async function fetchSegmentAudienceRows(env, campaignId) {
+  const usersLoaded = await supabaseJson(
+    env,
+    '/rest/v1/app_users?select=user_id,email,role,page_permissions&limit=' + MAX_REPORT_ROWS,
+  );
+  if (!usersLoaded.ok) {
+    return {
+      ok: false,
+      status: usersLoaded.status,
+      error: 'Failed to load audience rows for segment estimate: ' + usersLoaded.text,
+      rows: [],
+    };
+  }
+
+  const campaignRowsLoaded = await fetchContentRows(env, {
+    campaignId: campaignId || '',
+    contentType: '',
+    startDate: '',
+    endDate: '',
+  });
+  if (!campaignRowsLoaded.ok) return campaignRowsLoaded;
+
+  const campaignByUser = new Map();
+  for (const row of campaignRowsLoaded.rows) {
+    const owner = asString(row.posting_owner_id || row.created_by || '');
+    if (!owner) continue;
+    const current = campaignByUser.get(owner) || { postedCount: 0, waitingReviewCount: 0 };
+    const lifecycle = canonicalLifecycleStatus(row);
+    if (lifecycle === 'posted' || lifecycle === 'archived') current.postedCount += 1;
+    if (lifecycle === 'in_review') current.waitingReviewCount += 1;
+    campaignByUser.set(owner, current);
+  }
+
+  const rows = (Array.isArray(usersLoaded.data) ? usersLoaded.data : []).map((row) => {
+    const userId = asString(row.user_id || '');
+    const campaignStats = campaignByUser.get(userId) || { postedCount: 0, waitingReviewCount: 0 };
+    const email = asString(row.email || '');
+    const emailDomain = email.includes('@') ? email.split('@').pop().toLowerCase() : '';
+    return {
+      user_id: userId,
+      email,
+      email_domain: emailDomain,
+      role: asString(row.role || ''),
+      page_permissions: Array.isArray(row.page_permissions) ? row.page_permissions : [],
+      campaign_posted_count: campaignStats.postedCount,
+      campaign_waiting_review_count: campaignStats.waitingReviewCount,
+    };
+  });
+
+  return { ok: true, rows };
+}
+
+function evaluateSegmentRule(rule, row) {
+  const domain = rule.domain;
+  const field = rule.field;
+  const operator = rule.operator;
+  const value = rule.value;
+  const lowerValue = value.toLowerCase();
+
+  let actual = null;
+  if (domain === 'contact_profile') {
+    if (field === 'role') actual = asString(row.role || '');
+    if (field === 'email_domain') actual = asString(row.email_domain || '');
+    if (field === 'user_id') actual = asString(row.user_id || '');
+  }
+  if (domain === 'campaign_activity') {
+    if (field === 'has_campaign_permission') actual = Array.isArray(row.page_permissions) && row.page_permissions.includes('campaigns');
+    if (field === 'posted_count') actual = Number(row.campaign_posted_count || 0);
+    if (field === 'waiting_review_count') actual = Number(row.campaign_waiting_review_count || 0);
+  }
+
+  if (operator === 'is_true') return actual === true;
+  if (operator === 'is_false') return actual === false;
+
+  if (typeof actual === 'number') {
+    const numericValue = Number.parseFloat(value || '0');
+    if (!Number.isFinite(numericValue)) return false;
+    if (operator === 'equals') return actual === numericValue;
+    if (operator === 'not_equals') return actual !== numericValue;
+    return false;
+  }
+
+  const normalizedActual = asString(actual || '').toLowerCase();
+  if (operator === 'equals') return normalizedActual === lowerValue;
+  if (operator === 'not_equals') return normalizedActual !== lowerValue;
+  if (operator === 'contains') return normalizedActual.includes(lowerValue);
+  if (operator === 'in') {
+    const set = lowerValue.split(',').map((item) => item.trim()).filter(Boolean);
+    return set.includes(normalizedActual);
+  }
+
+  return false;
+}
+
+function evaluateSegmentGroups(segment, row) {
+  const groups = Array.isArray(segment.rule_groups) ? segment.rule_groups : [];
+  if (groups.length === 0) return true;
+
+  for (const group of groups) {
+    const rules = Array.isArray(group.rules) ? group.rules : [];
+    if (rules.length === 0) continue;
+    if (group.logic === 'or') {
+      const matched = rules.some((rule) => evaluateSegmentRule(rule, row));
+      if (!matched) return false;
+      continue;
+    }
+    const matched = rules.every((rule) => evaluateSegmentRule(rule, row));
+    if (!matched) return false;
+  }
+
+  return true;
+}
+
 function canonicalizeForJson(value) {
   if (Array.isArray(value)) return value.map(canonicalizeForJson);
   if (value && typeof value === 'object') {
@@ -804,6 +947,41 @@ export async function onRequestPost(context) {
       hasMore: loaded.hasMore,
       generatedAt: new Date().toISOString(),
       filters,
+    });
+  }
+
+  if (action === 'get-segment-estimate') {
+    const campaignId = asString(body.campaign_id || body.campaignId || '');
+    if (!campaignId) return errorResponse('campaign_id is required', 400);
+
+    const segment = parseSegmentEstimateInput(body.segment || {}, campaignId);
+    const loaded = await fetchSegmentAudienceRows(env, campaignId);
+    if (!loaded.ok) return errorResponse(loaded.error, loaded.status || 500);
+
+    const rows = Array.isArray(loaded.rows) ? loaded.rows : [];
+    const matched = rows.filter((row) => evaluateSegmentGroups(segment, row));
+    const generatedAt = new Date().toISOString();
+
+    await insertCampaignActivity(env, {
+      entity_type: 'campaign-segment',
+      entity_id: campaignId,
+      action_type: 'segment-estimate-generated',
+      performed_by: authz.actor.user_id,
+      metadata: {
+        campaign_id: campaignId,
+        source_rows: rows.length,
+        estimated_count: matched.length,
+        generated_at: generatedAt,
+      },
+    });
+
+    return jsonResponse({
+      ok: true,
+      estimate: {
+        estimated_count: matched.length,
+        confidence: 'estimated',
+        generated_at: generatedAt,
+      },
     });
   }
 

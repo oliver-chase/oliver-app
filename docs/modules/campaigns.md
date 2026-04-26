@@ -38,7 +38,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
 - Campaign CRUD/reporting operations are centralized in `src/lib/campaigns.ts`.
 - Backend endpoints are implemented in `functions/api/campaigns.js` and `functions/api/campaign-jobs.js`.
 - Automation surfaces include journey canvas publish/version tracking and execution timeline/export through existing campaign APIs.
-- Automation workspace also includes planning-board and focus-item operations persisted in campaign cadence metadata with audit events.
+- Automation workspace also includes planning-board, focus-item, and segment-builder operations persisted in campaign cadence metadata with audit events.
 
 ## Current-state gap analysis
 - Full requirement audit and E2E gap matrix: `docs/modules/campaigns-gap-analysis-2026-04-25.md`

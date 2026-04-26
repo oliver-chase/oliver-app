@@ -641,6 +641,156 @@ test.describe('campaign module report and automation flows', () => {
     expect(focusList.length).toBeGreaterThan(0)
   })
 
+  test('segment builder requests live estimate and saves segment definitions without dropping journey metadata', async ({ page }) => {
+    const campaignPatchBodies: Record<string, unknown>[] = []
+    const campaignApiBodies: CampaignApiBody[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+      if (method === 'PATCH') {
+        const body = request.postDataJSON() as Record<string, unknown>
+        campaignPatchBodies.push(body)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            id: 'campaign-segment-1',
+            name: 'Segment Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: body.cadence_rule || null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          }]),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-segment-1',
+            name: 'Segment Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: {
+              preset: 'weekly',
+              posts_per_week: 3,
+              journey_graph: {
+                version: 3,
+                published_at: '2026-04-20T12:00:00.000Z',
+                published_by: 'qa-admin-user',
+                nodes: [
+                  {
+                    id: 'node-action-1',
+                    type: 'action',
+                    title: 'Send intro',
+                    config: { action_key: 'send-intro' },
+                    next_node_ids: [],
+                  },
+                ],
+              },
+            },
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        campaignApiBodies.push(body)
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-segment-estimate') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              ok: true,
+              estimate: {
+                estimated_count: 42,
+                confidence: 'estimated',
+                generated_at: '2026-04-26T14:00:00.000Z',
+              },
+            }),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+    const automation = page.locator('#campaigns-automation')
+    const segmentCard = automation.locator('article').filter({ hasText: 'Audience Segment Builder' }).first()
+    await segmentCard.getByLabel('Segment Name').fill('RevOps audience')
+    await segmentCard.getByLabel('Value').first().fill('admin')
+    await segmentCard.getByRole('button', { name: 'Live Estimate' }).click()
+    await expect(segmentCard.getByText('Estimate: 42 (estimated)')).toBeVisible()
+
+    await segmentCard.getByRole('button', { name: 'Save Segment' }).click()
+    await expect.poll(() => campaignPatchBodies.length).toBeGreaterThan(0)
+    const latestPatch = campaignPatchBodies.at(-1) || {}
+    const cadenceRule = (latestPatch.cadence_rule || {}) as Record<string, unknown>
+    const journeyGraph = (cadenceRule.journey_graph || {}) as Record<string, unknown>
+    const segmentDefinitions = Array.isArray(cadenceRule.segment_definitions) ? cadenceRule.segment_definitions : []
+    expect(journeyGraph.version).toBe(3)
+    expect(segmentDefinitions.length).toBeGreaterThan(0)
+
+    const estimateCalls = campaignApiBodies.filter(body => body.action === 'get-segment-estimate')
+    expect(estimateCalls.length).toBeGreaterThan(0)
+  })
+
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
     const campaignApiBodies: CampaignApiBody[] = []
 
