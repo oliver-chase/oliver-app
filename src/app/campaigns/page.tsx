@@ -2238,7 +2238,7 @@ export default function CampaignsPage() {
       setSchemaMissing(true)
       setPolicyBlocked(false)
       setRefreshRecommended(false)
-      setError('Campaign schema is not migrated yet. Run supabase/migrations/014_campaign_content_posting_foundation.sql.')
+      setError('Campaign schema is not migrated yet. Run campaign migrations 014-016 in supabase/migrations.')
       return
     }
     const transitionMessage = campaignTransitionMessageFromError(exception)
@@ -3061,7 +3061,8 @@ export default function CampaignsPage() {
     setErrorFromException,
   ])
 
-  const cloneSegmentFromInput = useCallback((segmentId: string) => {
+  const cloneSegmentFromInput = useCallback(async (segmentId: string) => {
+    if (!selectedCampaign || !appUser?.user_id) return
     const source = segmentDefinitions.find(segment => segment.id === segmentId)
     if (!source) return
     const cloned: CampaignSegmentDraft = {
@@ -3081,18 +3082,129 @@ export default function CampaignsPage() {
         })),
       })),
     }
-    setSegmentDraft(cloned)
-    setSegmentEstimate(null)
-  }, [segmentDefinitions])
+    const normalized = normalizeSegmentDraft(cloned, selectedCampaign.id, appUser.user_id, null)
+    const clonedSegment: CampaignSegmentDefinition = {
+      ...normalized,
+      estimated_count: source.estimated_count,
+      estimate_confidence: source.estimate_confidence,
+      estimate_generated_at: source.estimate_generated_at,
+    }
+    const nextSegments = [clonedSegment, ...segmentDefinitions]
 
-  const archiveSegmentFromInput = useCallback((segmentId: string) => {
+    setSegmentSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(selectedCampaign.cadence_rule && typeof selectedCampaign.cadence_rule === 'object' ? selectedCampaign.cadence_rule : {}),
+        segment_definitions: nextSegments,
+      })
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        { cadence_rule: nextCadenceRule },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setSegmentDefinitions(nextSegments)
+      setSegmentDraft(cloned)
+      setSegmentEstimate(clonedSegment.estimate_generated_at
+        ? {
+          estimated_count: clonedSegment.estimated_count,
+          confidence: clonedSegment.estimate_confidence,
+          generated_at: clonedSegment.estimate_generated_at,
+        }
+        : null)
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: 'campaign-segment-cloned',
+        performed_by: appUser.user_id,
+        metadata: {
+          source_segment_id: source.id,
+          cloned_segment_id: clonedSegment.id,
+          cloned_segment_name: clonedSegment.name,
+        },
+      })
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess('Segment cloned.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setSegmentSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    markMutationSuccess,
+    segmentDefinitions,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  const archiveSegmentFromInput = useCallback(async (segmentId: string) => {
+    if (!selectedCampaign || !appUser?.user_id) return
     const source = segmentDefinitions.find(segment => segment.id === segmentId)
     if (!source) return
-    setSegmentDraft({
-      ...draftFromSegmentDefinition(source),
+    const archivedSegment: CampaignSegmentDefinition = {
+      ...source,
       status: 'archived',
-    })
-  }, [segmentDefinitions])
+      updated_at: new Date().toISOString(),
+      updated_by: appUser.user_id,
+    }
+    const nextSegments = segmentDefinitions.map(segment => (
+      segment.id === source.id ? archivedSegment : segment
+    ))
+
+    setSegmentSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(selectedCampaign.cadence_rule && typeof selectedCampaign.cadence_rule === 'object' ? selectedCampaign.cadence_rule : {}),
+        segment_definitions: nextSegments,
+      })
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        { cadence_rule: nextCadenceRule },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setSegmentDefinitions(nextSegments)
+      setSegmentDraft({
+        ...draftFromSegmentDefinition(archivedSegment),
+        status: 'archived',
+      })
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: 'campaign-segment-archived',
+        performed_by: appUser.user_id,
+        metadata: {
+          segment_id: archivedSegment.id,
+          segment_name: archivedSegment.name,
+        },
+      })
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess('Segment archived.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setSegmentSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    markMutationSuccess,
+    segmentDefinitions,
+    selectedCampaign,
+    setErrorFromException,
+  ])
 
   const createContentDraftFromInput = useCallback(async (payload: {
     title?: string
@@ -7119,19 +7231,26 @@ export default function CampaignsPage() {
                             <button
                               type="button"
                               className="btn btn--secondary btn--sm"
-                              onClick={() => cloneSegmentFromInput(segment.id)}
+                              onClick={() => { void cloneSegmentFromInput(segment.id) }}
+                              disabled={segmentSaving}
                             >
                               Clone
                             </button>
                             <button
                               type="button"
                               className="btn btn--secondary btn--sm"
-                              onClick={() => archiveSegmentFromInput(segment.id)}
+                              onClick={() => { void archiveSegmentFromInput(segment.id) }}
+                              disabled={segmentSaving || segment.status === 'archived'}
                             >
                               Archive
                             </button>
                           </div>
                         </div>
+                        {segment.estimate_generated_at && (
+                          <p className="campaign-card-copy">
+                            Estimate freshness: {new Date(segment.estimate_generated_at).toLocaleString()} ({segment.estimate_confidence})
+                          </p>
+                        )}
                       </article>
                     ))}
                   </article>

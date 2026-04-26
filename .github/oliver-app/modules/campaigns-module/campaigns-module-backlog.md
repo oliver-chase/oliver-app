@@ -33,6 +33,7 @@ Scope: all module stories for campaigns including execution, parity, rollout, an
 ## Canonical index points
 
 - PRD execution map: `campaigns-module-user-story-map.md`
+- Journey coverage matrix: `campaigns-module-journey-coverage-matrix.md`
 - E12 epic charter: `US-CMP-ARCH-1800-social-calendar-no-api-epic-charter.md`
 - E13 epic charter: `US-CMP-ARCH-1810-social-automation-governance-epic-charter.md`
 - QA and rollout evidence: `US-CMP-QA-1111-rollout-controls-and-migration-safety.md`,
@@ -88,6 +89,16 @@ Mautic source anchors:
 - `https://docs.mautic.org/en/6.0/channels/focus_items.html`
 - `https://docs.mautic.org/en/6.0/reports/reports.html`
 
+Capability parity audit (2026-04-26):
+- Journey builder (`actions` / `decisions` / `conditions`): In progress (`CMP-E14A`), delivered baseline editor + timeline; hardening continues.
+- Dynamic segment engine + live estimates: In progress (`CMP-E15A`), delivered baseline builder + estimate + clone/archive persistence; scheduled evaluator still pending.
+- Point/scoring automation: Planned (`CMP-E15B`), no production scoring engine yet.
+- Focus-item engagement controls: In progress (`CMP-E14B`), baseline model and validation present; telemetry confidence surfacing incomplete.
+- Campaign report data-source transparency: Partial (`CMP-E17A`, `CMP-T19`), source manifests/provenance not yet complete on all views.
+- Chatbot fuzzy campaign workflow routing: Partial (`CMP-E20B`), alias coverage expanding; confidence/ambiguity telemetry gates pending.
+- Cross-module design system parity and mapping: Planned/In progress (`CMP-T18`, `CMP-E20C`), mapping/gates defined, migration execution pending.
+- Full click-path and mobile certification: In progress (`CMP-E20A`, `CMP-E20C`), matrix and gating stories defined, route-complete cert pending.
+
 Global acceptance guardrails for all stories in Themes `CMP-T14` to `CMP-T17`:
 1. Keep architecture on existing runtime only: `Next.js static export + Supabase + Cloudflare Pages Functions`; no new persistent runtime dependencies.
 2. Enforce capability and permission checks in both UI and server contracts; UI gating alone is insufficient.
@@ -107,6 +118,14 @@ Mandatory execution protocol for every story in this section:
 8. Run full campaign QA sweep before merge: TypeScript check, campaign contracts, campaign e2e suite, campaign smoke lists.
 9. Record post-implementation gap analysis with uncovered tech debt and create follow-up backlog stories for every unresolved gap.
 10. Do not mark a story complete unless acceptance criteria, evidence, and regression coverage are all satisfied.
+
+Full journey audit baseline (must be kept current while executing stories):
+1. Entry points: hub tile, direct route URL, deep links, sidebar route links, chatbot quick chips, chatbot typed-intent routing.
+2. Workflow loops: create campaign -> create draft -> submit review -> approve/reject -> claim/unclaim -> schedule -> reminders -> mark posted -> report/export.
+3. Automation loops: planning board -> focus items -> segment builder -> journey canvas -> timeline filter -> report drilldown -> recommendation action.
+4. Cross-surface transitions: reports to filtered queues, timeline node to canvas highlight, reminders to content detail, chatbot action to exact route/filter context.
+5. Error/recovery loops: schema missing, RLS denied, stale-update conflicts, invalid transitions, malformed upload/flow payloads.
+6. Mobile loops: sidebar open/close, section switching, modal save/cancel, chatbot trigger + drawer, touch-target path completion without overflow.
 
 ### Theme CMP-T14: Visual Campaign Orchestration and Operator Clarity
 
@@ -206,6 +225,10 @@ Execution status (2026-04-26):
   - Live segment estimate action added to `/api/campaigns` (`get-segment-estimate`) with audit logging.
   - Save flow preserves existing campaign automation metadata (including journey graph/planning/focus payloads).
   - Targeted e2e and contract coverage added for estimate + persistence paths.
+- Phase-2 hardening on current branch:
+  - Clone and archive segment actions now persist immediately, with audit-log events.
+  - Segment estimate freshness/confidence surfaced per saved segment record.
+  - Targeted e2e coverage now validates clone/archive persistence in addition to create/edit/save flow.
 
 **Story US-CMP-BE-1910: Add dynamic segment engine for campaign audience entry**
 As a campaign owner, I want dynamic segment rules so contacts enter/exit campaigns based on changing attributes and behavior.
@@ -352,3 +375,203 @@ Acceptance Criteria:
 4. Evidence package records false-positive and false-negative checks before release.
 5. Rollout checklist requires signoff from campaign ops and QA.
 6. Regression suite is wired into existing campaign staging signoff process.
+
+### Theme CMP-T18: Component Library Mapping and Design Consistency
+
+#### Epic CMP-E18A: Campaign Surface Component Mapping and Token Compliance
+
+**Story US-CMP-FE-1940: Map all campaign surfaces to approved component primitives**
+As a frontend owner, I want every Campaigns surface mapped to approved component-library primitives so visuals and interaction patterns stay consistent.
+
+Acceptance Criteria:
+1. Campaigns module has a maintained component mapping matrix from each major UI section to approved component primitives.
+2. All buttons, inputs, selects, pills, cards, banners, and modals in Campaigns use mapped primitives/tokens with no uncatalogued visual variants.
+3. Any new Campaigns UI must include mapping updates before merge, including rationale for exceptions.
+4. Mapping includes Figma/Component Library references for each primitive and token bundle.
+5. Token usage follows shared semantic tokens only; hardcoded visual values are disallowed.
+6. Story includes a migration checklist for legacy UI pieces still using non-standard classes.
+
+**Story US-CMP-QA-1941: Enforce consistency gates for component mapping and visual drift**
+As a QA owner, I want automated gates for mapping compliance and visual consistency so regressions are caught before staging.
+
+Acceptance Criteria:
+1. CI gate validates Campaigns surfaces against the component mapping matrix and fails on unmapped primitives.
+2. Visual regression tests cover Campaigns core routes (`campaigns`, `content`, `review-queue`, `calendar`, `reports`, `automation`) in desktop and mobile viewports.
+3. Accessibility checks are part of gating for mapped components (focus order, labels, contrast, keyboard navigation).
+4. Design drift incidents create tracked backlog items with owner/severity and remediation ETA.
+5. Evidence bundle for each Campaign epic includes mapping validation output and visual comparison artifacts.
+6. Staging merge cannot proceed while mapping/visual drift gates are failing.
+
+### Theme CMP-T19: Data Ingestion and Automation Source Intelligence
+
+#### Epic CMP-E19A: Campaign Data Contracts for Posts, Search, and Research Signals
+
+**Story US-CMP-BE-1942: Define canonical ingestion contracts for campaign post/search/research evidence**
+As a platform owner, I want a canonical ingestion contract so campaign automation has consistent, auditable inputs from posting, search discovery, and research artifacts.
+
+Acceptance Criteria:
+1. A canonical ingestion schema is defined for post events, search evidence, and research findings with explicit schema versioning.
+2. Ingestion writes are accepted only through existing stack paths (`Cloudflare Functions` + `Supabase`) with typed payload validation and reject reasons.
+3. Every ingested record stores source metadata (`source_type`, `source_id`, `captured_at`, `confidence`, `coverage_scope`, `request_id`, `actor`).
+4. Dedupe keys prevent duplicate writes for retried ingestion events while preserving idempotent upserts.
+5. Invalid records are persisted to a dead-letter table/queue with actionable diagnostics and replay controls.
+6. Contract tests cover valid payloads, missing required fields, schema version mismatch, duplicate retries, and out-of-order events.
+
+**Story US-CMP-BE-1943: Build campaign source ledger and lineage APIs**
+As an operator, I want source-lineage APIs so I can trace every campaign automation decision back to its post/search/research evidence.
+
+Acceptance Criteria:
+1. Campaign APIs expose a source-ledger view keyed by campaign, content item, and automation node.
+2. Ledger records include joinable references to raw evidence rows and derived automation outcomes.
+3. Read APIs support filters by source type, confidence band, freshness window, and ingestion status.
+4. All lineage reads enforce capability-based access and redact restricted fields by role.
+5. Report/export payloads include lineage manifest metadata (`generated_at`, filters, source coverage summary).
+6. API contract tests validate permission-denied shapes, filter correctness, and manifest consistency.
+
+#### Epic CMP-E19B: Automation Data Surfacing and Trust Signals
+
+**Story US-CMP-FE-1944: Surface automation data provenance across Campaigns UI**
+As a campaign user, I want provenance and trust signals on automation/report surfaces so I can tell which recommendations are current and what data they used.
+
+Acceptance Criteria:
+1. Campaign overview, automation timeline, segment cards, and reports surfaces display `last updated`, `source coverage`, and `confidence` indicators.
+2. Post/search/research-derived metrics link to a drill-down panel showing contributing sources and timestamps.
+3. Stale or low-confidence data states render deterministic warnings with remediation actions (`refresh now`, `review sources`, `narrow filters`).
+4. UI states follow approved component-library mappings and semantic token usage defined in `CMP-T18`.
+5. Mobile and desktop layouts preserve readability with no overflow and maintain keyboard/screen-reader accessibility.
+6. E2E tests validate provenance rendering, stale-state warnings, and drill-down source inspection paths.
+
+**Story US-CMP-QA-1945: Certify ingestion-to-UI traceability and regression gates**
+As a QA lead, I want end-to-end traceability gates so automation data regressions are caught before staging/main merge.
+
+Acceptance Criteria:
+1. QA suite includes seeded-path tests proving ingestion events flow to ledger APIs and UI provenance surfaces without data loss.
+2. Regression tests assert that automation recommendations and report cards include source coverage/confidence when upstream evidence exists.
+3. Negative-path tests verify graceful degradation when ingestion is delayed, partially failed, or schema-rejected.
+4. Gap-analysis output is required per release and must create backlog follow-ups for unresolved lineage, trust, or observability debt.
+5. Staging promotion is blocked when traceability gates fail or source manifests are missing from evidence bundles.
+6. Main merge requires explicit signoff that ingestion contracts, lineage APIs, and UI provenance ACs all passed on staging.
+
+### Theme CMP-T20: Journey Completeness, Chatbot Routing Quality, and Cross-Module UX Parity
+
+#### Epic CMP-E20A: Full Journey Click-Path Certification
+
+**Story US-CMP-QA-1946: Build click-path matrix for all Campaigns entry points and critical actions**
+As a product owner, I want a complete click-path matrix so every Campaigns workflow is verified for usability, path length, and regression risk.
+
+Acceptance Criteria:
+1. A maintained journey matrix covers all module entry points (hub card, direct route, sidebar route links, chatbot commands, deep-link drilldowns from reports/alerts).
+2. Matrix includes primary and alternate paths for create/edit/review/claim/schedule/post/reminders/reports/automation actions.
+3. Each path defines expected click count budget, required state preconditions, and fallback/recovery paths when prerequisites fail.
+4. Every terminal user action in Campaigns has at least one deterministic assertion in e2e coverage.
+5. Path matrix is versioned with release date and linked evidence artifacts.
+6. No story in active Campaign epics can close without matrix-impact review and updates.
+
+**Story US-CMP-FE-1947: Reduce interaction friction for high-frequency Campaign actions**
+As an operator, I want lower-friction interaction paths so recurring Campaign actions require fewer clicks and less context switching.
+
+Acceptance Criteria:
+1. Top recurring actions (`create draft`, `submit review`, `claim`, `set reminder`, `mark posted`, `open automation`) have measured click/time baselines and optimized variants.
+2. UI introduces context-preserving quick actions where safe, without bypassing permission checks or validation flows.
+3. Keyboard-first affordances are available for high-frequency actions and documented in module help text.
+4. Path optimizations preserve auditability and do not remove required reason capture for governed actions.
+5. UX updates remain consistent with shared component-library patterns (`CMP-T18`) and include mobile parity behavior.
+6. E2E coverage validates old and new paths during rollout flag period until cutover completes.
+
+#### Epic CMP-E20B: Chatbot Intent Fidelity and Guided Flow Robustness
+
+**Story US-CMP-CHAT-1948: Expand Campaign chatbot alias map and fuzzy routing confidence gates**
+As a user, I want Oliver to resolve Campaign intents reliably (including typo/variant phrasing) so I can reach workflows without navigation friction.
+
+Acceptance Criteria:
+1. Command aliases include action synonyms, domain language variants, and common misspellings for Campaign workflows.
+2. Fuzzy routing thresholds are measured with fixture phrases and must meet documented precision/recall targets for Campaign commands.
+3. Ambiguous matches produce disambiguation prompts instead of executing incorrect actions.
+4. Chatbot command telemetry records intent, selected action, confidence, and fallback usage for regression analysis.
+5. Campaign chatbot behavior remains scoped to campaign conversation path guardrails.
+6. E2E tests cover direct command hits, fuzzy typo recovery, ambiguous prompt handling, and out-of-scope requests.
+
+**Story US-CMP-CHAT-1949: Harden guided-flow field mapping and validation prompts**
+As an operator, I want guided chatbot flows to validate inputs predictably so malformed data cannot silently propagate into Campaign writes.
+
+Acceptance Criteria:
+1. All guided steps define explicit input normalization and validation messages for required, optional, and skipped values.
+2. Entity/choice resolution logs when fallback matching is used and prompts user confirmation when confidence is below threshold.
+3. Date/time, URL, and lifecycle-state inputs enforce canonical formatting before commit.
+4. Failed flow commits return actionable remediation messages and preserve entered context for retry.
+5. Guided flow results match equivalent UI form writes in data shape and audit metadata.
+6. Contract and e2e tests verify parity between chatbot commits and direct UI commits.
+
+#### Epic CMP-E20C: Cross-Module Design and Mobile Consistency
+
+**Story US-CMP-FE-1950: Align Campaign shells and controls with global module design structure**
+As a frontend owner, I want Campaign UI structure to mirror cross-module design standards so the module feels consistent with the rest of the system.
+
+Acceptance Criteria:
+1. Campaign shell hierarchy (header, sidebar, section cards, status banners, action rails) matches approved module baseline patterns used in sibling modules.
+2. Shared primitives are consumed from component library mappings with documented exceptions and migration plans.
+3. Visual density, spacing, typography scale, and status semantics align with global token definitions.
+4. Error/empty/loading/recovery components use shared patterns and copy standards.
+5. Cross-module parity checks include spot audits against Reviews, HR, and SDR module shells.
+6. Visual regression suite includes parity snapshots across modules for comparable surface types.
+
+**Story US-CMP-QA-1951: Mobile-first certification for all Campaign module surfaces**
+As a QA owner, I want full mobile certification so Campaign routes remain usable and non-overlapping on small screens.
+
+Acceptance Criteria:
+1. Every Campaign route (`campaigns`, `content`, `review-queue`, `calendar`, `reminders`, `reports`, `automation`) has mobile viewport e2e coverage.
+2. Tests assert no clipped controls, no horizontal overflow, and no hidden critical actions at defined breakpoints.
+3. Mobile interactions include sidebar toggling, modal interactions, chatbot trigger/panel behavior, and section action controls.
+4. Touch-target sizing and focus states meet accessibility standards in mobile and tablet layouts.
+5. Any mobile regression automatically opens backlog defects with route, selector, and screenshot artifacts.
+6. Staging promotion is blocked when mobile certification suite has unresolved failures.
+
+### Theme CMP-T21: Information Architecture and Visualization Clarity
+
+#### Epic CMP-E21A: High-Trust Data Presentation
+
+**Story US-CMP-FE-1952: Standardize campaign metric card semantics and drill-down behavior**
+As a campaign operator, I want metric cards to present consistent definitions and drill-down pathways so I can trust what each number means and act on it.
+
+Acceptance Criteria:
+1. Every metric card shows label, precise definition tooltip, aggregation window, and last-refresh timestamp.
+2. Cards with actionable values provide deterministic drill-down links into filtered operational views.
+3. Cards sourced from partial data include visible coverage/confidence badges with plain-language explanation.
+4. Totals and breakdowns are numerically consistent across overview, reports, and export manifests.
+5. Card visuals follow component-library mapping and semantic token constraints defined in `CMP-T18`.
+6. E2E tests verify card-to-drilldown navigation and filter prepopulation.
+
+**Story US-CMP-BE-1953: Add explicit metric-definition registry and API metadata contract**
+As a backend owner, I want metric metadata returned with report payloads so frontend rendering is deterministic and avoids hardcoded assumptions.
+
+Acceptance Criteria:
+1. Report endpoints return metric metadata (`id`, `label`, `definition`, `window`, `unit`, `confidence`, `coverage`) with values.
+2. Metric registry is versioned and backward-compatible for at least one prior version.
+3. Payload includes provenance references for each metric family (tables/events/derived rules).
+4. Unknown/unsupported metrics are ignored gracefully by clients with non-fatal warnings.
+5. Contract tests validate metadata presence and compatibility envelopes.
+6. Export jobs embed metric metadata manifest alongside generated data payload.
+
+#### Epic CMP-E21B: Interaction Density and Cognitive Load Reduction
+
+**Story US-CMP-FE-1954: Improve section-level information hierarchy and action grouping**
+As a user, I want denser but clearer information hierarchy so I can scan status and execute next actions with minimal cognitive load.
+
+Acceptance Criteria:
+1. Each Campaign section has consistent hierarchy: summary strip, primary actions, secondary actions, content area, and system-state banner.
+2. Related controls are grouped and labeled by intent (`create`, `review`, `schedule`, `analyze`) with clear disabled-state rationale.
+3. Action bars remain sticky/visible where appropriate without occluding content or causing overlap.
+4. Long lists include progressive disclosure patterns that preserve scanability and keyboard access.
+5. Mobile layout keeps primary actions within two interactions from section load.
+6. Story ships with before/after interaction maps and click-count deltas.
+
+**Story US-CMP-QA-1955: Enforce visualization and interaction regression budgets**
+As QA, I want regression budgets on layout stability and click-path complexity so UX does not degrade over time.
+
+Acceptance Criteria:
+1. Regression gates track and alert on click-count increases for critical journeys beyond approved thresholds.
+2. Visual diff gates include overlap/clipping checks for key action bars, cards, filters, and modal shells.
+3. Route-level performance budgets monitor first-interaction readiness and filter-apply responsiveness.
+4. Budget exceptions require documented owner, expiry date, and remediation plan.
+5. Evidence artifacts for each release include regression-budget results and approved exceptions.
+6. Staging and main promotions are blocked for unresolved high-severity budget breaches.

@@ -703,7 +703,7 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
     {
       id: 'show-campaign-summary',
       label: 'Show Campaign Summary',
-      aliases: ['campaign summary', 'campaign status', 'report summary'],
+      aliases: ['campaign summary', 'campaign status', 'report summary', 'campaign insights', 'automation summary', 'posting summary'],
       steps: [],
       run: async () => {
         const summary = ctx.getSummary()
@@ -725,14 +725,14 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
     {
       id: 'export-campaign-summary',
       label: 'Export Campaign Summary',
-      aliases: ['export summary', 'download summary', 'campaign export'],
+      aliases: ['export summary', 'download summary', 'campaign export', 'export report', 'download report', 'export insights'],
       steps: [],
       run: async () => ctx.exportSummary(),
     },
     {
       id: 'open-content-library',
       label: 'Open Content Library',
-      aliases: ['content library', 'available content', 'open unclaimed content'],
+      aliases: ['content library', 'available content', 'open unclaimed content', 'search content', 'find content', 'content search'],
       steps: [],
       run: async () => {
         ctx.openContentLibrary({ viewMode: 'all', status: 'all', ownership: 'all' })
@@ -762,7 +762,7 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
     {
       id: 'open-review-queue',
       label: 'Open Review Queue',
-      aliases: ['review queue', 'needs review', 'pending approvals'],
+      aliases: ['review queue', 'needs review', 'pending approvals', 'approval queue', 'approve content', 'review approvals'],
       steps: [],
       run: async () => {
         ctx.openReviewQueue()
@@ -792,7 +792,7 @@ export function buildCampaignFlows(ctx: BuildCampaignFlowsContext): OliverFlow[]
     {
       id: 'open-reports',
       label: 'Open Reports',
-      aliases: ['campaign reports', 'report dashboard', 'reporting section'],
+      aliases: ['campaign reports', 'report dashboard', 'reporting section', 'searches', 'campaign search', 'analytics'],
       steps: [],
       run: async () => {
         ctx.openReports()

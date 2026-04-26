@@ -40,6 +40,20 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
 - Automation surfaces include journey canvas publish/version tracking and execution timeline/export through existing campaign APIs.
 - Automation workspace also includes planning-board, focus-item, and segment-builder operations persisted in campaign cadence metadata with audit events.
 
+## Data lineage (current state)
+- Primary source of truth is Supabase campaign domain tables (`campaigns`, `campaign_content_items`, `campaign_assets`, `campaign_activity_log`, `campaign_reminders`, export/history tables).
+- Automation read surfaces (`/campaigns/automation`, `/campaigns/reports`) call `functions/api/campaigns.js` actions:
+  - `get-report-summary`
+  - `get-journey-timeline`
+  - `get-segment-estimate`
+- Automation write surfaces currently persist through campaign updates (`cadence_rule` payload sections for journey graph, planning board, focus-item configs, segment definitions) plus activity-log events for traceability.
+- Reminder and missed-post operational telemetry is produced in `functions/api/campaign-jobs.js` using campaign content and activity rows.
+
+## Data lineage gaps (current state)
+- There is no fully normalized source-ledger that maps post/search/research evidence to each automation decision across all surfaces.
+- Search/research evidence provenance and confidence/coverage indicators are partial and not yet consistently surfaced in every campaign view.
+- Backlog coverage for these gaps is tracked in `CMP-T19` (ingestion contracts + lineage APIs + UI provenance indicators).
+
 ## Current-state gap analysis
 - Full requirement audit and E2E gap matrix: `docs/modules/campaigns-gap-analysis-2026-04-25.md`
 - E14A implementation gap analysis and residual-risk ledger: `docs/modules/campaigns-gap-analysis-2026-04-26-e14a.md`
