@@ -22,12 +22,9 @@ const WORKSPACE_CARDS = [
 export function CampaignsLanding() {
   return (
     <div className="campaign-shell">
-      <div className="coming-soon">
-        <div className="coming-soon-badge">Workspace Live</div>
-        <div className="coming-soon-title">Campaign Content &amp; Posting</div>
-        <div className="coming-soon-sub">
-          Campaigns, content lifecycle actions, review queue, claiming, calendar reminders, and reporting are now active.
-        </div>
+      <div className="campaign-intro">
+        <div className="campaign-title">Campaign Execution Workspace</div>
+        <div className="campaign-subtitle">Campaign strategy, content drafting, review, claiming, and reporting are now active.</div>
       </div>
 
       <section id="campaigns-overview" className="campaign-section">
