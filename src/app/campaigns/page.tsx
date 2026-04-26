@@ -1050,6 +1050,46 @@ export default function CampaignsPage() {
     return chips
   }, [campaignNameById, contentLibraryFilters.campaignId, contentLibraryFilters.contentType, contentLibraryFilters.ownership, contentLibraryFilters.query, contentLibraryFilters.status, contentLibraryViewMode])
 
+  const activeCalendarFilterChips = useMemo(() => {
+    const chips: Array<{ id: string; label: string; onRemove: () => void }> = []
+    if (calendarFilters.query.trim()) {
+      chips.push({
+        id: 'query',
+        label: `Search: ${calendarFilters.query.trim()}`,
+        onRemove: () => setCalendarFilters(previous => ({ ...previous, query: '' })),
+      })
+    }
+    if (calendarFilters.campaignId) {
+      chips.push({
+        id: 'campaign',
+        label: `Campaign: ${campaignNameById.get(calendarFilters.campaignId) || calendarFilters.campaignId}`,
+        onRemove: () => setCalendarFilters(previous => ({ ...previous, campaignId: '' })),
+      })
+    }
+    if (calendarFilters.channel !== 'all') {
+      chips.push({
+        id: 'channel',
+        label: `Channel: ${calendarFilters.channel}`,
+        onRemove: () => setCalendarFilters(previous => ({ ...previous, channel: 'all' })),
+      })
+    }
+    if (calendarFilters.ownership !== 'all') {
+      chips.push({
+        id: 'ownership',
+        label: 'Ownership: mine',
+        onRemove: () => setCalendarFilters(previous => ({ ...previous, ownership: 'all' })),
+      })
+    }
+    if (calendarFilters.timing !== 'all') {
+      chips.push({
+        id: 'timing',
+        label: `Timing: ${calendarFilters.timing}`,
+        onRemove: () => setCalendarFilters(previous => ({ ...previous, timing: 'all' })),
+      })
+    }
+    return chips
+  }, [calendarFilters.campaignId, calendarFilters.channel, calendarFilters.ownership, calendarFilters.query, calendarFilters.timing, campaignNameById])
+
   const filteredMyClaimed = useMemo(() => {
     const query = calendarFilters.query.trim().toLowerCase()
     const now = Date.now()
@@ -4207,6 +4247,20 @@ export default function CampaignsPage() {
                   Reset Calendar Filters
                 </button>
               </div>
+              {activeCalendarFilterChips.length > 0 && (
+                <div className="campaign-chip-row">
+                  {activeCalendarFilterChips.map(chip => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      className="btn btn--secondary btn--sm campaign-filter-chip"
+                      onClick={chip.onRemove}
+                    >
+                      {chip.label} ✕
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="campaign-card-copy campaign-calendar-window">
                 Window: {calendarWindow.label}
               </p>

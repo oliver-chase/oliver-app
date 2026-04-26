@@ -1709,23 +1709,29 @@ test.describe('campaign module report and automation flows', () => {
     const calendarItems = calendarSection.locator('article').filter({ hasText: 'Download ICS' })
 
     await expect(calendarSection.getByText('Showing 3 of 3 claimed items.')).toBeVisible()
+    await expect(calendarSection.getByRole('button', { name: 'Timing: all ✕' })).toHaveCount(0)
     await expect(calendarItems.nth(0).getByRole('heading', { level: 3 })).toHaveText('Overdue claimed item')
 
     await calendarSection.getByLabel('Sort claimed content').selectOption('latest')
     await expect(calendarItems.nth(0).getByRole('heading', { level: 3 })).toHaveText('Future claimed item')
 
     await calendarSection.getByLabel('Filter claimed timing').selectOption('overdue')
+    await expect(calendarSection.getByRole('button', { name: 'Timing: overdue ✕' })).toBeVisible()
     await expect(calendarSection.getByText('Showing 1 of 3 claimed items.')).toBeVisible()
     await expect(calendarItems).toHaveCount(1)
     await expect(calendarItems.nth(0).getByRole('heading', { level: 3 })).toHaveText('Overdue claimed item')
 
     await calendarSection.getByLabel('Filter claimed timing').selectOption('all')
+    await expect(calendarSection.getByRole('button', { name: 'Timing: overdue ✕' })).toHaveCount(0)
     await calendarSection.getByLabel('Filter claimed channel').selectOption('email')
+    await expect(calendarSection.getByRole('button', { name: 'Channel: email ✕' })).toBeVisible()
     await expect(calendarSection.getByText('Showing 1 of 3 claimed items.')).toBeVisible()
     await expect(calendarItems.nth(0).getByRole('heading', { level: 3 })).toHaveText('Future claimed item')
 
     await calendarSection.getByRole('button', { name: 'Reset Calendar Filters' }).click()
     await expect(calendarSection.getByText('Showing 3 of 3 claimed items.')).toBeVisible()
+    await expect(calendarSection.getByRole('button', { name: 'Channel: email ✕' })).toHaveCount(0)
+    await expect(calendarSection.getByRole('button', { name: 'Timing: overdue ✕' })).toHaveCount(0)
   })
 
   test('calendar timeline shows claimed, posted, missed, and open-slot entries across views', async ({ page }) => {
