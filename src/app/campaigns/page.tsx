@@ -42,6 +42,7 @@ import {
   requestCampaignReportExport,
   downloadCampaignReportExport,
   getCampaignReportSummary,
+  getCampaignSegmentEstimate,
   getCampaignJourneyTimeline,
   listCampaignReportExports,
   runCampaignJobs,
@@ -73,6 +74,8 @@ import type {
   CampaignRecord,
   CampaignReportExportJob,
   CampaignReportSummary,
+  CampaignSegmentDefinition,
+  CampaignSegmentEstimate,
 } from '@/types/campaigns'
 
 type CampaignSection = 'list' | 'content' | 'review' | 'calendar' | 'reminders' | 'reports' | 'automation'
@@ -288,6 +291,41 @@ type CampaignFocusItemDraft = {
   endAt: string
   domainAllowlist: string
   status: CampaignFocusItemStatus
+}
+
+type CampaignSegmentRuleDraft = {
+  id: string
+  domain: 'contact_profile' | 'campaign_activity'
+  field: string
+  operator: 'equals' | 'not_equals' | 'contains' | 'in' | 'is_true' | 'is_false'
+  value: string
+}
+
+type CampaignSegmentGroupDraft = {
+  id: string
+  logic: 'and' | 'or'
+  rules: CampaignSegmentRuleDraft[]
+}
+
+type CampaignSegmentDraft = {
+  id: string
+  name: string
+  description: string
+  status: 'draft' | 'ready' | 'archived'
+  ruleGroups: CampaignSegmentGroupDraft[]
+}
+
+const SEGMENT_FIELD_OPTIONS: Record<CampaignSegmentRuleDraft['domain'], Array<{ value: string; label: string }>> = {
+  contact_profile: [
+    { value: 'role', label: 'Role' },
+    { value: 'email_domain', label: 'Email Domain' },
+    { value: 'user_id', label: 'User ID' },
+  ],
+  campaign_activity: [
+    { value: 'has_campaign_permission', label: 'Has Campaign Permission' },
+    { value: 'posted_count', label: 'Posted Count' },
+    { value: 'waiting_review_count', label: 'Waiting Review Count' },
+  ],
 }
 
 const CAMPAIGN_CADENCE_OPTIONS: Array<{ value: CampaignCadencePreset; label: string }> = [
@@ -830,6 +868,155 @@ function buildPlanningBoardCompleteness(draft: CampaignPlanningBoardDraft) {
   }
 }
 
+function createDefaultSegmentRuleDraft(): CampaignSegmentRuleDraft {
+  return {
+    id: `rule-${Math.random().toString(36).slice(2, 8)}`,
+    domain: 'contact_profile',
+    field: 'role',
+    operator: 'equals',
+    value: '',
+  }
+}
+
+function createDefaultSegmentDraft(): CampaignSegmentDraft {
+  return {
+    id: `segment-${Math.random().toString(36).slice(2, 8)}`,
+    name: '',
+    description: '',
+    status: 'draft',
+    ruleGroups: [{
+      id: `group-${Math.random().toString(36).slice(2, 8)}`,
+      logic: 'and',
+      rules: [createDefaultSegmentRuleDraft()],
+    }],
+  }
+}
+
+function parseSegmentDefinitions(campaign: CampaignRecord | null): CampaignSegmentDefinition[] {
+  const cadenceRule = asRecord(campaign?.cadence_rule)
+  const raw = Array.isArray(cadenceRule.segment_definitions) ? cadenceRule.segment_definitions : []
+  return raw
+    .map((row): CampaignSegmentDefinition | null => {
+      if (!row || typeof row !== 'object') return null
+      const source = row as Record<string, unknown>
+      const ruleGroups = Array.isArray(source.rule_groups) ? source.rule_groups : []
+      const normalizedGroups = ruleGroups
+        .map((group) => {
+          if (!group || typeof group !== 'object') return null
+          const groupSource = group as Record<string, unknown>
+          const rules = Array.isArray(groupSource.rules) ? groupSource.rules : []
+          const normalizedRules = rules
+            .map((rule) => {
+              if (!rule || typeof rule !== 'object') return null
+              const ruleSource = rule as Record<string, unknown>
+              const domain = ruleSource.domain === 'campaign_activity' ? 'campaign_activity' : 'contact_profile'
+              const operators = ['equals', 'not_equals', 'contains', 'in', 'is_true', 'is_false']
+              const operator = operators.includes(String(ruleSource.operator))
+                ? String(ruleSource.operator) as CampaignSegmentRuleDraft['operator']
+                : 'equals'
+              return {
+                id: typeof ruleSource.id === 'string' && ruleSource.id.trim() ? ruleSource.id.trim() : `rule-${Math.random().toString(36).slice(2, 8)}`,
+                domain,
+                field: typeof ruleSource.field === 'string' ? ruleSource.field : '',
+                operator,
+                value: typeof ruleSource.value === 'string' ? ruleSource.value : '',
+              }
+            })
+            .filter((rule): rule is CampaignSegmentRuleDraft => !!rule)
+          return {
+            id: typeof groupSource.id === 'string' && groupSource.id.trim() ? groupSource.id.trim() : `group-${Math.random().toString(36).slice(2, 8)}`,
+            logic: groupSource.logic === 'or' ? 'or' : 'and',
+            rules: normalizedRules,
+          }
+        })
+        .filter((group): group is CampaignSegmentGroupDraft => !!group)
+      const status = source.status === 'ready' || source.status === 'archived' ? source.status : 'draft'
+      return {
+        id: typeof source.id === 'string' && source.id.trim() ? source.id.trim() : `segment-${Math.random().toString(36).slice(2, 8)}`,
+        name: typeof source.name === 'string' ? source.name : '',
+        description: typeof source.description === 'string' ? source.description : '',
+        status,
+        schema_version: Number.isFinite(Number(source.schema_version)) ? Number(source.schema_version) : 1,
+        campaign_id: typeof source.campaign_id === 'string' && source.campaign_id.trim() ? source.campaign_id : campaign?.id || null,
+        rule_groups: normalizedGroups,
+        estimated_count: Number.isFinite(Number(source.estimated_count)) ? Number(source.estimated_count) : 0,
+        estimate_confidence: source.estimate_confidence === 'exact' ? 'exact' : 'estimated',
+        estimate_generated_at: typeof source.estimate_generated_at === 'string' ? source.estimate_generated_at : null,
+        created_at: typeof source.created_at === 'string' ? source.created_at : '',
+        created_by: typeof source.created_by === 'string' ? source.created_by : '',
+        updated_at: typeof source.updated_at === 'string' ? source.updated_at : '',
+        updated_by: typeof source.updated_by === 'string' ? source.updated_by : '',
+      }
+    })
+    .filter((segment): segment is CampaignSegmentDefinition => !!segment)
+}
+
+function draftFromSegmentDefinition(segment: CampaignSegmentDefinition): CampaignSegmentDraft {
+  return {
+    id: segment.id,
+    name: segment.name,
+    description: segment.description,
+    status: segment.status,
+    ruleGroups: segment.rule_groups.map(group => ({
+      id: group.id,
+      logic: group.logic,
+      rules: group.rules.map(rule => ({
+        id: rule.id,
+        domain: rule.domain,
+        field: rule.field,
+        operator: rule.operator,
+        value: rule.value,
+      })),
+    })),
+  }
+}
+
+function normalizeSegmentDraft(draft: CampaignSegmentDraft, campaignId: string, actorUserId: string, previous?: CampaignSegmentDefinition | null): CampaignSegmentDefinition {
+  const nowIso = new Date().toISOString()
+  return {
+    id: draft.id,
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    status: draft.status,
+    schema_version: 1,
+    campaign_id: campaignId,
+    rule_groups: draft.ruleGroups.map(group => ({
+      id: group.id,
+      logic: group.logic,
+      rules: group.rules.map(rule => ({
+        id: rule.id,
+        domain: rule.domain,
+        field: rule.field,
+        operator: rule.operator,
+        value: rule.value.trim(),
+      })),
+    })),
+    estimated_count: previous?.estimated_count || 0,
+    estimate_confidence: previous?.estimate_confidence || 'estimated',
+    estimate_generated_at: previous?.estimate_generated_at || null,
+    created_at: previous?.created_at || nowIso,
+    created_by: previous?.created_by || actorUserId,
+    updated_at: nowIso,
+    updated_by: actorUserId,
+  }
+}
+
+function buildSegmentDraftCompleteness(draft: CampaignSegmentDraft) {
+  const hasName = draft.name.trim().length > 0
+  const hasAtLeastOneRule = draft.ruleGroups.some(group => group.rules.length > 0)
+  const hasValidRuleValues = draft.ruleGroups.every(group => group.rules.every(rule => {
+    if (!rule.field.trim()) return false
+    if (rule.operator === 'is_true' || rule.operator === 'is_false') return true
+    return rule.value.trim().length > 0
+  }))
+  const checks = [hasName, hasAtLeastOneRule, hasValidRuleValues]
+  return {
+    completeCount: checks.filter(Boolean).length,
+    totalCount: checks.length,
+    isComplete: checks.every(Boolean),
+  }
+}
+
 export default function CampaignsPage() {
   const pathname = usePathname()
   const router = useRouter()
@@ -955,6 +1142,11 @@ export default function CampaignsPage() {
   const [focusItems, setFocusItems] = useState<CampaignFocusItem[]>([])
   const [focusItemDraft, setFocusItemDraft] = useState<CampaignFocusItemDraft>(createDefaultFocusItemDraft())
   const [focusItemSaving, setFocusItemSaving] = useState(false)
+  const [segmentDefinitions, setSegmentDefinitions] = useState<CampaignSegmentDefinition[]>([])
+  const [segmentDraft, setSegmentDraft] = useState<CampaignSegmentDraft>(createDefaultSegmentDraft())
+  const [segmentSaving, setSegmentSaving] = useState(false)
+  const [segmentEstimate, setSegmentEstimate] = useState<CampaignSegmentEstimate | null>(null)
+  const [segmentEstimating, setSegmentEstimating] = useState(false)
 
   const [campaignDraft, setCampaignDraft] = useState({
     name: '',
@@ -1096,14 +1288,18 @@ export default function CampaignsPage() {
   useEffect(() => {
     const graph = parseJourneyGraphFromCampaign(selectedCampaign)
     setJourneyGraphMeta(graph)
+    setPlanningBoardDraft(parsePlanningBoardDraft(selectedCampaign))
+    setFocusItems(parseFocusItems(selectedCampaign))
+    setFocusItemDraft(createDefaultFocusItemDraft())
+    const parsedSegments = parseSegmentDefinitions(selectedCampaign)
+    setSegmentDefinitions(parsedSegments)
+    setSegmentDraft(parsedSegments[0] ? draftFromSegmentDefinition(parsedSegments[0]) : createDefaultSegmentDraft())
+    setSegmentEstimate(null)
     if (graph?.nodes.length) {
       setJourneyNodeDrafts(graph.nodes.map(nodeDraftFromNode))
       return
     }
     setJourneyNodeDrafts([createDefaultJourneyNodeDraft('action')])
-    setPlanningBoardDraft(parsePlanningBoardDraft(selectedCampaign))
-    setFocusItems(parseFocusItems(selectedCampaign))
-    setFocusItemDraft(createDefaultFocusItemDraft())
   }, [selectedCampaign])
 
   useEffect(() => {
@@ -1360,6 +1556,14 @@ export default function CampaignsPage() {
     const conversionRate = impressions > 0 ? (conversions / impressions) * 100 : 0
     return { impressions, conversions, conversionRate }
   }, [focusItems])
+  const segmentDraftCompleteness = useMemo(
+    () => buildSegmentDraftCompleteness(segmentDraft),
+    [segmentDraft],
+  )
+  const selectedSegmentDefinition = useMemo(
+    () => segmentDefinitions.find(segment => segment.id === segmentDraft.id) || null,
+    [segmentDefinitions, segmentDraft.id],
+  )
   const journeyNodeOptions = useMemo(
     () => journeyNodeDrafts
       .map(node => ({ id: node.id.trim(), title: node.title.trim() }))
@@ -2748,6 +2952,147 @@ export default function CampaignsPage() {
     selectedCampaign,
     setErrorFromException,
   ])
+
+  const loadSegmentEstimateFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    setSegmentEstimating(true)
+    setError(null)
+    try {
+      const normalized = normalizeSegmentDraft(segmentDraft, selectedCampaign.id, appUser.user_id, selectedSegmentDefinition)
+      const estimate = await getCampaignSegmentEstimate({
+        actor: { user_id: appUser.user_id, user_email: appUser.email || '' },
+        campaignId: selectedCampaign.id,
+        segment: {
+          campaign_id: normalized.campaign_id,
+          rule_groups: normalized.rule_groups,
+        },
+      })
+      setSegmentEstimate(estimate)
+      markMutationSuccess(`Segment estimate updated: ${estimate.estimated_count}`)
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setSegmentEstimating(false)
+    }
+  }, [
+    appUser?.email,
+    appUser?.user_id,
+    markMutationSuccess,
+    segmentDraft,
+    selectedCampaign,
+    selectedSegmentDefinition,
+    setErrorFromException,
+  ])
+
+  const saveSegmentFromInput = useCallback(async () => {
+    if (!selectedCampaign || !appUser?.user_id) return
+    if (!segmentDraftCompleteness.isComplete) {
+      setError('Segment is missing required values. Complete name and rule values before saving.')
+      return
+    }
+
+    const existing = segmentDefinitions.find(segment => segment.id === segmentDraft.id) || null
+    const normalized = normalizeSegmentDraft(segmentDraft, selectedCampaign.id, appUser.user_id, existing)
+    const estimate = segmentEstimate || (existing
+      ? {
+        estimated_count: existing.estimated_count,
+        confidence: existing.estimate_confidence,
+        generated_at: existing.estimate_generated_at || '',
+      }
+      : null)
+
+    const nextSegment: CampaignSegmentDefinition = {
+      ...normalized,
+      estimated_count: estimate?.estimated_count || 0,
+      estimate_confidence: estimate?.confidence || 'estimated',
+      estimate_generated_at: estimate?.generated_at || normalized.estimate_generated_at,
+    }
+    const nextSegments = existing
+      ? segmentDefinitions.map(segment => (segment.id === existing.id ? nextSegment : segment))
+      : [nextSegment, ...segmentDefinitions]
+
+    setSegmentSaving(true)
+    setSyncState('syncing')
+    setError(null)
+    try {
+      const nextCadenceRule = buildCadenceRuleFromPreset(campaignDetailDraft.cadencePreset, {
+        ...(selectedCampaign.cadence_rule && typeof selectedCampaign.cadence_rule === 'object' ? selectedCampaign.cadence_rule : {}),
+        segment_definitions: nextSegments,
+      })
+      const updated = await updateCampaign(
+        selectedCampaign.id,
+        { cadence_rule: nextCadenceRule },
+        appUser.user_id,
+      )
+      setCampaigns(previous => previous.map(campaign => (
+        campaign.id === updated.id ? updated : campaign
+      )))
+      setSegmentDefinitions(nextSegments)
+      await logCampaignActivityEvent({
+        entity_type: 'campaign',
+        entity_id: selectedCampaign.id,
+        action_type: existing ? 'campaign-segment-updated' : 'campaign-segment-created',
+        performed_by: appUser.user_id,
+        metadata: {
+          segment_id: nextSegment.id,
+          segment_name: nextSegment.name,
+          segment_status: nextSegment.status,
+          rule_group_count: nextSegment.rule_groups.length,
+        },
+      })
+      void listCampaignActivityLogs(300).then(setActivityLogs).catch(() => {})
+      markMutationSuccess(existing ? 'Segment updated.' : 'Segment created.')
+    } catch (exception) {
+      setSyncState('error')
+      setErrorFromException(exception)
+    } finally {
+      setSegmentSaving(false)
+    }
+  }, [
+    appUser?.user_id,
+    campaignDetailDraft.cadencePreset,
+    markMutationSuccess,
+    segmentDefinitions,
+    segmentDraft,
+    segmentDraftCompleteness.isComplete,
+    segmentEstimate,
+    selectedCampaign,
+    setErrorFromException,
+  ])
+
+  const cloneSegmentFromInput = useCallback((segmentId: string) => {
+    const source = segmentDefinitions.find(segment => segment.id === segmentId)
+    if (!source) return
+    const cloned: CampaignSegmentDraft = {
+      ...draftFromSegmentDefinition(source),
+      id: `segment-${Math.random().toString(36).slice(2, 8)}`,
+      name: `${source.name} copy`,
+      status: 'draft',
+      ruleGroups: source.rule_groups.map(group => ({
+        id: `group-${Math.random().toString(36).slice(2, 8)}`,
+        logic: group.logic,
+        rules: group.rules.map(rule => ({
+          id: `rule-${Math.random().toString(36).slice(2, 8)}`,
+          domain: rule.domain,
+          field: rule.field,
+          operator: rule.operator,
+          value: rule.value,
+        })),
+      })),
+    }
+    setSegmentDraft(cloned)
+    setSegmentEstimate(null)
+  }, [segmentDefinitions])
+
+  const archiveSegmentFromInput = useCallback((segmentId: string) => {
+    const source = segmentDefinitions.find(segment => segment.id === segmentId)
+    if (!source) return
+    setSegmentDraft({
+      ...draftFromSegmentDefinition(source),
+      status: 'archived',
+    })
+  }, [segmentDefinitions])
 
   const createContentDraftFromInput = useCallback(async (payload: {
     title?: string
@@ -6507,6 +6852,288 @@ export default function CampaignsPage() {
                         {planningBoardSaving ? 'Saving…' : 'Save Planning Board'}
                       </button>
                     </div>
+                  </article>
+
+                  <article className="card campaign-card">
+                    <div className="campaign-row-head">
+                      <div>
+                        <h3 className="campaign-card-title">Audience Segment Builder</h3>
+                        <p className="campaign-card-copy">
+                          Build dynamic qualification rules for campaign audience entry with live estimates.
+                        </p>
+                      </div>
+                      <span className="campaign-pill">
+                        Completeness {segmentDraftCompleteness.completeCount}/{segmentDraftCompleteness.totalCount}
+                      </span>
+                    </div>
+
+                    <div className="campaign-form-grid">
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Segment Name</span>
+                        <input
+                          className="input"
+                          value={segmentDraft.name}
+                          onChange={(event) => setSegmentDraft(previous => ({ ...previous, name: event.target.value }))}
+                        />
+                      </label>
+                      <label className="campaign-filter-control">
+                        <span className="campaign-card-copy">Status</span>
+                        <select
+                          className="input"
+                          value={segmentDraft.status}
+                          onChange={(event) => setSegmentDraft(previous => ({ ...previous, status: event.target.value as CampaignSegmentDraft['status'] }))}
+                        >
+                          <option value="draft">draft</option>
+                          <option value="ready">ready</option>
+                          <option value="archived">archived</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label className="campaign-filter-control">
+                      <span className="campaign-card-copy">Description</span>
+                      <input
+                        className="input"
+                        value={segmentDraft.description}
+                        onChange={(event) => setSegmentDraft(previous => ({ ...previous, description: event.target.value }))}
+                      />
+                    </label>
+
+                    {segmentDraft.ruleGroups.map((group, groupIndex) => (
+                      <article key={group.id} className="card campaign-card">
+                        <div className="campaign-row-head">
+                          <p className="campaign-card-title">Rule Group {groupIndex + 1}</p>
+                          <div className="campaign-card-actions">
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Logic</span>
+                              <select
+                                className="input"
+                                value={group.logic}
+                                onChange={(event) => setSegmentDraft(previous => ({
+                                  ...previous,
+                                  ruleGroups: previous.ruleGroups.map((row, rowIndex) => (
+                                    rowIndex === groupIndex ? { ...row, logic: event.target.value as CampaignSegmentGroupDraft['logic'] } : row
+                                  )),
+                                }))}
+                              >
+                                <option value="and">and</option>
+                                <option value="or">or</option>
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => setSegmentDraft(previous => ({
+                                ...previous,
+                                ruleGroups: previous.ruleGroups.map((row, rowIndex) => (
+                                  rowIndex === groupIndex
+                                    ? { ...row, rules: [...row.rules, createDefaultSegmentRuleDraft()] }
+                                    : row
+                                )),
+                              }))}
+                            >
+                              Add Rule
+                            </button>
+                          </div>
+                        </div>
+
+                        {group.rules.map((rule, ruleIndex) => (
+                          <div key={rule.id} className="campaign-form-grid">
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Domain</span>
+                              <select
+                                className="input"
+                                value={rule.domain}
+                                onChange={(event) => {
+                                  const nextDomain = event.target.value as CampaignSegmentRuleDraft['domain']
+                                  const nextField = SEGMENT_FIELD_OPTIONS[nextDomain][0]?.value || ''
+                                  setSegmentDraft(previous => ({
+                                    ...previous,
+                                    ruleGroups: previous.ruleGroups.map((groupRow, groupRowIndex) => (
+                                      groupRowIndex === groupIndex
+                                        ? {
+                                          ...groupRow,
+                                          rules: groupRow.rules.map((ruleRow, ruleRowIndex) => (
+                                            ruleRowIndex === ruleIndex
+                                              ? { ...ruleRow, domain: nextDomain, field: nextField }
+                                              : ruleRow
+                                          )),
+                                        }
+                                        : groupRow
+                                    )),
+                                  }))
+                                }}
+                              >
+                                <option value="contact_profile">contact_profile</option>
+                                <option value="campaign_activity">campaign_activity</option>
+                              </select>
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Field</span>
+                              <select
+                                className="input"
+                                value={rule.field}
+                                onChange={(event) => setSegmentDraft(previous => ({
+                                  ...previous,
+                                  ruleGroups: previous.ruleGroups.map((groupRow, groupRowIndex) => (
+                                    groupRowIndex === groupIndex
+                                      ? {
+                                        ...groupRow,
+                                        rules: groupRow.rules.map((ruleRow, ruleRowIndex) => (
+                                          ruleRowIndex === ruleIndex ? { ...ruleRow, field: event.target.value } : ruleRow
+                                        )),
+                                      }
+                                      : groupRow
+                                  )),
+                                }))}
+                              >
+                                {SEGMENT_FIELD_OPTIONS[rule.domain].map(option => (
+                                  <option key={`segment-field-${rule.id}-${option.value}`} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Operator</span>
+                              <select
+                                className="input"
+                                value={rule.operator}
+                                onChange={(event) => setSegmentDraft(previous => ({
+                                  ...previous,
+                                  ruleGroups: previous.ruleGroups.map((groupRow, groupRowIndex) => (
+                                    groupRowIndex === groupIndex
+                                      ? {
+                                        ...groupRow,
+                                        rules: groupRow.rules.map((ruleRow, ruleRowIndex) => (
+                                          ruleRowIndex === ruleIndex ? { ...ruleRow, operator: event.target.value as CampaignSegmentRuleDraft['operator'] } : ruleRow
+                                        )),
+                                      }
+                                      : groupRow
+                                  )),
+                                }))}
+                              >
+                                <option value="equals">equals</option>
+                                <option value="not_equals">not_equals</option>
+                                <option value="contains">contains</option>
+                                <option value="in">in</option>
+                                <option value="is_true">is_true</option>
+                                <option value="is_false">is_false</option>
+                              </select>
+                            </label>
+                            <label className="campaign-filter-control">
+                              <span className="campaign-card-copy">Value</span>
+                              <input
+                                className="input"
+                                value={rule.value}
+                                disabled={rule.operator === 'is_true' || rule.operator === 'is_false'}
+                                placeholder={rule.operator === 'in' ? 'comma,separated,values' : ''}
+                                onChange={(event) => setSegmentDraft(previous => ({
+                                  ...previous,
+                                  ruleGroups: previous.ruleGroups.map((groupRow, groupRowIndex) => (
+                                    groupRowIndex === groupIndex
+                                      ? {
+                                        ...groupRow,
+                                        rules: groupRow.rules.map((ruleRow, ruleRowIndex) => (
+                                          ruleRowIndex === ruleIndex ? { ...ruleRow, value: event.target.value } : ruleRow
+                                        )),
+                                      }
+                                      : groupRow
+                                  )),
+                                }))}
+                              />
+                            </label>
+                          </div>
+                        ))}
+                      </article>
+                    ))}
+
+                    {!segmentDraftCompleteness.isComplete && (
+                      <p className="campaign-card-rejection">Segment requires name and valid rule values before save.</p>
+                    )}
+                    <div className="campaign-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setSegmentDraft(previous => ({
+                          ...previous,
+                          ruleGroups: [
+                            ...previous.ruleGroups,
+                            {
+                              id: `group-${Math.random().toString(36).slice(2, 8)}`,
+                              logic: 'and',
+                              rules: [createDefaultSegmentRuleDraft()],
+                            },
+                          ],
+                        }))}
+                      >
+                        Add Group
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => { void loadSegmentEstimateFromInput() }}
+                        disabled={segmentEstimating}
+                      >
+                        {segmentEstimating ? 'Estimating…' : 'Live Estimate'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--sm"
+                        onClick={() => { void saveSegmentFromInput() }}
+                        disabled={segmentSaving}
+                      >
+                        {segmentSaving ? 'Saving…' : 'Save Segment'}
+                      </button>
+                    </div>
+                    <p className="campaign-card-copy">
+                      Estimate: {segmentEstimate ? `${segmentEstimate.estimated_count} (${segmentEstimate.confidence}) at ${new Date(segmentEstimate.generated_at).toLocaleString()}` : 'No estimate yet'}
+                    </p>
+
+                    {segmentDefinitions.length === 0 && (
+                      <p className="campaign-card-copy">No segments saved yet for this campaign.</p>
+                    )}
+                    {segmentDefinitions.map(segment => (
+                      <article key={segment.id} className="card campaign-card">
+                        <div className="campaign-row-head">
+                          <div>
+                            <p className="campaign-card-title">{segment.name || segment.id}</p>
+                            <p className="campaign-card-copy">
+                              {segment.status} · groups {segment.rule_groups.length} · estimate {segment.estimated_count}
+                            </p>
+                          </div>
+                          <div className="campaign-card-actions">
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => {
+                                setSegmentDraft(draftFromSegmentDefinition(segment))
+                                setSegmentEstimate(segment.estimate_generated_at
+                                  ? {
+                                    estimated_count: segment.estimated_count,
+                                    confidence: segment.estimate_confidence,
+                                    generated_at: segment.estimate_generated_at,
+                                  }
+                                  : null)
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => cloneSegmentFromInput(segment.id)}
+                            >
+                              Clone
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => archiveSegmentFromInput(segment.id)}
+                            >
+                              Archive
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
                   </article>
 
                   <article className="card campaign-card">

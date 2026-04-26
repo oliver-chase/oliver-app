@@ -312,3 +312,139 @@ test('campaigns API contract: journey timeline actions reject unauthorized actor
     assert.match(String(body.error || ''), /forbidden|permission/i)
   })
 })
+
+test('campaigns API contract: segment estimate returns estimated count for valid rules', { concurrency: false }, async () => {
+  let estimateLogged = false
+
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([
+        {
+          user_id: 'admin-1',
+          email: 'admin@example.com',
+          role: 'admin',
+          page_permissions: ['campaigns'],
+        },
+        {
+          user_id: 'member-1',
+          email: 'member@acme.com',
+          role: 'member',
+          page_permissions: ['campaigns'],
+        },
+        {
+          user_id: 'member-2',
+          email: 'member@other.com',
+          role: 'member',
+          page_permissions: [],
+        },
+      ])
+    }
+
+    if (url.pathname === '/rest/v1/campaign_content_items' && method === 'GET') {
+      return jsonResponse([
+        {
+          id: 'content-1',
+          status: 'posted',
+          lifecycle_status: 'posted',
+          created_at: '2026-04-26T00:00:00.000Z',
+          updated_at: '2026-04-26T00:00:00.000Z',
+          posted_at: '2026-04-26T00:00:00.000Z',
+          scheduled_for: '2026-04-26T00:00:00.000Z',
+          campaign_id: 'campaign-segment-1',
+          content_type: 'linkedin-post',
+          topic: 'Ops',
+          created_by: 'member-1',
+          posting_owner_id: 'member-1',
+          archived_at: null,
+        },
+      ])
+    }
+
+    if (url.pathname === '/rest/v1/campaign_activity_log' && method === 'POST') {
+      const payload = JSON.parse(String(init.body || '{}'))
+      estimateLogged = payload.action_type === 'segment-estimate-generated'
+      return jsonResponse([], 201)
+    }
+
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get-segment-estimate',
+        actor: {
+          user_id: 'admin-1',
+          user_email: 'admin@example.com',
+        },
+        campaign_id: 'campaign-segment-1',
+        segment: {
+          campaign_id: 'campaign-segment-1',
+          rule_groups: [
+            {
+              logic: 'and',
+              rules: [
+                { domain: 'contact_profile', field: 'email_domain', operator: 'equals', value: 'acme.com' },
+                { domain: 'campaign_activity', field: 'has_campaign_permission', operator: 'is_true', value: '' },
+              ],
+            },
+          ],
+        },
+      }),
+    })
+
+    const response = await onRequestPost({ request, env: { ...BASE_ENV } })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(body.ok, true)
+    assert.equal(body.estimate?.estimated_count, 1)
+    assert.equal(body.estimate?.confidence, 'estimated')
+    assert.equal(estimateLogged, true)
+  })
+})
+
+test('campaigns API contract: segment estimate requires campaign_id', { concurrency: false }, async () => {
+  await withMockedFetch(async (input, init = {}) => {
+    const url = new URL(String(input))
+    const method = (init.method || 'GET').toUpperCase()
+    if (url.pathname === '/rest/v1/app_users' && method === 'GET') {
+      return jsonResponse([{
+        user_id: 'admin-1',
+        email: 'admin@example.com',
+        role: 'admin',
+        page_permissions: ['campaigns'],
+      }])
+    }
+    return new Response(`Unhandled route ${method} ${url.pathname}${url.search}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }, async () => {
+    const request = new Request('https://oliver-app.local/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'get-segment-estimate',
+        actor: {
+          user_id: 'admin-1',
+          user_email: 'admin@example.com',
+        },
+        segment: {
+          rule_groups: [],
+        },
+      }),
+    })
+
+    const response = await onRequestPost({ request, env: { ...BASE_ENV } })
+    const body = await response.json()
+    assert.equal(response.status, 400)
+    assert.equal(body.error, 'campaign_id is required')
+  })
+})

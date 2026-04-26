@@ -18,6 +18,8 @@ import type {
   CampaignReportGroupings,
   CampaignRecord,
   CampaignReminder,
+  CampaignSegmentDefinition,
+  CampaignSegmentEstimate,
   CampaignReportSummary,
   CampaignReportSummaryResponse,
   CampaignStatus,
@@ -1062,6 +1064,26 @@ export async function requestCampaignReportExport(input: {
     },
   })
   return data.job
+}
+
+export async function getCampaignSegmentEstimate(input: {
+  actor: CampaignApiActor
+  campaignId: string
+  segment: Pick<CampaignSegmentDefinition, 'rule_groups' | 'campaign_id'>
+}): Promise<CampaignSegmentEstimate> {
+  const data = await requestCampaignApi<{ estimate: CampaignSegmentEstimate }>({
+    method: 'POST',
+    body: {
+      action: 'get-segment-estimate',
+      actor: input.actor,
+      campaign_id: input.campaignId,
+      segment: {
+        campaign_id: input.segment.campaign_id || input.campaignId,
+        rule_groups: input.segment.rule_groups || [],
+      },
+    },
+  })
+  return data.estimate
 }
 
 export async function listCampaignReportExports(input: {

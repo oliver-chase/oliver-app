@@ -200,6 +200,48 @@ export interface CampaignJobsRunResult {
   }
 }
 
+export type CampaignSegmentStatus = 'draft' | 'ready' | 'archived'
+export type CampaignSegmentGroupLogic = 'and' | 'or'
+export type CampaignSegmentRuleDomain = 'contact_profile' | 'campaign_activity'
+export type CampaignSegmentRuleOperator = 'equals' | 'not_equals' | 'contains' | 'in' | 'is_true' | 'is_false'
+
+export interface CampaignSegmentRule {
+  id: string
+  domain: CampaignSegmentRuleDomain
+  field: string
+  operator: CampaignSegmentRuleOperator
+  value: string
+}
+
+export interface CampaignSegmentRuleGroup {
+  id: string
+  logic: CampaignSegmentGroupLogic
+  rules: CampaignSegmentRule[]
+}
+
+export interface CampaignSegmentDefinition {
+  id: string
+  name: string
+  description: string
+  status: CampaignSegmentStatus
+  schema_version: number
+  campaign_id: string | null
+  rule_groups: CampaignSegmentRuleGroup[]
+  estimated_count: number
+  estimate_confidence: 'estimated' | 'exact'
+  estimate_generated_at: string | null
+  created_at: string
+  created_by: string
+  updated_at: string
+  updated_by: string
+}
+
+export interface CampaignSegmentEstimate {
+  estimated_count: number
+  confidence: 'estimated' | 'exact'
+  generated_at: string
+}
+
 export interface CreateCampaignInput {
   name: string
   description?: string
