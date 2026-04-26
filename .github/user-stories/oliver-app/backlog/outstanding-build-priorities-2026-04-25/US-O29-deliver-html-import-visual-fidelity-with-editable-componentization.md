@@ -1,7 +1,7 @@
 ---
 ID: US-O29
 Title: Deliver HTML Import Visual Fidelity with Editable Componentization
-Status: Not Started
+Status: In Progress
 Verified: false
 Backdated: 2026-04-25
 ---
@@ -18,3 +18,7 @@ Acceptance Criteria:
 - [ ] Import preview clearly distinguishes supported editable elements vs locked/fallback-rendered elements.
 - [ ] Regression fixtures include representative HTML templates and compare before/after render snapshots.
 
+Progress notes (2026-04-26):
+- Added HTML + companion CSS bundle import path in Slides (`.html` with optional `.css` selected together), inlining matched linked stylesheets before parse.
+- Parser render snapshot now clones document body/html context (not only the root node), improving fidelity for selectors that depend on `body`/ancestor context.
+- Added end-to-end coverage for companion stylesheet import (`SLD-FE-303`).

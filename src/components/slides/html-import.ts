@@ -4,6 +4,8 @@ const DEFAULT_CANVAS_WIDTH = 1920
 const DEFAULT_CANVAS_HEIGHT = 1080
 const CANVAS_TARGET_ASPECT_RATIO = DEFAULT_CANVAS_WIDTH / DEFAULT_CANVAS_HEIGHT
 const MIN_FLOW_NODE_SIZE = 12
+const IMPORT_ROOT_MARKER_ATTR = 'data-import-root-id'
+const IMPORT_ROOT_MARKER_VALUE = 'import-root'
 const FLOW_TEXT_TAGS = new Set([
   'h1',
   'h2',
@@ -513,16 +515,40 @@ function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
     sandbox.appendChild(styleEl)
   }
 
-  const rootClone = root.cloneNode(true) as HTMLElement
-  sandbox.appendChild(rootClone)
+  let rootClone: HTMLElement | null = null
+  const sourceBody = doc.body
+  if (sourceBody) {
+    const bodyClone = sourceBody.cloneNode(true) as HTMLElement
+    const sourceHtml = doc.documentElement
+    if (sourceHtml) {
+      const htmlClone = document.createElement('html')
+      for (const attribute of Array.from(sourceHtml.attributes)) {
+        htmlClone.setAttribute(attribute.name, attribute.value)
+      }
+      htmlClone.appendChild(bodyClone)
+      sandbox.appendChild(htmlClone)
+    } else {
+      sandbox.appendChild(bodyClone)
+    }
+
+    if (bodyClone.getAttribute(IMPORT_ROOT_MARKER_ATTR) === IMPORT_ROOT_MARKER_VALUE) {
+      rootClone = bodyClone
+    } else {
+      rootClone = bodyClone.querySelector<HTMLElement>(`[${IMPORT_ROOT_MARKER_ATTR}="${IMPORT_ROOT_MARKER_VALUE}"]`)
+    }
+  }
+
+  if (!rootClone) {
+    rootClone = root.cloneNode(true) as HTMLElement
+    sandbox.appendChild(rootClone)
+  }
   document.body.appendChild(sandbox)
 
   const nodesById = new Map<string, HTMLElement>()
-  for (const node of Array.from(root.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
+  for (const node of Array.from(sandbox.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
     const id = node.getAttribute('data-import-node-id')
     if (!id) continue
-    const cloneNode = rootClone.querySelector<HTMLElement>(`[data-import-node-id="${id}"]`)
-    if (cloneNode) nodesById.set(id, cloneNode)
+    nodesById.set(id, node)
   }
 
   return {
@@ -583,6 +609,7 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
     }
   }
 
+  root.setAttribute(IMPORT_ROOT_MARKER_ATTR, IMPORT_ROOT_MARKER_VALUE)
   const allNodes = Array.from(root.querySelectorAll<HTMLElement>('*'))
   for (let index = 0; index < allNodes.length; index += 1) {
     allNodes[index].setAttribute('data-import-node-id', `import-node-${index + 1}`)

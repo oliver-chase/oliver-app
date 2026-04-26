@@ -213,6 +213,56 @@ test.describe('slides regression', () => {
     expect(String(panel?.style?.backgroundColor || '')).toContain('30, 41, 59')
   })
 
+  test('SLD-FE-303 imports HTML with companion CSS files selected together', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="deck-theme.css" />
+      </head>
+      <body>
+        <div class="slide-canvas">
+          <h1 class="hero-title">Companion Stylesheet Heading</h1>
+        </div>
+      </body>
+    </html>`
+    const css = `
+      body { margin: 0; }
+      .slide-canvas { position: relative; width: 1600px; height: 900px; background: #f8fafc; }
+      .hero-title {
+        position: absolute;
+        left: 120px;
+        top: 96px;
+        width: 820px;
+        font-size: 58px;
+        line-height: 66px;
+        color: #14532d;
+        font-family: "Times New Roman", serif;
+      }
+    `
+
+    await page.setInputFiles('#slides-html-file', [
+      {
+        name: 'deck.html',
+        mimeType: 'text/html',
+        buffer: Buffer.from(html),
+      },
+      {
+        name: 'deck-theme.css',
+        mimeType: 'text/css',
+        buffer: Buffer.from(css),
+      },
+    ])
+
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText('Inlined 1 companion stylesheet from selected files.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('20, 83, 45')
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).fontFamily.toLowerCase())).toContain('times')
+  })
+
   test('SLD-FE-302 toolbar controls use icon glyphs with tooltips and compact button modifier', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 

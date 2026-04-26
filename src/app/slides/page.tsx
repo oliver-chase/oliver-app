@@ -17,6 +17,10 @@ import {
   validateParsedResult,
   validatePastedHtml,
 } from '@/components/slides/import-validation'
+import {
+  inlineCompanionStylesheets,
+  selectImportFiles,
+} from '@/components/slides/import-file-bundle'
 import type {
   SlideAuditEvent,
   SlideAuditExportJob,
@@ -713,6 +717,7 @@ export default function SlidesPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const parseAbortRef = useRef<AbortController | null>(null)
+  const pendingImportWarningsRef = useRef<string[]>([])
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const [canvasScale, setCanvasScale] = useState(1)
   const canvasDragRef = useRef<CanvasDragState | null>(null)
@@ -1559,6 +1564,9 @@ export default function SlidesPage() {
   }, [finalizeCanvasDrag, finalizeCanvasResize])
 
   const parseHtmlSync = useCallback((html: string): SlideImportResult => {
+    const pendingWarnings = pendingImportWarningsRef.current
+    pendingImportWarningsRef.current = []
+
     const preflight = validatePastedHtml(html)
     if (preflight) {
       setImportError(preflight)
@@ -1576,7 +1584,17 @@ export default function SlidesPage() {
       throw new Error(parsedValidation.message)
     }
 
-    setResult(parsed)
+    const mergedWarnings = pendingWarnings.length > 0
+      ? Array.from(new Set([...pendingWarnings, ...parsed.warnings]))
+      : parsed.warnings
+    const parsedResult = mergedWarnings === parsed.warnings
+      ? parsed
+      : {
+          ...parsed,
+          warnings: mergedWarnings,
+        }
+
+    setResult(parsedResult)
     setSelectedComponentIds([])
     setEditingComponentId(null)
     setDraggingComponentId(null)
@@ -1586,10 +1604,10 @@ export default function SlidesPage() {
     setImportError(null)
     setParseStatus('completed')
     setParseProgress(100)
-    setParseMessage(`Parsed ${parsed.components.length} components.`)
+    setParseMessage(`Parsed ${parsedResult.components.length} components.`)
     setExportHtml('')
     setDirty()
-    return parsed
+    return parsedResult
   }, [clearHistory, setDirty])
 
   const runParseWithProgress = useCallback(async (html: string) => {
@@ -2288,10 +2306,24 @@ export default function SlidesPage() {
   }, [])
 
   const onFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const selectedFiles = Array.from(event.target.files || [])
+    if (selectedFiles.length === 0) return
 
-    const fileValidation = validateImportFile(file)
+    const selection = selectImportFiles(selectedFiles)
+    if (!selection.htmlFile) {
+      const message = 'Select an .html file. Optional companion .css files can be selected together for higher-fidelity import.'
+      setImportError({
+        code: 'invalid_file_type',
+        message,
+      })
+      setParseStatus('failed')
+      setParseProgress(0)
+      setParseMessage(message)
+      event.target.value = ''
+      return
+    }
+
+    const fileValidation = validateImportFile(selection.htmlFile)
     if (fileValidation) {
       setImportError(fileValidation)
       setParseStatus('failed')
@@ -2301,9 +2333,28 @@ export default function SlidesPage() {
       return
     }
 
-    const text = await file.text()
-    setRawHtml(text)
-    await runParseWithProgress(text)
+    const text = await selection.htmlFile.text()
+    const inlineResult = await inlineCompanionStylesheets(text, selection.cssFiles)
+    const importWarnings: string[] = []
+    if (inlineResult.inlinedHrefs.length > 0) {
+      importWarnings.push(
+        `Inlined ${inlineResult.inlinedHrefs.length} companion stylesheet${inlineResult.inlinedHrefs.length === 1 ? '' : 's'} from selected files.`,
+      )
+    }
+    if (inlineResult.unresolvedHrefs.length > 0) {
+      importWarnings.push(
+        `Could not match ${inlineResult.unresolvedHrefs.length} linked stylesheet${inlineResult.unresolvedHrefs.length === 1 ? '' : 's'} to selected CSS files.`,
+      )
+    }
+    if (inlineResult.ignoredCssFiles.length > 0) {
+      importWarnings.push(
+        `Ignored ${inlineResult.ignoredCssFiles.length} oversized CSS companion file${inlineResult.ignoredCssFiles.length === 1 ? '' : 's'}.`,
+      )
+    }
+
+    pendingImportWarningsRef.current = importWarnings
+    setRawHtml(inlineResult.html)
+    await runParseWithProgress(inlineResult.html)
     event.target.value = ''
   }, [runParseWithProgress])
 
@@ -3549,7 +3600,8 @@ export default function SlidesPage() {
                   ref={fileInputRef}
                   id="slides-html-file"
                   type="file"
-                  accept=".html,.htm,text/html"
+                  accept=".html,.htm,.css,text/html,text/css"
+                  multiple
                   onChange={onFileChange}
                   hidden
                 />
@@ -3558,7 +3610,7 @@ export default function SlidesPage() {
                   <section className="slides-import-panel">
                     <div className="slides-panel-heading">
                       <h2>Import HTML</h2>
-                      <p>Upload a file or paste markup, then parse into editable layers.</p>
+                      <p>Upload HTML (plus optional companion CSS files) or paste markup, then parse into editable layers.</p>
                     </div>
 
                     <div className="slides-actions">
