@@ -1,6 +1,8 @@
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived'
 
 export type CampaignContentStatus = 'draft' | 'needs_review' | 'unclaimed' | 'claimed' | 'posted'
+export type CampaignContentCanonicalStatus = 'draft' | 'in_review' | 'changes_requested' | 'approved' | 'scheduled' | 'posted' | 'blocked' | 'archived'
+export type CampaignReviewStatus = 'not_submitted' | 'in_review' | 'changes_requested' | 'approved'
 export type CampaignAdminOverrideAction = 'reset-draft' | 'force-unclaimed' | 'force-posted'
 export type CampaignTransitionErrorCode = 'CMP_PERMISSION_DENIED' | 'CMP_NOT_FOUND' | 'CMP_INVALID_STATE' | 'CMP_VALIDATION_FAILED' | 'CMP_CONFLICT' | 'CMP_UNKNOWN'
 
@@ -47,6 +49,8 @@ export interface CampaignContentItem {
   topic: string
   campaign_id: string | null
   status: CampaignContentStatus
+  lifecycle_status?: CampaignContentCanonicalStatus | null
+  legacy_status?: CampaignContentStatus | null
   intended_channel: string | null
   attributed_author_id: string | null
   posting_owner_id: string | null
@@ -55,6 +59,16 @@ export interface CampaignContentItem {
   posted_at: string | null
   post_url: string | null
   rejection_reason: string | null
+  review_status?: CampaignReviewStatus | null
+  review_submitted_at?: string | null
+  review_submitted_by?: string | null
+  review_claimed_at?: string | null
+  review_claimed_by?: string | null
+  review_approved_at?: string | null
+  review_approved_by?: string | null
+  review_changes_requested_at?: string | null
+  review_changes_requested_by?: string | null
+  review_feedback_summary?: string | null
   created_by: string
   created_at: string
   updated_at: string
@@ -241,6 +255,15 @@ export interface CreateCampaignReminderInput {
   user_id: string
   reminder_type: CampaignReminderType
   scheduled_for: string
+}
+
+export interface UpdateCampaignReminderInput {
+  user_id?: string
+  reminder_type?: CampaignReminderType
+  scheduled_for?: string
+  status?: CampaignReminderStatus
+  sent_at?: string | null
+  failure_reason?: string | null
 }
 
 export interface AddCampaignMetricsInput {

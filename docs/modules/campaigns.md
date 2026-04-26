@@ -10,6 +10,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
   - `src/app/campaigns/content/page.tsx`
   - `src/app/campaigns/review-queue/page.tsx`
   - `src/app/campaigns/calendar/page.tsx`
+  - `src/app/campaigns/reminders/page.tsx`
   - `src/app/campaigns/reports/page.tsx`
 - Landing component: `src/components/campaigns/CampaignsLanding.tsx`
 - Module chatbot: `src/app/campaigns/commands.ts`, `src/app/campaigns/flows.ts`
@@ -22,6 +23,7 @@ Campaign content operations: campaign setup, draft creation, review queue, claim
   - `/campaigns/content`
   - `/campaigns/review-queue`
   - `/campaigns/calendar`
+  - `/campaigns/reminders`
   - `/campaigns/reports`
 - Sidebar navigation now uses route links (not in-page anchor scroll).
 

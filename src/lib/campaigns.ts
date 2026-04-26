@@ -20,6 +20,7 @@ import type {
   CreateCampaignContentDraftInput,
   CreateCampaignInput,
   CreateCampaignReminderInput,
+  UpdateCampaignReminderInput,
   CampaignTransitionError,
   CampaignTransitionErrorCode,
   UpdateCampaignInput,
@@ -117,8 +118,7 @@ function throwCampaignTransitionError(label: string, error: SupabaseLikeError | 
 export function isCampaignsSchemaMissing(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
   return (
-    (message.includes('campaign') && message.includes('does not exist'))
-    || message.includes('pgrst205')
+    message.includes('pgrst205')
     || (message.includes('could not find the table') && message.includes('public.campaign_'))
     || (message.includes('public.campaign_') && message.includes('schema cache'))
     || message.includes('could not find the function public.campaign_')
@@ -445,6 +445,46 @@ export async function createCampaignReminder(input: CreateCampaignReminderInput)
   return data as CampaignReminder
 }
 
+export async function listCampaignReminders(): Promise<CampaignReminder[]> {
+  const { data, error } = await supabase
+    .from('campaign_reminders')
+    .select('*')
+    .order('scheduled_for', { ascending: true })
+  throwDbError('listCampaignReminders', error)
+  return (data ?? []) as CampaignReminder[]
+}
+
+export async function updateCampaignReminder(reminderId: string, input: UpdateCampaignReminderInput): Promise<CampaignReminder> {
+  const payload: Record<string, unknown> = {}
+  if (input.user_id !== undefined) payload.user_id = input.user_id
+  if (input.reminder_type !== undefined) payload.reminder_type = input.reminder_type
+  if (input.scheduled_for !== undefined) payload.scheduled_for = input.scheduled_for
+  if (input.status !== undefined) payload.status = input.status
+  if (input.sent_at !== undefined) payload.sent_at = input.sent_at
+  if (input.failure_reason !== undefined) payload.failure_reason = input.failure_reason
+
+  if (Object.keys(payload).length === 0) {
+    throw new Error('updateCampaignReminder: no fields were provided.')
+  }
+
+  const { data, error } = await supabase
+    .from('campaign_reminders')
+    .update(payload)
+    .eq('id', reminderId)
+    .select('*')
+    .single()
+  throwDbError('updateCampaignReminder', error)
+  return data as CampaignReminder
+}
+
+export async function deleteCampaignReminder(reminderId: string): Promise<void> {
+  const { error } = await supabase
+    .from('campaign_reminders')
+    .delete()
+    .eq('id', reminderId)
+  throwDbError('deleteCampaignReminder', error)
+}
+
 export async function addCampaignPerformanceMetrics(input: AddCampaignMetricsInput): Promise<CampaignContentMetrics> {
   const payload = {
     content_id: input.content_id,
@@ -571,6 +611,39 @@ export async function updateCampaignContentPostUrl(
     { p_content_id: contentId, p_actor_user_id: actorUserId, p_post_url: postUrl.trim() },
     'updateCampaignContentPostUrl',
   )
+}
+
+export async function updateCampaignContentDraftBody(
+  contentId: string,
+  actorUserId: string,
+  body: string,
+): Promise<CampaignContentItem> {
+  const trimmed = body.trim()
+  if (!trimmed) {
+    throw new Error('updateCampaignContentDraftBody: body is required.')
+  }
+
+  const { data, error } = await supabase
+    .from('campaign_content_items')
+    .update({ body: trimmed })
+    .eq('id', contentId)
+    .eq('status', 'draft')
+    .select('*')
+    .single()
+  throwDbError('updateCampaignContentDraftBody', error)
+
+  const updated = data as CampaignContentItem
+  await logCampaignActivity({
+    entity_type: 'campaign-content',
+    entity_id: updated.id,
+    action_type: 'content-draft-body-updated',
+    performed_by: actorUserId,
+    metadata: {
+      status: updated.status,
+    },
+  })
+
+  return updated
 }
 
 export async function campaignAdminOverrideContent(

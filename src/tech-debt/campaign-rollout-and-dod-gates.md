@@ -100,11 +100,15 @@ Status: In Progress
 - [ ] Confirm migrations `014` and `015` present and healthy.
 - [ ] Confirm module visibility flags in staging/prod env config.
 - [ ] Record evidence in `campaign-staging-signoff-evidence-2026-04-26.md`.
-- [ ] Execute with fixed-port commands in blocked environments if needed (`npm run test:smoke:campaigns`, `npm run test:smoke:campaigns:frontend`, `npm run test:smoke:campaigns:mobile`).
+- [ ] Execute staging suites with external Playwright mode:
+  - `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:staging:list` (preflight: confirm campaign-only test selection)
+  - `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:staging`
+  - or run per-suite external commands (`test:smoke:campaigns:external`, `test:smoke:campaigns:frontend:external`, `test:smoke:campaigns:mobile:external`).
 
 ### Local unblock note
 
 - 2026-04-26: `npm run test:smoke:campaigns` could not start web server in this sandbox (`EPERM: listen 0.0.0.0:3002`), requires staging/manual execution environment.
+- 2026-04-26: Added campaign external smoke commands so staging runs can skip local webserver bind and target `PLAYWRIGHT_BASE_URL` directly.
 
 ## US-CMP-QA-1112 MVP DoD verification checklist
 

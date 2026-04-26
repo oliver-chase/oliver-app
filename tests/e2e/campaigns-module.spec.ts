@@ -132,6 +132,7 @@ test.describe('campaign module report and automation flows', () => {
     await expect(sidebar.getByRole('link', { name: 'Content Library' })).toHaveAttribute('href', /\/campaigns\/content\/?$/)
     await expect(sidebar.getByRole('link', { name: 'Review Queue' })).toHaveAttribute('href', /\/campaigns\/review-queue\/?$/)
     await expect(sidebar.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', /\/campaigns\/calendar\/?$/)
+    await expect(sidebar.getByRole('link', { name: 'Reminders' })).toHaveAttribute('href', /\/campaigns\/reminders\/?$/)
     await expect(sidebar.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', /\/campaigns\/reports\/?$/)
 
     await sidebar.getByRole('link', { name: 'Content Library' }).click()

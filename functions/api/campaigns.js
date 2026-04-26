@@ -234,9 +234,20 @@ function dateToIsoOrNull(value, endOfDay = false) {
   return parsed.toISOString();
 }
 
+function canonicalLifecycleStatus(row) {
+  if (typeof row?.lifecycle_status === 'string' && row.lifecycle_status.trim()) return row.lifecycle_status;
+  if (row?.status === 'draft') return 'draft';
+  if (row?.status === 'needs_review') return 'in_review';
+  if (row?.status === 'unclaimed') return 'approved';
+  if (row?.status === 'claimed') return 'scheduled';
+  if (row?.status === 'posted' && row?.archived_at) return 'archived';
+  if (row?.status === 'posted') return 'posted';
+  return 'draft';
+}
+
 async function fetchContentRows(env, filters) {
   const parts = [
-    '/rest/v1/campaign_content_items?select=id,status,created_at,updated_at,posted_at,scheduled_for,campaign_id,content_type,topic,created_by,posting_owner_id,archived_at',
+    '/rest/v1/campaign_content_items?select=id,status,lifecycle_status,review_status,created_at,updated_at,posted_at,scheduled_for,campaign_id,content_type,topic,created_by,posting_owner_id,archived_at',
     '&order=created_at.desc',
     '&limit=' + MAX_REPORT_ROWS,
   ];
@@ -268,14 +279,17 @@ async function fetchContentRows(env, filters) {
 function computeSummary(rows, nowIso) {
   const now = new Date(nowIso).getTime();
 
-  const waitingReview = rows.filter((row) => row.status === 'needs_review').length;
-  const unclaimed = rows.filter((row) => row.status === 'unclaimed').length;
-  const claimed = rows.filter((row) => row.status === 'claimed').length;
-  const posted = rows.filter((row) => row.status === 'posted').length;
+  const waitingReview = rows.filter((row) => canonicalLifecycleStatus(row) === 'in_review').length;
+  const unclaimed = rows.filter((row) => canonicalLifecycleStatus(row) === 'approved').length;
+  const claimed = rows.filter((row) => canonicalLifecycleStatus(row) === 'scheduled').length;
+  const posted = rows.filter((row) => {
+    const status = canonicalLifecycleStatus(row);
+    return status === 'posted' || status === 'archived';
+  }).length;
   const submitted = waitingReview + unclaimed + claimed + posted;
   const approved = unclaimed + claimed + posted;
   const missed = rows.filter((row) => {
-    if (row.status !== 'claimed') return false;
+    if (canonicalLifecycleStatus(row) !== 'scheduled') return false;
     if (!row.scheduled_for) return false;
     return new Date(row.scheduled_for).getTime() < now;
   }).length;

@@ -39,6 +39,8 @@ Blocker:
 
 Unblock action:
 - Complete one full staging run with seeded campaign dataset and update:
+  - preflight command scope with `PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:staging:list`,
+  - execute campaign suites via external-mode commands (`PLAYWRIGHT_BASE_URL=https://<staging-host> npm run test:smoke:campaigns:staging`) and attach artifacts,
   - this file (`Status`, `Result summary`, `Evidence artifact`),
   - `src/tech-debt/campaign-staging-signoff-evidence-2026-04-26.md` (signature + run actor),
   - `src/tech-debt/campaign-rollout-and-dod-gates.md` (rollout blocker lift after checklist complete).

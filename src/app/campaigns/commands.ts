@@ -144,6 +144,13 @@ export const CAMPAIGNS_COMMANDS: CommandMeta[] = [
     aliases: ['posting calendar', 'schedule view', 'open slots'],
   },
   {
+    id: 'open-reminders',
+    label: 'Open Reminders',
+    group: 'Quick',
+    hint: 'Jump to dedicated reminders workspace',
+    aliases: ['reminders', 'task reminders', 'follow-up queue'],
+  },
+  {
     id: 'open-reports',
     label: 'Open Reports',
     group: 'Quick',
