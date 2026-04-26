@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import type {
   AddCampaignMetricsInput,
+  CampaignAdminOverrideInput,
+  CampaignActivityLog,
   CampaignAsset,
   CampaignContentItem,
   CampaignContentMetrics,
@@ -18,6 +20,9 @@ import type {
   CreateCampaignContentDraftInput,
   CreateCampaignInput,
   CreateCampaignReminderInput,
+  CampaignTransitionError,
+  CampaignTransitionErrorCode,
+  UpdateCampaignInput,
 } from '@/types/campaigns'
 
 type SupabaseLikeError = {
@@ -25,6 +30,63 @@ type SupabaseLikeError = {
   code?: string
   hint?: string
   details?: string
+}
+
+const CAMPAIGN_TRANSITION_ERROR_CODES: CampaignTransitionErrorCode[] = [
+  'CMP_PERMISSION_DENIED',
+  'CMP_NOT_FOUND',
+  'CMP_INVALID_STATE',
+  'CMP_VALIDATION_FAILED',
+  'CMP_CONFLICT',
+]
+
+export function parseCampaignTransitionError(error: unknown): CampaignTransitionError | null {
+  const message = error instanceof Error ? error.message : String(error || '')
+  const normalizedMessage = message.toLowerCase()
+  const matchedCode = CAMPAIGN_TRANSITION_ERROR_CODES.find(code => normalizedMessage.includes(code.toLowerCase()))
+  if (!matchedCode) return null
+
+  const codeIndex = normalizedMessage.indexOf(matchedCode.toLowerCase())
+  const reasonCandidate = codeIndex >= 0 ? normalizedMessage.slice(codeIndex + matchedCode.length) : ''
+  const reason = reasonCandidate.replace(/^:\s*/i, '').trim() || 'Campaign transition was not completed.'
+
+  return {
+    code: matchedCode,
+    reason: reason || 'Campaign transition was not completed.',
+    rawMessage: normalizedMessage,
+  }
+}
+
+function normalizeDbErrorMessage(error: SupabaseLikeError | null): string {
+  return typeof error?.message === 'string' ? error.message.toLowerCase() : ''
+}
+
+function isMissingCampaignTableError(error: SupabaseLikeError | null, table: string): boolean {
+  const message = normalizeDbErrorMessage(error)
+  return (
+    error?.code === 'PGRST205'
+    && (
+      message.includes(`public.${table}`.toLowerCase())
+      || message.includes('schema cache')
+      || message.includes('could not find the table')
+    )
+  )
+}
+
+function isCampaignAssetUnavailableError(error: SupabaseLikeError | null): boolean {
+  return isMissingCampaignTableError(error, 'campaign_assets')
+}
+
+export async function isCampaignAssetsTableAvailable(): Promise<boolean> {
+  const { error } = await supabase
+    .from('campaign_assets')
+    .select('id', { count: 'exact', head: true })
+    .limit(1)
+
+  if (!error) return true
+  if (isCampaignAssetUnavailableError(error)) return false
+  throwDbError('isCampaignAssetsTableAvailable', error)
+  return false
 }
 
 export type CampaignApiActor = {
@@ -42,10 +104,23 @@ function throwDbError(label: string, error: SupabaseLikeError | null) {
   throw new Error(`${label}: ${code ? `[${code}] ` : ''}${error.message || 'unknown database error'}${hint}${details}`)
 }
 
+function throwCampaignTransitionError(label: string, error: SupabaseLikeError | null) {
+  if (!error) return
+  const parsed = parseCampaignTransitionError(error)
+  if (!parsed) {
+    throwDbError(label, error)
+    return
+  }
+  throw new Error(`${label}: ${parsed.code}: ${parsed.reason}`)
+}
+
 export function isCampaignsSchemaMissing(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
   return (
     (message.includes('campaign') && message.includes('does not exist'))
+    || message.includes('pgrst205')
+    || (message.includes('could not find the table') && message.includes('public.campaign_'))
+    || (message.includes('public.campaign_') && message.includes('schema cache'))
     || message.includes('could not find the function public.campaign_')
     || (message.includes('function public.campaign_') && message.includes('does not exist'))
   )
@@ -100,7 +175,9 @@ async function runContentTransitionRpc(
   label: string,
 ): Promise<CampaignContentItem> {
   const { data, error } = await supabase.rpc(rpcName, params)
-  throwDbError(label, error)
+  if (error) {
+    throwCampaignTransitionError(label, error)
+  }
   return normalizeRpcResult<CampaignContentItem>(label, (data ?? null) as CampaignContentItem | CampaignContentItem[] | null)
 }
 
@@ -145,6 +222,49 @@ export async function createCampaign(input: CreateCampaignInput & { created_by: 
   return campaign
 }
 
+export async function updateCampaign(
+  campaignId: string,
+  input: UpdateCampaignInput,
+  actorUserId: string,
+): Promise<CampaignRecord> {
+  const payload: Record<string, unknown> = {}
+  if (input.name !== undefined) payload.name = input.name.trim()
+  if (input.description !== undefined) payload.description = input.description.trim()
+  if (input.offer_definition !== undefined) payload.offer_definition = input.offer_definition.trim()
+  if (input.target_audience !== undefined) payload.target_audience = input.target_audience.trim()
+  if (input.primary_cta !== undefined) payload.primary_cta = input.primary_cta.trim()
+  if (input.keywords !== undefined) payload.keywords = input.keywords
+  if (input.start_date !== undefined) payload.start_date = input.start_date || null
+  if (input.end_date !== undefined) payload.end_date = input.end_date || null
+  if (input.cadence_rule !== undefined) payload.cadence_rule = input.cadence_rule || null
+  if (input.status !== undefined) payload.status = input.status
+
+  if (Object.keys(payload).length === 0) {
+    throw new Error('updateCampaign: no fields were provided.')
+  }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(payload)
+    .eq('id', campaignId)
+    .select('*')
+    .single()
+  throwDbError('updateCampaign', error)
+
+  const updated = data as CampaignRecord
+  await logCampaignActivity({
+    entity_type: 'campaign',
+    entity_id: updated.id,
+    action_type: 'campaign-updated',
+    performed_by: actorUserId,
+    metadata: {
+      changed_fields: Object.keys(payload),
+      status: updated.status,
+    },
+  })
+  return updated
+}
+
 export async function listCampaignContentItems(): Promise<CampaignContentItem[]> {
   const { data, error } = await supabase
     .from('campaign_content_items')
@@ -165,8 +285,22 @@ export async function listCampaignAssets(contentIds?: string[]): Promise<Campaig
   }
 
   const { data, error } = await query
+  if (isMissingCampaignTableError(error, 'campaign_assets')) {
+    return []
+  }
   throwDbError('listCampaignAssets', error)
   return (data ?? []) as CampaignAsset[]
+}
+
+export async function listCampaignActivityLogs(limit = 250): Promise<CampaignActivityLog[]> {
+  const safeLimit = Math.max(1, Math.min(limit, 1000))
+  const { data, error } = await supabase
+    .from('campaign_activity_log')
+    .select('*')
+    .order('timestamp', { ascending: false })
+    .limit(safeLimit)
+  throwDbError('listCampaignActivityLogs', error)
+  return (data ?? []) as CampaignActivityLog[]
 }
 
 export async function createCampaignContentDraft(input: CreateCampaignContentDraftInput & { created_by: string }): Promise<CampaignContentItem> {
@@ -219,6 +353,9 @@ export async function createCampaignAsset(input: CreateCampaignAssetInput & { cr
     .insert(payload)
     .select('*')
     .single()
+  if (isCampaignAssetUnavailableError(error)) {
+    throw new Error('createCampaignAsset: campaign_assets table is not provisioned.')
+  }
   throwDbError('createCampaignAsset', error)
 
   const created = data as CampaignAsset
@@ -244,12 +381,18 @@ export async function removeCampaignAsset(assetId: string, actorUserId: string):
     .select('id,content_id,campaign_id,url,file_reference')
     .eq('id', assetId)
     .maybeSingle()
+  if (isCampaignAssetUnavailableError(existingError)) {
+    throw new Error('removeCampaignAsset: campaign_assets table is not provisioned.')
+  }
   throwDbError('removeCampaignAsset(load)', existingError)
 
   const { error } = await supabase
     .from('campaign_assets')
     .delete()
     .eq('id', assetId)
+  if (isCampaignAssetUnavailableError(error)) {
+    throw new Error('removeCampaignAsset: campaign_assets table is not provisioned.')
+  }
   throwDbError('removeCampaignAsset(delete)', error)
 
   if (existing) {
@@ -427,6 +570,30 @@ export async function updateCampaignContentPostUrl(
     'campaign_update_post_url',
     { p_content_id: contentId, p_actor_user_id: actorUserId, p_post_url: postUrl.trim() },
     'updateCampaignContentPostUrl',
+  )
+}
+
+export async function campaignAdminOverrideContent(
+  contentId: string,
+  actorUserId: string,
+  input: CampaignAdminOverrideInput,
+): Promise<CampaignContentItem> {
+  const reason = input.reason.trim()
+  if (!reason) throw new Error('campaignAdminOverrideContent: reason is required.')
+
+  return runContentTransitionRpc(
+    'campaign_admin_override',
+    {
+      p_content_id: contentId,
+      p_actor_user_id: actorUserId,
+      p_action: input.action,
+      p_reason: reason,
+      p_payload: {
+        post_url: input.post_url?.trim() || null,
+        posted_at: input.posted_at?.trim() || null,
+      },
+    },
+    'campaignAdminOverrideContent',
   )
 }
 

@@ -38,6 +38,7 @@ import {
   getCampaignReportSummary,
   listCampaignReportExports,
   runCampaignJobs,
+  parseCampaignTransitionError,
   submitCampaignContentForReview,
   type CampaignSyncState,
   unclaimCampaignContent,
@@ -241,14 +242,49 @@ function isHttpUrl(value: string) {
   }
 }
 
-function isCampaignStaleStateError(error: unknown) {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
-  return (
-    message.includes('cmp_invalid_state')
-    || message.includes('cmp_not_found')
-    || message.includes('already')
-    || message.includes('empty rpc response')
-  )
+function campaignTransitionMessageFromError(error: unknown) {
+  const transitionError = parseCampaignTransitionError(error)
+  if (!transitionError) return null
+
+  switch (transitionError.code) {
+    case 'CMP_NOT_FOUND':
+      return {
+        message: `Campaign item not found or stale. Refresh and retry.`,
+        refreshRecommended: true,
+      }
+    case 'CMP_INVALID_STATE':
+      return {
+        message: `Campaign data changed while this action was running. Refresh and retry.`,
+        refreshRecommended: true,
+      }
+    case 'CMP_PERMISSION_DENIED':
+      return {
+        message: `You do not have permission to perform this action right now.`,
+        refreshRecommended: false,
+      }
+    case 'CMP_VALIDATION_FAILED':
+      return {
+        message: transitionError.reason
+          ? `${transitionError.reason.charAt(0).toUpperCase()}${transitionError.reason.slice(1)}`
+          : 'Please provide the required information and retry.',
+        refreshRecommended: false,
+      }
+    case 'CMP_CONFLICT':
+      return {
+        message: `Concurrent content update detected. Refresh and retry.`,
+        refreshRecommended: true,
+      }
+    case 'CMP_UNKNOWN':
+      return {
+        message: transitionError.reason,
+        refreshRecommended: false,
+      }
+    default:
+      return {
+        message: transitionError.reason,
+        refreshRecommended: false,
+      }
+  }
 }
 
 function humanizeActionType(value: string) {
@@ -1448,11 +1484,12 @@ export default function CampaignsPage() {
       setError(CAMPAIGNS_ACCESS_POLICY_MESSAGE)
       return
     }
-    if (isCampaignStaleStateError(exception)) {
+    const transitionMessage = campaignTransitionMessageFromError(exception)
+    if (transitionMessage) {
       setSchemaMissing(false)
       setPolicyBlocked(false)
-      setRefreshRecommended(true)
-      setError('Campaign data changed while this action was running. Refresh and retry.')
+      setRefreshRecommended(Boolean(transitionMessage.refreshRecommended))
+      setError(transitionMessage.message)
       return
     }
     setSchemaMissing(false)
