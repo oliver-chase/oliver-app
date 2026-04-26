@@ -213,6 +213,169 @@ test.describe('slides regression', () => {
     expect(String(panel?.style?.backgroundColor || '')).toContain('30, 41, 59')
   })
 
+  test('SLD-FE-304 marks fallback-rendered imports as locked and clearly labeled', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<div class="slide-canvas" style="width:1280px;height:720px;">
+      <span><span>Fallback only inline text</span></span>
+    </div>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText(/imported top-level nodes as fallback/i)).toBeVisible()
+    await expect(page.getByText(/fallback node.*locked layers/i)).toBeVisible()
+
+    const layer = page.locator('.slides-canvas-component').first()
+    await expect(layer).toHaveAttribute('data-component-locked', 'true')
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      sourceLabel?: string
+      locked?: boolean
+    }>
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0]?.locked).toBe(true)
+    expect(String(parsed[0]?.sourceLabel || '')).toContain('(fallback)')
+  })
+
+  test('SLD-FE-305 prioritizes .page root detection over lower-priority slide containers', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      .slide-canvas { position: relative; width: 4000px; height: 2250px; background: #0f172a; }
+      .slide-canvas .title { position: absolute; left: 500px; top: 360px; width: 1600px; font-size: 48px; color: #ef4444; }
+      .page { position: relative; width: 1600px; height: 900px; background: #e2e8f0; }
+      .page .title { position: absolute; left: 160px; top: 120px; width: 920px; font-size: 60px; color: #0f172a; }
+    </style>
+    <section class="slide-canvas">
+      <h1 class="title">Decoy Slide Root</h1>
+    </section>
+    <section class="page">
+      <h1 class="title">Priority Page Root</h1>
+    </section>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Show Raw JSON' }).click()
+    const parsed = await page.locator('.slides-code').evaluate((el) => JSON.parse(el.textContent || '[]')) as Array<{
+      content?: string
+      x?: number
+      style?: { color?: string }
+    }>
+
+    expect(parsed).toHaveLength(1)
+    expect(String(parsed[0]?.content || '')).toContain('Priority Page Root')
+    expect(String(parsed[0]?.content || '')).not.toContain('Decoy Slide Root')
+    expect(Number(parsed[0]?.x || 0)).toBeGreaterThanOrEqual(190)
+    expect(String(parsed[0]?.style?.color || '')).toContain('15, 23, 42')
+  })
+
+  test('SLD-FE-306 avoids tiny-text scaling when body bounds are much larger than imported layer bounds', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<style>
+      body { position: relative; width: 6400px; height: 3600px; margin: 0; }
+      .hero { position: absolute; left: 320px; top: 260px; width: 1200px; font-size: 96px; line-height: 104px; color: #0f172a; }
+    </style>
+    <h1 class="hero">Body Oversized Root</h1>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText(/oversized root width/i)).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect(headingLayer).toHaveAttribute('data-component-x', '320')
+    await expect.poll(async () => {
+      const value = await headingLayer.evaluate((node) => window.getComputedStyle(node).fontSize)
+      return Number.parseFloat(value)
+    }).toBeGreaterThan(90)
+  })
+
+  test('SLD-FE-307 surfaces warning taxonomy for pseudo-elements, animations, canvas, video, and unresolved stylesheets', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    await page.locator('#slides-raw-html').fill(`<!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="./missing-theme.css" />
+        <style>
+          @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+          .slide-canvas { position: relative; width: 1600px; height: 900px; }
+          .title { position: absolute; left: 120px; top: 110px; width: 840px; font-size: 64px; animation: pulse 3s infinite; }
+          .title::before { content: ""; display: inline-block; width: 8px; height: 48px; background: #06b6d4; margin-right: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="slide-canvas">
+          <h1 class="title">Warning Taxonomy</h1>
+          <canvas width="320" height="160"></canvas>
+          <video src="https://example.com/sample.mp4"></video>
+        </div>
+      </body>
+    </html>`)
+
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await expect(page.getByText(/unresolved external stylesheets may reduce import fidelity/i)).toBeVisible()
+    await expect(page.getByText(/pseudo-elements/i)).toBeVisible()
+    await expect(page.getByText(/css animations/i)).toBeVisible()
+    await expect(page.getByText(/canvas elements/i)).toBeVisible()
+    await expect(page.getByText(/video elements/i)).toBeVisible()
+  })
+
+  test('SLD-FE-303 imports HTML with companion CSS files selected together', async ({ page }) => {
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<!doctype html>
+    <html>
+      <head>
+        <link rel="stylesheet" href="deck-theme.css" />
+      </head>
+      <body>
+        <div class="slide-canvas">
+          <h1 class="hero-title">Companion Stylesheet Heading</h1>
+        </div>
+      </body>
+    </html>`
+    const css = `
+      body { margin: 0; }
+      .slide-canvas { position: relative; width: 1600px; height: 900px; background: #f8fafc; }
+      .hero-title {
+        position: absolute;
+        left: 120px;
+        top: 96px;
+        width: 820px;
+        font-size: 58px;
+        line-height: 66px;
+        color: #14532d;
+        font-family: "Times New Roman", serif;
+      }
+    `
+
+    await page.setInputFiles('#slides-html-file', [
+      {
+        name: 'deck.html',
+        mimeType: 'text/html',
+        buffer: Buffer.from(html),
+      },
+      {
+        name: 'deck-theme.css',
+        mimeType: 'text/css',
+        buffer: Buffer.from(css),
+      },
+    ])
+
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+    await expect(page.getByText('Inlined 1 companion stylesheet from selected files.')).toBeVisible()
+
+    const headingLayer = page.locator('.slides-canvas-component[data-component-type="heading"]').first()
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).color)).toContain('20, 83, 45')
+    await expect.poll(async () => headingLayer.evaluate((node) => window.getComputedStyle(node).fontFamily.toLowerCase())).toContain('times')
+  })
+
   test('SLD-FE-302 toolbar controls use icon glyphs with tooltips and compact button modifier', async ({ page }) => {
     await gotoAndSettle(page, '/slides')
 
@@ -682,6 +845,120 @@ test.describe('slides regression', () => {
 
     await page.getByRole('button', { name: 'My Slides' }).click()
     await expect(page.locator('.slides-library-card')).toHaveCount(3)
+  })
+
+  test('SLD-FE-210 template search ranks best matches and quick preview supports duplicate flow', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('oliver-slides-store-v1', JSON.stringify({
+        slides: [],
+        templates: [
+          {
+            id: 'template-rank-1',
+            owner_user_id: 'qa-admin-user',
+            name: 'Executive QBR Narrative',
+            description: 'Board-level quarterly narrative.',
+            is_shared: true,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-1-heading',
+                type: 'heading',
+                sourceLabel: '.heading',
+                x: 120,
+                y: 120,
+                width: 900,
+                content: 'Executive QBR Narrative',
+                style: { fontSize: 56, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-25T10:00:00.000Z',
+            updated_at: '2026-04-25T10:00:00.000Z',
+          },
+          {
+            id: 'template-rank-2',
+            owner_user_id: 'qa-admin-user',
+            name: 'Executive QBR Outline',
+            description: 'Executive QBR talking points and timeline.',
+            is_shared: true,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-2-panel',
+                type: 'panel',
+                sourceLabel: '.panel',
+                x: 180,
+                y: 240,
+                width: 760,
+                height: 360,
+                content: '<h3>Executive QBR</h3><p>Summary</p>',
+                style: { fontSize: 28, color: '#111827', backgroundColor: '#f8fafc' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-24T10:00:00.000Z',
+            updated_at: '2026-04-24T10:00:00.000Z',
+          },
+          {
+            id: 'template-rank-3',
+            owner_user_id: 'qa-admin-user',
+            name: 'Hiring Kickoff',
+            description: 'People planning and role kickoff.',
+            is_shared: false,
+            canvas: { width: 1920, height: 1080 },
+            components: [
+              {
+                id: 'rank-3-text',
+                type: 'text',
+                sourceLabel: '.text',
+                x: 120,
+                y: 140,
+                width: 860,
+                content: 'Hiring Kickoff Plan',
+                style: { fontSize: 40, color: '#0f172a' },
+                locked: false,
+                visible: true,
+              },
+            ],
+            metadata: {},
+            created_at: '2026-04-23T10:00:00.000Z',
+            updated_at: '2026-04-23T10:00:00.000Z',
+          },
+        ],
+        collaborators: [],
+        approvals: [],
+        audits: [],
+        auditPresets: [],
+        nextAuditId: 1,
+        nextApprovalId: 1,
+      }))
+    })
+
+    await gotoAndSettle(page, '/slides')
+    await page.getByRole('button', { name: 'Template Library' }).click()
+
+    await page.locator('#slides-search').fill('executive qbr')
+    await expect(page.getByText('Showing 2 template matches sorted by relevance.')).toBeVisible()
+
+    const rankedCards = page.locator('.slides-library-card')
+    await expect(rankedCards).toHaveCount(2)
+    const bestMatchCard = page.locator('.slides-library-card', { hasText: 'Executive QBR Outline' }).first()
+    await expect(bestMatchCard.getByText('Best match')).toBeVisible()
+
+    await bestMatchCard.getByRole('button', { name: 'Quick Preview' }).click()
+    const previewDialog = page.getByRole('dialog', { name: 'Quick Preview: Executive QBR Outline' })
+    await expect(previewDialog).toBeVisible()
+    await expect(previewDialog.getByText('Best match')).toBeVisible()
+
+    await previewDialog.getByRole('button', { name: 'Duplicate to My Slides' }).click()
+    await expect(page.locator('#slides-title')).toHaveValue('Executive QBR Outline (Copy)')
+
+    await page.getByRole('button', { name: 'My Slides' }).click()
+    await expect(page.getByText('Executive QBR Outline (Copy)')).toBeVisible()
   })
 
   test('SLD-FE-400 and SLD-BE-400 support visibility controls and template ownership governance', async ({ page }) => {
@@ -1841,5 +2118,34 @@ test.describe('slides regression', () => {
     })
     await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
     await expect(page.getByText(/Save status: saved/i)).toBeVisible({ timeout: 10000 })
+  })
+
+  test('US-O31 autosave enters degraded local-draft mode after retry budget is exhausted', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem
+      Storage.prototype.setItem = function setItemWithFailure(key: string, value: string) {
+        if (key === 'oliver-slides-store-v1') {
+          throw new Error('forced autosave failure')
+        }
+        return originalSetItem.call(this, key, value)
+      }
+    })
+
+    await gotoAndSettle(page, '/slides')
+
+    const html = `<div class="slide-canvas" style="width:1920px;height:1080px;"><h1 style="position:absolute;left:100px;top:120px;width:800px;">Degraded Mode</h1></div>`
+    await page.locator('#slides-raw-html').fill(html)
+    await page.locator('#main-content').getByRole('button', { name: 'Parse Pasted HTML' }).click()
+    await expect(page.getByText('Parse complete.')).toBeVisible()
+
+    await expect(page.getByText(/Autosave retry queued/i)).toBeVisible({ timeout: 15000 })
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.getByRole('button', { name: 'Retry Autosave Now' }).click()
+    }
+
+    await expect(page.getByRole('alert').filter({ hasText: /Autosave paused after 5 failed attempts/i })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(/Degraded Mode: Local Draft/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Retry Slides Service' })).toBeVisible()
   })
 })

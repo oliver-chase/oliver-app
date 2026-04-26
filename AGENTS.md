@@ -4,6 +4,22 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+## Required Context Order
+1. `docs/MODULE_CONTEXT.md`
+2. `docs/MODULE_INSTRUCTIONS.md`
+3. `docs/modules/<target-module>.md`
+
+Do this before editing module code.
+
+## Module Documentation Contract
+- If module routing, visibility, permissions, chatbot commands/flows, or data contracts change, update docs in the same PR.
+- Required updates when applicable:
+  - `docs/MODULE_CONTEXT.md`
+  - `docs/MODULE_INSTRUCTIONS.md`
+  - `docs/modules/README.md`
+  - `docs/modules/<target-module>.md`
+- Source-of-truth for module metadata remains `src/modules/registry.ts`.
+
 ## Commit Rules
 - Do not auto-commit after every change.
 - Only commit when explicitly asked, or when a named milestone is complete.

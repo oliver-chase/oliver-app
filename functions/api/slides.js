@@ -3,7 +3,7 @@
 // GET /api/slides?resource=slides|templates|audits|audit-presets|audit-export-jobs|template-collaborators|template-approvals&search=&limit=&offset=
 // POST /api/slides { action, actor, ...payload }
 
-import { jsonResponse, errorResponse } from './_shared/ai.js';
+import { jsonResponse } from './_shared/ai.js';
 
 const MAX_COMPONENTS_PER_SLIDE = 400;
 const MAX_TITLE_LENGTH = 160;
@@ -39,6 +39,108 @@ const AUDIT_ACTIONS = [
 ];
 const AUDIT_OUTCOMES = ['success', 'failure'];
 const AUDIT_ENTITY_TYPES = ['slide', 'template'];
+const MAX_ERROR_MESSAGE_LENGTH = 320;
+
+function generateCorrelationId() {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `slides-${Date.now().toString(36)}-${random}`;
+}
+
+function extractCloudflareRayId(value) {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/ray id[:\s-]*([a-z0-9]+)/i);
+  return match && match[1] ? match[1] : null;
+}
+
+function summarizeFailureMessage(rawMessage) {
+  const text = typeof rawMessage === 'string' ? rawMessage.trim() : String(rawMessage || '').trim();
+  if (!text) return 'Slides request failed.';
+
+  if (/<!doctype html/i.test(text) || /<html/i.test(text)) {
+    const rayId = extractCloudflareRayId(text);
+    return rayId
+      ? `Slides upstream runtime exception (Cloudflare Ray ID ${rayId}).`
+      : 'Slides upstream runtime exception.';
+  }
+
+  const compact = text.replace(/\s+/g, ' ');
+  if (compact.length <= MAX_ERROR_MESSAGE_LENGTH) return compact;
+  return compact.slice(0, MAX_ERROR_MESSAGE_LENGTH) + '...';
+}
+
+function classifyFailureClass(status, message) {
+  if (status === 400) return 'validation_error';
+  if (status === 401) return 'unauthenticated';
+  if (status === 403) return 'unauthorized';
+  if (status === 404) return 'not_found';
+  if (status === 408) return 'timeout';
+  if (status === 409) return 'conflict';
+  if (status === 429) return 'rate_limited';
+  if (status === 502 || status === 503 || status === 504) return 'upstream_unavailable';
+  if (status >= 500) return 'server_error';
+  if (/runtime exception/i.test(message)) return 'upstream_runtime';
+  return 'request_error';
+}
+
+function isRetryableFailure(status, failureClass) {
+  if (status === 408 || status === 429) return true;
+  if (status >= 500) return true;
+  return failureClass === 'upstream_unavailable' || failureClass === 'upstream_runtime' || failureClass === 'timeout';
+}
+
+function buildFailureEnvelope(message, status = 500, options = {}) {
+  const safeMessage = summarizeFailureMessage(message);
+  const correlationId = typeof options.correlation_id === 'string' && options.correlation_id
+    ? options.correlation_id
+    : generateCorrelationId();
+  const rayId = options.ray_id || extractCloudflareRayId(safeMessage) || null;
+  const failureClass = options.failure_class || classifyFailureClass(status, safeMessage);
+  const retryable = typeof options.retryable === 'boolean'
+    ? options.retryable
+    : isRetryableFailure(status, failureClass);
+
+  const errorDetail = {
+    code: options.code || 'slides_api_error',
+    status,
+    failure_class: failureClass,
+    retryable,
+    correlation_id: correlationId,
+    ray_id: rayId,
+    endpoint: '/api/slides',
+    method: options.method || null,
+    actor_user_id: options.actor_user_id || null,
+    actor_email: options.actor_email || null,
+    timestamp: new Date().toISOString(),
+  };
+
+  const logPayload = {
+    level: status >= 500 ? 'error' : 'warn',
+    message: safeMessage,
+    ...errorDetail,
+  };
+  if (status >= 500) {
+    console.error('[slides-api-failure]', JSON.stringify(logPayload));
+  } else {
+    console.warn('[slides-api-failure]', JSON.stringify(logPayload));
+  }
+
+  return {
+    ok: false,
+    error: safeMessage,
+    error_detail: errorDetail,
+  };
+}
+
+function errorResponse(message, status = 500, options = {}) {
+  const envelope = buildFailureEnvelope(message, status, options);
+  return new Response(JSON.stringify(envelope), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-slides-correlation-id': envelope.error_detail.correlation_id,
+    },
+  });
+}
 
 function resolveServiceKey(env) {
   return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY || null;
@@ -503,6 +605,7 @@ function normalizeAuditExportJobRow(row) {
 
 async function supabaseFetch(env, path, init = {}) {
   const supabaseUrl = resolveSupabaseUrl(env);
+  const method = (init.method || 'GET').toUpperCase();
   const response = await fetch(supabaseUrl + path, {
     ...init,
     headers: {
@@ -513,7 +616,13 @@ async function supabaseFetch(env, path, init = {}) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`${init.method || 'GET'} ${path} failed: ${response.status} ${text}`);
+    const error = new Error(`${method} ${path} failed: ${response.status} ${text}`);
+    error.status = response.status;
+    error.method = method;
+    error.path = path;
+    error.responseText = text;
+    error.rayId = response.headers.get('cf-ray') || extractCloudflareRayId(text) || null;
+    throw error;
   }
 
   return response;
@@ -825,10 +934,17 @@ async function handleSaveAction(env, actor, body) {
         error_class: 'revision_conflict',
         details: { expected_revision: expectedRevision, actual_revision: existing.revision },
       });
+      const envelope = buildFailureEnvelope('Revision conflict. Reload or overwrite.', 409, {
+        code: 'revision_conflict',
+        failure_class: 'conflict',
+        retryable: false,
+        method: 'POST',
+        actor_user_id: actor.user_id,
+        actor_email: actor.email || null,
+      });
       return jsonResponse({
-        ok: false,
+        ...envelope,
         message: 'Revision conflict. Reload or overwrite.',
-        error: 'revision_conflict',
         server_slide: serverSlide,
       }, 409);
     }
@@ -2118,12 +2234,23 @@ function addAuditSearch(path, query) {
   return path + '&or=' + encodeURIComponent(clause);
 }
 
-function safeSlidesErrorResponse(error, fallbackMessage) {
+function safeSlidesErrorResponse(error, fallbackMessage, context = {}) {
   const detail = error instanceof Error ? error.message : String(error || '');
   const message = detail
     ? `${fallbackMessage} ${detail}`
     : fallbackMessage;
-  return errorResponse(message, 503);
+  const status = Number.isFinite(error?.status) && Number(error.status) > 0
+    ? Number(error.status)
+    : 503;
+  return errorResponse(message, status, {
+    code: 'slides_service_unavailable',
+    failure_class: classifyFailureClass(status, message),
+    retryable: isRetryableFailure(status, classifyFailureClass(status, message)),
+    ray_id: error?.rayId || null,
+    method: context.method || null,
+    actor_user_id: context.actor?.user_id || null,
+    actor_email: context.actor?.email || null,
+  });
 }
 
 export async function onRequestGet(context) {
@@ -2132,7 +2259,14 @@ export async function onRequestGet(context) {
   if (missing) return missing;
 
   const authz = await authorizeActorForRead(request, env);
-  if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+  if (!authz.ok) {
+    const identity = resolveActorIdentityFromQuery(request, env);
+    return errorResponse(authz.error, authz.status || 403, {
+      method: request.method || 'GET',
+      actor_user_id: identity?.userId || null,
+      actor_email: identity?.email || null,
+    });
+  }
 
   const actor = authz.actor;
   const url = new URL(request.url);
@@ -2323,7 +2457,10 @@ export async function onRequestGet(context) {
 
   return errorResponse('Unsupported resource for /api/slides. Use slides, templates, audits, audit-presets, audit-export-jobs, template-collaborators, or template-approvals.', 400);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.');
+    return safeSlidesErrorResponse(error, 'Slides data service is temporarily unavailable.', {
+      method: request.method || 'GET',
+      actor,
+    });
   }
 }
 
@@ -2336,7 +2473,9 @@ export async function onRequestPost(context) {
   try {
     body = await request.json();
   } catch (_) {
-    return errorResponse('Invalid JSON body', 400);
+    return errorResponse('Invalid JSON body', 400, {
+      method: request.method || 'POST',
+    });
   }
 
   const action = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
@@ -2350,7 +2489,14 @@ export async function onRequestPost(context) {
     actor = resolveSlidesAutomationActor(env);
   } else {
     const authz = await authorizeActor(request, body, env);
-    if (!authz.ok) return errorResponse(authz.error, authz.status || 403);
+    if (!authz.ok) {
+      const identity = resolveActorIdentity(request, body, env);
+      return errorResponse(authz.error, authz.status || 403, {
+        method: request.method || 'POST',
+        actor_user_id: identity?.userId || null,
+        actor_email: identity?.email || null,
+      });
+    }
     actor = authz.actor;
   }
 
@@ -2378,6 +2524,9 @@ export async function onRequestPost(context) {
 
   return errorResponse('Unsupported action for /api/slides.', 400);
   } catch (error) {
-    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.');
+    return safeSlidesErrorResponse(error, 'Slides write service is temporarily unavailable.', {
+      method: request.method || 'POST',
+      actor,
+    });
   }
 }

@@ -154,6 +154,12 @@ public/                 Static assets
 
 The app is intentionally split so one module can be built or maintained with minimal cross-reading.
 
+Module documentation is now split into dedicated files:
+
+- Global context map: `docs/MODULE_CONTEXT.md`
+- Agent/workflow instructions: `docs/MODULE_INSTRUCTIONS.md`
+- Per-module breakouts: `docs/modules/README.md` and `docs/modules/*.md`
+
 Hub modules (current product modules):
 
 - Account Planning: `src/app/accounts/*` + `src/components/accounts/*`.

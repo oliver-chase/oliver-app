@@ -17,6 +17,10 @@ import {
   validateParsedResult,
   validatePastedHtml,
 } from '@/components/slides/import-validation'
+import {
+  inlineCompanionStylesheets,
+  selectImportFiles,
+} from '@/components/slides/import-file-bundle'
 import type {
   SlideAuditEvent,
   SlideAuditExportJob,
@@ -50,8 +54,12 @@ import {
   runTemplateApprovalEscalationSweep,
   renameSlide,
   saveSlide,
+  SlideApiError,
   SlideConflictError,
+  getSlidesRuntimeHealth,
+  subscribeSlidesRuntimeHealth,
   submitTemplateApproval,
+  type SlidesRuntimeHealthState,
   transferTemplateOwnership,
   upsertAuditPreset,
   upsertTemplateCollaborator,
@@ -66,6 +74,7 @@ import { useModuleAccess } from '@/modules/use-module-access'
 const AUTOSAVE_DELAY_MS = 5000
 const AUTOSAVE_RETRY_BASE_DELAY_MS = 2000
 const AUTOSAVE_RETRY_MAX_DELAY_MS = 60000
+const AUTOSAVE_RETRY_MAX_ATTEMPTS = 5
 const LEGACY_DRAFT_RECOVERY_KEY = 'oliver-slide-draft-v1'
 const DRAFT_RECOVERY_KEY_PREFIX = 'oliver-slide-draft-v2'
 const UNSAVED_CHANGES_CONFIRM_TEXT = 'You have unsaved slide changes. Discard them and continue?'
@@ -88,6 +97,14 @@ interface AutosaveRetryState {
   delayMs: number
   nextAttemptAt: number
   lastError: string
+}
+
+interface SlidesDegradedState {
+  mode: 'local-draft'
+  message: string
+  correlationId: string | null
+  rayId: string | null
+  endpoint: string
 }
 
 interface CanvasDragState {
@@ -140,6 +157,113 @@ interface TemplateCollaboratorDraft {
   role: SlideTemplateCollaboratorRole
 }
 
+interface RankedTemplateEntry {
+  template: SlideTemplateRecord
+  searchScore: number
+  matchSignals: string[]
+  pendingApprovals: number
+  isBestMatch: boolean
+}
+
+function getTemplatePreviewScale(
+  canvas: { width: number; height: number },
+  maxWidth: number,
+  maxHeight: number,
+): number {
+  const width = canvas.width > 0 ? canvas.width : 1
+  const height = canvas.height > 0 ? canvas.height : 1
+  return Math.min(maxWidth / width, maxHeight / height)
+}
+
+function normalizeTemplateSearchText(value: string | null | undefined): string {
+  return (value || '').toLowerCase().trim()
+}
+
+function buildTemplateContentSearchCorpus(template: SlideTemplateRecord): string {
+  return template.components
+    .slice(0, 24)
+    .map((component) => {
+      const plainContent = (component.content || '').replace(/<[^>]+>/g, ' ')
+      return [component.type, component.sourceLabel || '', plainContent].join(' ')
+    })
+    .join(' ')
+    .toLowerCase()
+}
+
+function rankTemplateForSearch(template: SlideTemplateRecord, query: string): {
+  score: number
+  matchSignals: string[]
+} {
+  const normalizedQuery = normalizeTemplateSearchText(query)
+  if (!normalizedQuery) return { score: 0, matchSignals: [] }
+
+  const name = normalizeTemplateSearchText(template.name)
+  const description = normalizeTemplateSearchText(template.description)
+  const owner = normalizeTemplateSearchText(template.owner_user_id)
+  const contentCorpus = buildTemplateContentSearchCorpus(template)
+
+  const signals = new Set<string>()
+  let score = 0
+
+  if (name === normalizedQuery) {
+    score += 200
+    signals.add('Exact Name')
+  } else if (name.startsWith(normalizedQuery)) {
+    score += 140
+    signals.add('Name Prefix')
+  } else if (name.includes(normalizedQuery)) {
+    score += 110
+    signals.add('Name')
+  }
+
+  if (description.includes(normalizedQuery)) {
+    score += 80
+    signals.add('Description')
+  }
+
+  if (owner.includes(normalizedQuery)) {
+    score += 40
+    signals.add('Owner')
+  }
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean)
+  let tokenHitCount = 0
+  for (const token of tokens) {
+    let tokenMatched = false
+    if (name.includes(token)) {
+      score += 24
+      tokenMatched = true
+      signals.add('Name')
+    }
+    if (description.includes(token)) {
+      score += 14
+      tokenMatched = true
+      signals.add('Description')
+    }
+    if (owner.includes(token)) {
+      score += 8
+      tokenMatched = true
+      signals.add('Owner')
+    }
+    if (contentCorpus.includes(token)) {
+      score += 6
+      tokenMatched = true
+      signals.add('Content')
+    }
+    if (tokenMatched) tokenHitCount += 1
+  }
+
+  if (tokens.length > 1 && tokenHitCount === tokens.length) {
+    score += 30
+    signals.add('All Tokens')
+  }
+
+  return {
+    score,
+    matchSignals: Array.from(signals),
+  }
+}
+
 function readHistoryIndex(state: unknown): number | null {
   if (!state || typeof state !== 'object') return null
   const candidate = (state as { idx?: unknown }).idx
@@ -176,6 +300,35 @@ function formatAuditExportFilters(filters: SlideAuditExportJob['filters']): stri
   }
   if (segments.length === 0) return 'All activity filters'
   return segments.join(' · ')
+}
+
+function isAutosaveRetryableError(error: unknown): boolean {
+  if (error instanceof SlideConflictError) return false
+  if (error instanceof SlideApiError) return error.retryable
+  if (error instanceof TypeError) return true
+  return true
+}
+
+function getSlideErrorSummary(error: unknown): {
+  message: string
+  correlationId: string | null
+  rayId: string | null
+  endpoint: string
+} {
+  if (error instanceof SlideApiError) {
+    return {
+      message: error.message,
+      correlationId: error.correlationId,
+      rayId: error.rayId,
+      endpoint: error.path || '/api/slides',
+    }
+  }
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    correlationId: null,
+    rayId: null,
+    endpoint: '/api/slides',
+  }
 }
 
 function formatTemplateApprovalType(type: SlideTemplateApproval['approval_type']): string {
@@ -519,6 +672,8 @@ export default function SlidesPage() {
   const [autosaveEnabled, setAutosaveEnabled] = useState(true)
   const [autosaveRetryState, setAutosaveRetryState] = useState<AutosaveRetryState | null>(null)
   const [conflictServerSlide, setConflictServerSlide] = useState<SlideRecord | null>(null)
+  const [degradedState, setDegradedState] = useState<SlidesDegradedState | null>(null)
+  const [runtimeHealth, setRuntimeHealth] = useState<SlidesRuntimeHealthState>(() => getSlidesRuntimeHealth())
 
   const [slides, setSlides] = useState<SlideRecord[]>([])
   const [templates, setTemplates] = useState<SlideTemplateRecord[]>([])
@@ -530,6 +685,7 @@ export default function SlidesPage() {
   const [templateTransferDraft, setTemplateTransferDraft] = useState<TemplateTransferDraft | null>(null)
   const [templateCollaboratorDraft, setTemplateCollaboratorDraft] = useState<TemplateCollaboratorDraft | null>(null)
   const [templateCollaboratorPanelId, setTemplateCollaboratorPanelId] = useState<string | null>(null)
+  const [templateQuickPreviewId, setTemplateQuickPreviewId] = useState<string | null>(null)
   const [templateCollaboratorsByTemplate, setTemplateCollaboratorsByTemplate] = useState<Record<string, SlideTemplateCollaborator[]>>({})
   const [templatePublishBusy, setTemplatePublishBusy] = useState(false)
   const [templateActionBusyId, setTemplateActionBusyId] = useState<string | null>(null)
@@ -561,6 +717,7 @@ export default function SlidesPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const parseAbortRef = useRef<AbortController | null>(null)
+  const pendingImportWarningsRef = useRef<string[]>([])
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
   const [canvasScale, setCanvasScale] = useState(1)
   const canvasDragRef = useRef<CanvasDragState | null>(null)
@@ -683,6 +840,49 @@ export default function SlidesPage() {
     }
     return byTemplate
   }, [templateApprovals])
+  const rankedTemplates = useMemo<RankedTemplateEntry[]>(() => {
+    const query = normalizeTemplateSearchText(trimmedSearchValue)
+    const rows = templates.map((template) => {
+      const pendingCount = (pendingApprovalsByTemplate[template.id] || []).length
+      const rank = rankTemplateForSearch(template, query)
+      const recencyBoost = Number.isFinite(Date.parse(template.updated_at))
+        ? Math.max(0, 7 - Math.floor((Date.now() - Date.parse(template.updated_at)) / (1000 * 60 * 60 * 24)))
+        : 0
+      const queryScore = rank.score > 0
+        ? rank.score + recencyBoost + Math.min(12, pendingCount * 3)
+        : 0
+      return {
+        template,
+        searchScore: query ? queryScore : 0,
+        matchSignals: rank.matchSignals,
+        pendingApprovals: pendingCount,
+        isBestMatch: false,
+      }
+    })
+
+    const filtered = query
+      ? rows.filter((entry) => entry.searchScore > 0)
+      : rows
+
+    const sorted = [...filtered].sort((left, right) => {
+      if (query) {
+        if (right.searchScore !== left.searchScore) return right.searchScore - left.searchScore
+      }
+      if (right.pendingApprovals !== left.pendingApprovals) return right.pendingApprovals - left.pendingApprovals
+      const updatedCompare = right.template.updated_at.localeCompare(left.template.updated_at)
+      if (updatedCompare !== 0) return updatedCompare
+      return left.template.name.localeCompare(right.template.name)
+    })
+
+    if (query && sorted.length > 0) {
+      sorted[0] = { ...sorted[0], isBestMatch: true }
+    }
+    return sorted
+  }, [pendingApprovalsByTemplate, templates, trimmedSearchValue])
+  const activeTemplateQuickPreview = useMemo(
+    () => rankedTemplates.find((entry) => entry.template.id === templateQuickPreviewId) || null,
+    [rankedTemplates, templateQuickPreviewId],
+  )
   const showTemplateApprovalQueue = actor.role === 'admin' || templateApprovals.length > 0
   const overdueTemplateApprovals = useMemo(
     () => templateApprovals.filter((approval) => getApprovalSlaState(approval).tone === 'overdue').length,
@@ -786,8 +986,7 @@ export default function SlidesPage() {
     })
   }, [])
 
-  const queueAutosaveRetry = useCallback((errorMessage: string) => {
-    const attempt = (autosaveRetryState?.attempt || 0) + 1
+  const queueAutosaveRetry = useCallback((errorMessage: string, attempt: number) => {
     const delayMs = Math.min(
       AUTOSAVE_RETRY_MAX_DELAY_MS,
       AUTOSAVE_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)),
@@ -801,7 +1000,7 @@ export default function SlidesPage() {
     })
     setSaveStatus('queued')
     setSaveError(`Autosave failed (${errorMessage}). Retrying in ${retryInSeconds}s.`)
-  }, [autosaveRetryState])
+  }, [])
 
   const scheduleAutosaveRetryNow = useCallback(() => {
     setAutosaveRetryState((previous) => {
@@ -818,6 +1017,10 @@ export default function SlidesPage() {
     setSaveError(null)
     setSaveStatus(result ? 'dirty' : 'clean')
   }, [result])
+
+  const clearDegradedMode = useCallback(() => {
+    setDegradedState(null)
+  }, [])
 
   const updateCanvasComponentContent = useCallback((componentId: string, content: string) => {
     if (!result) return
@@ -1361,6 +1564,9 @@ export default function SlidesPage() {
   }, [finalizeCanvasDrag, finalizeCanvasResize])
 
   const parseHtmlSync = useCallback((html: string): SlideImportResult => {
+    const pendingWarnings = pendingImportWarningsRef.current
+    pendingImportWarningsRef.current = []
+
     const preflight = validatePastedHtml(html)
     if (preflight) {
       setImportError(preflight)
@@ -1378,7 +1584,17 @@ export default function SlidesPage() {
       throw new Error(parsedValidation.message)
     }
 
-    setResult(parsed)
+    const mergedWarnings = pendingWarnings.length > 0
+      ? Array.from(new Set([...pendingWarnings, ...parsed.warnings]))
+      : parsed.warnings
+    const parsedResult = mergedWarnings === parsed.warnings
+      ? parsed
+      : {
+          ...parsed,
+          warnings: mergedWarnings,
+        }
+
+    setResult(parsedResult)
     setSelectedComponentIds([])
     setEditingComponentId(null)
     setDraggingComponentId(null)
@@ -1388,10 +1604,10 @@ export default function SlidesPage() {
     setImportError(null)
     setParseStatus('completed')
     setParseProgress(100)
-    setParseMessage(`Parsed ${parsed.components.length} components.`)
+    setParseMessage(`Parsed ${parsedResult.components.length} components.`)
     setExportHtml('')
     setDirty()
-    return parsed
+    return parsedResult
   }, [clearHistory, setDirty])
 
   const runParseWithProgress = useCallback(async (html: string) => {
@@ -1480,6 +1696,7 @@ export default function SlidesPage() {
       ])
 
       const blockingErrors: string[] = []
+      const nonBlockingWarnings: string[] = []
 
       if (slideRowsResult.status === 'fulfilled') {
         setSlides(slideRowsResult.value)
@@ -1496,31 +1713,32 @@ export default function SlidesPage() {
       if (approvalRowsResult.status === 'fulfilled') {
         setTemplateApprovals(approvalRowsResult.value)
       } else {
-        setTemplateApprovals([])
+        nonBlockingWarnings.push('Template approvals are temporarily unavailable.')
       }
 
       if (auditRowsResult.status === 'fulfilled') {
         setAudits(auditRowsResult.value.items)
         setAuditHasMore(auditRowsResult.value.pagination.has_more)
       } else {
-        setAudits([])
-        setAuditHasMore(false)
+        nonBlockingWarnings.push('Activity audit feed is temporarily unavailable.')
       }
 
       if (auditPresetRowsResult.status === 'fulfilled') {
         setAuditPresets(auditPresetRowsResult.value)
       } else {
-        setAuditPresets([])
+        nonBlockingWarnings.push('Activity presets are temporarily unavailable.')
       }
 
       if (auditExportJobRowsResult.status === 'fulfilled') {
         setAuditExportJobs(auditExportJobRowsResult.value)
       } else {
-        setAuditExportJobs([])
+        nonBlockingWarnings.push('Audit export jobs are temporarily unavailable.')
       }
 
       if (blockingErrors.length > 0) {
         setLibraryError(blockingErrors[0])
+      } else if (nonBlockingWarnings.length > 0) {
+        setLibraryError(nonBlockingWarnings[0])
       }
     } catch (error) {
       setLibraryError(error instanceof Error ? error.message : String(error))
@@ -1544,6 +1762,23 @@ export default function SlidesPage() {
   }, [searchValue, auditActionFilter, auditOutcomeFilter, auditEntityTypeFilter, auditDateFrom, auditDateTo])
 
   useEffect(() => {
+    return subscribeSlidesRuntimeHealth((state) => {
+      setRuntimeHealth(state)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (runtimeHealth.mode !== 'degraded' || !runtimeHealth.lastFailure) return
+    setDegradedState({
+      mode: 'local-draft',
+      message: 'Slides service degraded. Local draft mode is active for unavailable endpoints.',
+      correlationId: runtimeHealth.lastFailure.correlationId,
+      rayId: runtimeHealth.lastFailure.rayId,
+      endpoint: runtimeHealth.lastFailure.endpoint || '/api/slides',
+    })
+  }, [runtimeHealth])
+
+  useEffect(() => {
     if (!allowRender) return
     void refreshLibraryData()
   }, [allowRender, refreshLibraryData])
@@ -1565,6 +1800,25 @@ export default function SlidesPage() {
     if (auditPresets.some((preset) => preset.id === selectedAuditPresetId)) return
     setSelectedAuditPresetId('')
   }, [auditPresets, selectedAuditPresetId])
+
+  useEffect(() => {
+    if (!templateQuickPreviewId) return
+    if (templates.some((template) => template.id === templateQuickPreviewId)) return
+    setTemplateQuickPreviewId(null)
+  }, [templateQuickPreviewId, templates])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !templateQuickPreviewId) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setTemplateQuickPreviewId(null)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [templateQuickPreviewId])
 
   const resetAuditFilters = useCallback(() => {
     setAuditActionFilter('all')
@@ -1718,6 +1972,7 @@ export default function SlidesPage() {
       setAutosaveRetryState(null)
       setConflictServerSlide(null)
       setSaveError(null)
+      setDegradedState(null)
 
       await refreshLibraryData()
       return response.slide
@@ -1731,15 +1986,61 @@ export default function SlidesPage() {
       }
 
       if (options?.autosave) {
-        queueAutosaveRetry(error instanceof Error ? error.message : String(error))
+        const summary = getSlideErrorSummary(error)
+        const nextAttempt = (autosaveRetryState?.attempt || 0) + 1
+        if (isAutosaveRetryableError(error) && nextAttempt <= AUTOSAVE_RETRY_MAX_ATTEMPTS) {
+          queueAutosaveRetry(summary.message, nextAttempt)
+          return null
+        }
+
+        const retryExhausted = nextAttempt > AUTOSAVE_RETRY_MAX_ATTEMPTS
+        const baseMessage = retryExhausted
+          ? `Autosave paused after ${AUTOSAVE_RETRY_MAX_ATTEMPTS} failed attempts.`
+          : 'Autosave stopped due to a terminal save error.'
+        const recoveryMessage = `${baseMessage} Local draft mode is active until Slides service recovers.`
+        setAutosaveEnabled(false)
+        setAutosaveRetryState(null)
+        setSaveStatus('error')
+        setSaveError(`${recoveryMessage} ${summary.message}`)
+        setDegradedState({
+          mode: 'local-draft',
+          message: recoveryMessage,
+          correlationId: summary.correlationId,
+          rayId: summary.rayId,
+          endpoint: summary.endpoint,
+        })
         return null
       }
 
       setSaveStatus('error')
-      setSaveError(error instanceof Error ? error.message : String(error))
+      const summary = getSlideErrorSummary(error)
+      setSaveError(summary.message)
       return null
     }
-  }, [activeRevision, activeSlideId, actor, normalizeComponentsForPersistence, queueAutosaveRetry, rawHtml.length, refreshLibraryData, result, slideTitle])
+  }, [
+    activeRevision,
+    activeSlideId,
+    actor,
+    autosaveRetryState,
+    normalizeComponentsForPersistence,
+    queueAutosaveRetry,
+    rawHtml.length,
+    refreshLibraryData,
+    result,
+    slideTitle,
+  ])
+
+  const retrySlidesService = useCallback(async () => {
+    setLibraryError(null)
+    setSaveError(null)
+    setAutosaveRetryState(null)
+    setAutosaveEnabled(true)
+    setDegradedState(null)
+    await refreshLibraryData()
+    if (result && saveStatus === 'dirty') {
+      await handleSave({ autosave: true })
+    }
+  }, [handleSave, refreshLibraryData, result, saveStatus])
 
   useEffect(() => {
     if (!autosaveEnabled || saveStatus !== 'dirty' || !result) return
@@ -2005,10 +2306,24 @@ export default function SlidesPage() {
   }, [])
 
   const onFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const selectedFiles = Array.from(event.target.files || [])
+    if (selectedFiles.length === 0) return
 
-    const fileValidation = validateImportFile(file)
+    const selection = selectImportFiles(selectedFiles)
+    if (!selection.htmlFile) {
+      const message = 'Select an .html file. Optional companion .css files can be selected together for higher-fidelity import.'
+      setImportError({
+        code: 'invalid_file_type',
+        message,
+      })
+      setParseStatus('failed')
+      setParseProgress(0)
+      setParseMessage(message)
+      event.target.value = ''
+      return
+    }
+
+    const fileValidation = validateImportFile(selection.htmlFile)
     if (fileValidation) {
       setImportError(fileValidation)
       setParseStatus('failed')
@@ -2018,9 +2333,28 @@ export default function SlidesPage() {
       return
     }
 
-    const text = await file.text()
-    setRawHtml(text)
-    await runParseWithProgress(text)
+    const text = await selection.htmlFile.text()
+    const inlineResult = await inlineCompanionStylesheets(text, selection.cssFiles)
+    const importWarnings: string[] = []
+    if (inlineResult.inlinedHrefs.length > 0) {
+      importWarnings.push(
+        `Inlined ${inlineResult.inlinedHrefs.length} companion stylesheet${inlineResult.inlinedHrefs.length === 1 ? '' : 's'} from selected files.`,
+      )
+    }
+    if (inlineResult.unresolvedHrefs.length > 0) {
+      importWarnings.push(
+        `Could not match ${inlineResult.unresolvedHrefs.length} linked stylesheet${inlineResult.unresolvedHrefs.length === 1 ? '' : 's'} to selected CSS files.`,
+      )
+    }
+    if (inlineResult.ignoredCssFiles.length > 0) {
+      importWarnings.push(
+        `Ignored ${inlineResult.ignoredCssFiles.length} oversized CSS companion file${inlineResult.ignoredCssFiles.length === 1 ? '' : 's'}.`,
+      )
+    }
+
+    pendingImportWarningsRef.current = importWarnings
+    setRawHtml(inlineResult.html)
+    await runParseWithProgress(inlineResult.html)
     event.target.value = ''
   }, [runParseWithProgress])
 
@@ -3215,6 +3549,28 @@ export default function SlidesPage() {
               </div>
             )}
 
+            {degradedState && (
+              <div className="slides-degraded" role="status">
+                <div>
+                  <strong>Degraded Mode: Local Draft</strong>
+                </div>
+                <div>{degradedState.message}</div>
+                <div className="slides-degraded-meta">
+                  Endpoint: {degradedState.endpoint}
+                  {degradedState.correlationId ? ` · Correlation ${degradedState.correlationId}` : ''}
+                  {degradedState.rayId ? ` · Ray ${degradedState.rayId}` : ''}
+                </div>
+                <div className="slides-inline-actions">
+                  <button type="button" className="btn btn-sm btn-primary btn--compact" onClick={() => void retrySlidesService()}>
+                    Retry Slides Service
+                  </button>
+                  <button type="button" className="btn btn-sm btn-ghost btn--compact" onClick={clearDegradedMode}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="slides-toolbar-row">
               <label className="slides-search-wrap" htmlFor="slides-search">
                 <span className="slides-search-label">{searchLabel}</span>
@@ -3244,7 +3600,8 @@ export default function SlidesPage() {
                   ref={fileInputRef}
                   id="slides-html-file"
                   type="file"
-                  accept=".html,.htm,text/html"
+                  accept=".html,.htm,.css,text/html,text/css"
+                  multiple
                   onChange={onFileChange}
                   hidden
                 />
@@ -3253,7 +3610,7 @@ export default function SlidesPage() {
                   <section className="slides-import-panel">
                     <div className="slides-panel-heading">
                       <h2>Import HTML</h2>
-                      <p>Upload a file or paste markup, then parse into editable layers.</p>
+                      <p>Upload HTML (plus optional companion CSS files) or paste markup, then parse into editable layers.</p>
                     </div>
 
                     <div className="slides-actions">
@@ -4048,6 +4405,11 @@ export default function SlidesPage() {
             {workspaceTab === 'templates' && (
               <div className="slides-library-section">
                 <h2>Template Library</h2>
+                {trimmedSearchValue && rankedTemplates.length > 0 && (
+                  <p className="slides-card-note slides-template-search-summary">
+                    Showing {rankedTemplates.length} template match{rankedTemplates.length === 1 ? '' : 'es'} sorted by relevance.
+                  </p>
+                )}
                 {showTemplateApprovalQueue && (
                   <div className="slides-template-draft">
                     <p className="slides-card-note">
@@ -4139,14 +4501,16 @@ export default function SlidesPage() {
                     })}
                   </div>
                 )}
-                {templates.length === 0 && (
+                {rankedTemplates.length === 0 && (
                   <p className="slides-empty">
                     {trimmedSearchValue
                       ? `No templates match "${trimmedSearchValue}". Clear or update search to continue.`
                       : 'No templates available yet.'}
                   </p>
                 )}
-                {templates.map((template) => (
+                {rankedTemplates.map((entry) => {
+                  const template = entry.template
+                  return (
                   <article key={template.id} className="slides-library-card">
                     <div>
                       <div className="slides-template-preview" aria-hidden="true">
@@ -4155,7 +4519,7 @@ export default function SlidesPage() {
                           style={{
                             width: `${template.canvas.width}px`,
                             height: `${template.canvas.height}px`,
-                            transform: `scale(${Math.min(220 / template.canvas.width, 124 / template.canvas.height)})`,
+                            transform: `scale(${getTemplatePreviewScale(template.canvas, 220, 124)})`,
                           }}
                         >
                           {template.components
@@ -4186,13 +4550,29 @@ export default function SlidesPage() {
                       <p>
                         Visibility: {template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(template.updated_at)}
                       </p>
-                      {(pendingApprovalsByTemplate[template.id] || []).length > 0 && (
+                      {entry.pendingApprovals > 0 && (
                         <p className="slides-card-note">
-                          Pending approvals: {(pendingApprovalsByTemplate[template.id] || []).length}
+                          Pending approvals: {entry.pendingApprovals}
+                        </p>
+                      )}
+                      {trimmedSearchValue && (
+                        <p
+                          className="slides-card-note slides-template-rank-note"
+                          data-rank={entry.isBestMatch ? 'top' : 'match'}
+                        >
+                          {entry.isBestMatch ? 'Best match' : `Match score ${entry.searchScore}`}
+                          {entry.matchSignals.length > 0 ? ` · ${entry.matchSignals.join(' · ')}` : ''}
                         </p>
                       )}
                     </div>
                     <div className="slides-inline-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost btn--compact"
+                        onClick={() => setTemplateQuickPreviewId(template.id)}
+                      >
+                        Quick Preview
+                      </button>
                       <button
                         type="button"
                         className="btn btn-sm btn-primary btn--compact"
@@ -4348,7 +4728,99 @@ export default function SlidesPage() {
                       </div>
                     )}
                   </article>
-                ))}
+                  )
+                })}
+                {activeTemplateQuickPreview && (
+                  <div
+                    className="slides-template-preview-modal-backdrop"
+                    onClick={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      setTemplateQuickPreviewId(null)
+                    }}
+                    role="presentation"
+                  >
+                    <section
+                      className="slides-template-preview-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label={`Quick Preview: ${activeTemplateQuickPreview.template.name}`}
+                    >
+                      <div className="slides-template-preview-modal-header">
+                        <h3>Quick Preview: {activeTemplateQuickPreview.template.name}</h3>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost btn--compact"
+                          onClick={() => setTemplateQuickPreviewId(null)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <p className="slides-card-note">
+                        {activeTemplateQuickPreview.template.description || 'No description'} · Components: {activeTemplateQuickPreview.template.components.length}
+                      </p>
+                      <p className="slides-card-note">
+                        Visibility: {activeTemplateQuickPreview.template.is_shared ? 'Shared' : 'Private'} · Updated: {formatDateTime(activeTemplateQuickPreview.template.updated_at)}
+                      </p>
+                      {trimmedSearchValue && (
+                        <p className="slides-card-note slides-template-rank-note" data-rank={activeTemplateQuickPreview.isBestMatch ? 'top' : 'match'}>
+                          {activeTemplateQuickPreview.isBestMatch ? 'Best match' : `Match score ${activeTemplateQuickPreview.searchScore}`}
+                          {activeTemplateQuickPreview.matchSignals.length > 0 ? ` · ${activeTemplateQuickPreview.matchSignals.join(' · ')}` : ''}
+                        </p>
+                      )}
+                      <div className="slides-template-preview-modal-stage-shell">
+                        <div
+                          className="slides-template-preview-stage"
+                          style={{
+                            width: `${activeTemplateQuickPreview.template.canvas.width}px`,
+                            height: `${activeTemplateQuickPreview.template.canvas.height}px`,
+                            transform: `scale(${getTemplatePreviewScale(activeTemplateQuickPreview.template.canvas, 860, 500)})`,
+                          }}
+                        >
+                          {activeTemplateQuickPreview.template.components
+                            .filter((component) => component.visible !== false)
+                            .slice(0, 28)
+                            .map((component) => (
+                              <div
+                                key={`${activeTemplateQuickPreview.template.id}:${component.id}`}
+                                className="slides-template-preview-component"
+                                data-preview-type={component.type}
+                                style={buildCanvasComponentStyle(component)}
+                              >
+                                {component.type === 'logo' ? (
+                                  <span className="slides-template-preview-asset">{component.sourceLabel || component.type}</span>
+                                ) : (
+                                  <div
+                                    className="slides-template-preview-content"
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(component.content || '') }}
+                                  />
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                      <div className="slides-inline-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary btn--compact"
+                          onClick={() => {
+                            const templateId = activeTemplateQuickPreview.template.id
+                            setTemplateQuickPreviewId(null)
+                            void handleDuplicateTemplate(templateId)
+                          }}
+                        >
+                          Duplicate to My Slides
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost btn--compact"
+                          onClick={() => setTemplateQuickPreviewId(null)}
+                        >
+                          Close Preview
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                )}
               </div>
             )}
 

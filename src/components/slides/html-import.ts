@@ -4,6 +4,8 @@ const DEFAULT_CANVAS_WIDTH = 1920
 const DEFAULT_CANVAS_HEIGHT = 1080
 const CANVAS_TARGET_ASPECT_RATIO = DEFAULT_CANVAS_WIDTH / DEFAULT_CANVAS_HEIGHT
 const MIN_FLOW_NODE_SIZE = 12
+const IMPORT_ROOT_MARKER_ATTR = 'data-import-root-id'
+const IMPORT_ROOT_MARKER_VALUE = 'import-root'
 const FLOW_TEXT_TAGS = new Set([
   'h1',
   'h2',
@@ -107,6 +109,14 @@ function parsePositivePx(rawValue: string | null | undefined): number | undefine
   if (!isPxLike(parsed)) return undefined
   if (parsed.value <= 0) return undefined
   return parsed.value
+}
+
+function estimateNodeAreaFromDeclaredSize(node: HTMLElement): number {
+  const styleMap = parseInlineStyle(node.getAttribute('style') || '')
+  const width = parsePositivePx(styleMap.width ?? node.getAttribute('width'))
+  const height = parsePositivePx(styleMap.height ?? node.getAttribute('height'))
+  if (!width || !height) return 0
+  return width * height
 }
 
 function sanitizeNodeInPlace(root: HTMLElement): void {
@@ -375,13 +385,22 @@ function extractStyle(
 }
 
 function getCanvasRoot(doc: Document): HTMLElement | null {
-  const explicitRoot = (
-    doc.querySelector<HTMLElement>('[data-slide-root]') ||
-    doc.querySelector<HTMLElement>('.slide-canvas')
-  )
-  if (explicitRoot) return explicitRoot
-
   if (!doc.body) return null
+
+  const prioritizedSelectors = ['.page', '[data-slide-root]', '.slide-canvas', '.slide']
+  for (const selector of prioritizedSelectors) {
+    const matches = Array.from(doc.querySelectorAll<HTMLElement>(selector))
+    if (matches.length === 0) continue
+
+    const best = matches
+      .map((candidate) => ({
+        candidate,
+        score: estimateNodeAreaFromDeclaredSize(candidate),
+      }))
+      .sort((a, b) => b.score - a.score)[0]
+
+    if (best?.candidate) return best.candidate
+  }
 
   const scoredCandidates = Array.from(doc.body.querySelectorAll<HTMLElement>('div,section,article,main'))
     .map((candidate) => {
@@ -406,7 +425,7 @@ function getCanvasRoot(doc: Document): HTMLElement | null {
 
   if (scoredCandidates.length > 0) return scoredCandidates[0].candidate
 
-  return doc.body.firstElementChild as HTMLElement | null
+  return doc.body
 }
 
 function shouldImportNode(node: HTMLElement, computedStyle: CSSStyleDeclaration | null): boolean {
@@ -484,6 +503,32 @@ function measureNodeRect(node: HTMLElement, root: HTMLElement): MeasuredNodeRect
   }
 }
 
+function measureContentBounds(
+  nodes: HTMLElement[],
+  snapshot: RenderSnapshot,
+  root: HTMLElement,
+): { width?: number; height?: number } {
+  let maxRight = 0
+  let maxBottom = 0
+
+  for (const node of nodes) {
+    const nodeId = node.getAttribute('data-import-node-id') || ''
+    const renderNode = snapshot.nodesById.get(nodeId) || node
+    const renderRoot = snapshot.root || root
+    const measured = measureNodeRect(renderNode, renderRoot)
+    if (measured.width === undefined || measured.height === undefined) continue
+    const x = measured.x || 0
+    const y = measured.y || 0
+    maxRight = Math.max(maxRight, x + measured.width)
+    maxBottom = Math.max(maxBottom, y + measured.height)
+  }
+
+  return {
+    width: maxRight > 0 ? maxRight : undefined,
+    height: maxBottom > 0 ? maxBottom : undefined,
+  }
+}
+
 function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
   if (typeof document === 'undefined' || !document.body) {
     return {
@@ -513,16 +558,40 @@ function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
     sandbox.appendChild(styleEl)
   }
 
-  const rootClone = root.cloneNode(true) as HTMLElement
-  sandbox.appendChild(rootClone)
+  let rootClone: HTMLElement | null = null
+  const sourceBody = doc.body
+  if (sourceBody) {
+    const bodyClone = sourceBody.cloneNode(true) as HTMLElement
+    const sourceHtml = doc.documentElement
+    if (sourceHtml) {
+      const htmlClone = document.createElement('html')
+      for (const attribute of Array.from(sourceHtml.attributes)) {
+        htmlClone.setAttribute(attribute.name, attribute.value)
+      }
+      htmlClone.appendChild(bodyClone)
+      sandbox.appendChild(htmlClone)
+    } else {
+      sandbox.appendChild(bodyClone)
+    }
+
+    if (bodyClone.getAttribute(IMPORT_ROOT_MARKER_ATTR) === IMPORT_ROOT_MARKER_VALUE) {
+      rootClone = bodyClone
+    } else {
+      rootClone = bodyClone.querySelector<HTMLElement>(`[${IMPORT_ROOT_MARKER_ATTR}="${IMPORT_ROOT_MARKER_VALUE}"]`)
+    }
+  }
+
+  if (!rootClone) {
+    rootClone = root.cloneNode(true) as HTMLElement
+    sandbox.appendChild(rootClone)
+  }
   document.body.appendChild(sandbox)
 
   const nodesById = new Map<string, HTMLElement>()
-  for (const node of Array.from(root.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
+  for (const node of Array.from(sandbox.querySelectorAll<HTMLElement>('[data-import-node-id]'))) {
     const id = node.getAttribute('data-import-node-id')
     if (!id) continue
-    const cloneNode = rootClone.querySelector<HTMLElement>(`[data-import-node-id="${id}"]`)
-    if (cloneNode) nodesById.set(id, cloneNode)
+    nodesById.set(id, node)
   }
 
   return {
@@ -583,14 +652,39 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
     }
   }
 
+  root.setAttribute(IMPORT_ROOT_MARKER_ATTR, IMPORT_ROOT_MARKER_VALUE)
   const allNodes = Array.from(root.querySelectorAll<HTMLElement>('*'))
   for (let index = 0; index < allNodes.length; index += 1) {
     allNodes[index].setAttribute('data-import-node-id', `import-node-${index + 1}`)
   }
 
   const warnings: string[] = []
-  if (doc.querySelector('link[rel~="stylesheet"]')) {
-    warnings.push('Detected linked stylesheet references. Import can only apply styles present in the uploaded HTML payload.')
+  const stylesheetLinks = Array.from(doc.querySelectorAll('link[rel~="stylesheet"][href]'))
+  if (stylesheetLinks.length > 0) {
+    warnings.push(
+      'Detected ' +
+      stylesheetLinks.length +
+      ' linked stylesheet reference' +
+      (stylesheetLinks.length === 1 ? '' : 's') +
+      '; unresolved external stylesheets may reduce import fidelity.',
+    )
+  }
+  const styleSources = Array.from(doc.querySelectorAll('style'))
+    .map((styleNode) => styleNode.textContent || '')
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+  if (styleSources.includes('::before') || styleSources.includes('::after')) {
+    warnings.push('Detected pseudo-elements (::before/::after); pseudo-element layers are not extracted and may require manual recreation.')
+  }
+  if (styleSources.includes('@keyframes') || /\banimation\s*:/.test(styleSources)) {
+    warnings.push('Detected CSS animations; animation effects are not imported and static styles are used.')
+  }
+  if (root.querySelector('canvas')) {
+    warnings.push('Detected canvas elements; canvas pixel content is not extracted into editable layers.')
+  }
+  if (root.querySelector('video')) {
+    warnings.push('Detected video elements; video playback layers are not imported as editable slide components.')
   }
   const renderSnapshot = buildRenderSnapshot(doc, root)
 
@@ -599,20 +693,6 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
     const measuredRootRect = renderSnapshot.root ? measureNodeRect(renderSnapshot.root, renderSnapshot.root) : {}
     const explicitCanvasWidth = parseCanvasPx(rootStyle.width ?? root.getAttribute('width') ?? undefined, 'width', warnings)
     const explicitCanvasHeight = parseCanvasPx(rootStyle.height ?? root.getAttribute('height') ?? undefined, 'height', warnings)
-    const sourceCanvasWidth = explicitCanvasWidth
-      ?? measuredRootRect.width
-      ?? DEFAULT_CANVAS_WIDTH
-    const sourceCanvasHeight = explicitCanvasHeight
-      ?? measuredRootRect.height
-      ?? DEFAULT_CANVAS_HEIGHT
-
-    const scaleX = DEFAULT_CANVAS_WIDTH / sourceCanvasWidth
-    const scaleY = DEFAULT_CANVAS_HEIGHT / sourceCanvasHeight
-    const shouldClampTypographyScale = explicitCanvasWidth === undefined || explicitCanvasHeight === undefined
-
-    if (sourceCanvasWidth !== DEFAULT_CANVAS_WIDTH || sourceCanvasHeight !== DEFAULT_CANVAS_HEIGHT) {
-      warnings.push('Normalized imported canvas from ' + sourceCanvasWidth + 'x' + sourceCanvasHeight + ' to ' + DEFAULT_CANVAS_WIDTH + 'x' + DEFAULT_CANVAS_HEIGHT + '.')
-    }
 
     const absoluteNodes = allNodes.filter((node) => {
       const nodeId = node.getAttribute('data-import-node-id') || ''
@@ -632,6 +712,35 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
       : flowNodes.length > 0
         ? flowNodes
         : fallbackNodes
+    const importMode = absoluteNodes.length > 0
+      ? 'absolute'
+      : flowNodes.length > 0
+        ? 'flow'
+        : 'fallback'
+    const contentBounds = measureContentBounds(nodes, renderSnapshot, root)
+    let sourceCanvasWidth = explicitCanvasWidth
+      ?? measuredRootRect.width
+      ?? DEFAULT_CANVAS_WIDTH
+    let sourceCanvasHeight = explicitCanvasHeight
+      ?? measuredRootRect.height
+      ?? DEFAULT_CANVAS_HEIGHT
+
+    if (explicitCanvasWidth === undefined && contentBounds.width && sourceCanvasWidth > contentBounds.width * 1.75) {
+      sourceCanvasWidth = Math.max(contentBounds.width, DEFAULT_CANVAS_WIDTH)
+      warnings.push(
+        'Detected oversized root width during import; normalized canvas width using layer bounds to avoid compressed output.',
+      )
+    }
+    if (explicitCanvasHeight === undefined && contentBounds.height && sourceCanvasHeight > contentBounds.height * 1.75) {
+      sourceCanvasHeight = Math.max(contentBounds.height, DEFAULT_CANVAS_HEIGHT)
+      warnings.push(
+        'Detected oversized root height during import; normalized canvas height using layer bounds to avoid compressed output.',
+      )
+    }
+
+    const scaleX = DEFAULT_CANVAS_WIDTH / sourceCanvasWidth
+    const scaleY = DEFAULT_CANVAS_HEIGHT / sourceCanvasHeight
+    const shouldClampTypographyScale = explicitCanvasWidth === undefined || explicitCanvasHeight === undefined
 
     if (absoluteNodes.length === 0) {
       if (flowNodes.length > 0) {
@@ -639,6 +748,22 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
       } else {
         warnings.push('No absolutely positioned elements found; imported top-level nodes as fallback.')
       }
+    }
+    if (sourceCanvasWidth !== DEFAULT_CANVAS_WIDTH || sourceCanvasHeight !== DEFAULT_CANVAS_HEIGHT) {
+      warnings.push(
+        'Normalized imported canvas from ' +
+        sourceCanvasWidth +
+        'x' +
+        sourceCanvasHeight +
+        ' to ' +
+        DEFAULT_CANVAS_WIDTH +
+        'x' +
+        DEFAULT_CANVAS_HEIGHT +
+        '.',
+      )
+    }
+    if (importMode === 'fallback' && nodes.length > 0) {
+      warnings.push(`Imported ${nodes.length} fallback node${nodes.length === 1 ? '' : 's'} as locked layers for visual fidelity.`)
     }
 
     const components: SlideComponent[] = nodes.map((node, index) => {
@@ -668,10 +793,11 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
         ?? parseAttrPx(node.getAttribute('height'), 'height', nodeLabel, warnings)
 
       const extractedStyle = extractStyle(styleMap, computedStyle)
+      const fallbackLocked = importMode === 'fallback'
       return {
         id: 'import-' + String(index + 1).padStart(3, '0'),
         type: inferType(node),
-        sourceLabel: nodeLabel,
+        sourceLabel: fallbackLocked ? `${nodeLabel} (fallback)` : nodeLabel,
         x: scaleValue(baseX + transformOffsets.x, scaleX),
         y: scaleValue(baseY + transformOffsets.y, scaleY),
         width: scaleValue(baseWidth, scaleX),
@@ -685,7 +811,7 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
             ? { minScale: 0.75 }
             : undefined,
         ),
-        locked: false,
+        locked: fallbackLocked,
         visible: true,
       }
     })

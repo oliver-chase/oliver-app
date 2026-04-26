@@ -110,6 +110,23 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   gap: var(--spacing-sm);
 }
 
+.slides-degraded {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-amber);
+  border-radius: var(--radius-md);
+  background: var(--color-amber-light);
+  color: var(--color-text-primary);
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.slides-degraded-meta {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  word-break: break-word;
+}
+
 .slides-toolbar-row {
   margin-top: var(--spacing-lg);
   display: flex;
@@ -828,6 +845,15 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   margin-bottom: var(--spacing-xs);
 }
 
+.slides-template-search-summary {
+  margin-top: calc(var(--spacing-sm) * -1);
+}
+
+.slides-template-rank-note[data-rank='top'] {
+  color: var(--color-brand-green);
+  font-weight: var(--font-weight-semibold);
+}
+
 .slides-template-preview-stage {
   position: relative;
   transform-origin: top left;
@@ -866,6 +892,50 @@ body { font-family: var(--font); background: var(--surface2); color: var(--text)
   color: var(--color-text-secondary);
   font-size: var(--font-size-2xs);
   border: 1px dashed var(--color-border);
+}
+
+.slides-template-preview-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.52);
+  z-index: 1200;
+  padding: var(--spacing-lg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.slides-template-preview-modal {
+  width: min(980px, 100%);
+  max-height: min(90vh, 920px);
+  overflow: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-bg-page);
+  box-shadow: var(--shadow-modal);
+  padding: var(--spacing-md);
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.slides-template-preview-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.slides-template-preview-modal-header h3 {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.slides-template-preview-modal-stage-shell {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  overflow: auto;
+  padding: var(--spacing-sm);
 }
 
 .slides-template-draft {
