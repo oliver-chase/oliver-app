@@ -6,7 +6,7 @@ type WorkspaceTab = 'import' | 'my-slides' | 'templates' | 'activity'
 type Ctx = {
   rawHtml: string
   openFilePicker: () => void
-  parseHtml: (html: string) => SlideImportResult
+  parseHtml: (html: string) => Promise<SlideImportResult>
   saveSlide: (titleOverride?: string) => Promise<string>
   generateExport: () => string
   downloadHtmlExport: () => Promise<string>
@@ -57,7 +57,7 @@ export function buildSlidesFlows(ctx: Ctx): OliverFlow[] {
         const html = source === 'paste' ? asString(answers.html) : rawHtml
         if (!html.trim()) return 'No HTML found. Paste HTML or load it in the editor first.'
         try {
-          const parsed = parseHtml(html)
+          const parsed = await parseHtml(html)
           const warningLine = parsed.warnings.length > 0
             ? ` Warnings: ${parsed.warnings.length}.`
             : ''

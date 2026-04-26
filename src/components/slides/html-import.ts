@@ -69,6 +69,89 @@ interface RenderSnapshot {
   dispose: () => void
 }
 
+function makeSafeResolvedUrl(rawUrl: string, baseUrl: string): string | null {
+  try {
+    return new URL(rawUrl, baseUrl).toString()
+  } catch {
+    return null
+  }
+}
+
+function parseStylesheetHref(styleSheet: HTMLLinkElement, baseUrl: string): string | null {
+  const href = styleSheet.getAttribute('href')
+  if (!href) return null
+  const resolved = makeSafeResolvedUrl(href, baseUrl)
+  if (!resolved) return null
+  if (resolved.startsWith('data:')) return null
+  return resolved
+}
+
+async function fetchWithTimeout(url: string, timeoutMs = 1500): Promise<string | null> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => {
+    controller.abort()
+  }, timeoutMs)
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'omit',
+      redirect: 'follow',
+      cache: 'no-cache',
+    })
+
+    if (!response.ok) return null
+    return await response.text()
+  } catch {
+    return null
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+async function inlineExternalStylesheets(doc: Document, warnings: string[]): Promise<string> {
+  const stylesheets = Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"][href]'))
+  if (stylesheets.length === 0) return ''
+
+  warnings.push(
+    'Detected ' +
+    stylesheets.length +
+    ' linked stylesheet reference' +
+    (stylesheets.length === 1 ? '' : 's') +
+    '; attempting to inline linked CSS for fidelity.',
+  )
+
+  const baseUrl = doc.baseURI || window.location.href
+  const fetched = await Promise.allSettled(
+    stylesheets.map((stylesheet) => {
+      const href = parseStylesheetHref(stylesheet, baseUrl)
+      if (!href) return Promise.resolve(null)
+      return fetchWithTimeout(href).then((cssText) => ({ href, cssText }))
+    }),
+  )
+
+  const inlinedStyles: string[] = []
+  fetched.forEach((entry) => {
+    if (entry.status !== 'fulfilled' || !entry.value?.cssText) return
+    inlinedStyles.push(entry.value.cssText)
+  })
+
+  const unresolvedCount = stylesheets.length - inlinedStyles.length
+  if (unresolvedCount > 0) {
+    warnings.push(
+      'Could not inline ' +
+      unresolvedCount +
+      ' linked stylesheet' +
+      (unresolvedCount === 1 ? '' : 's') +
+      '; remaining fallback styles may differ from source.',
+    )
+  }
+
+  return inlinedStyles.join('\n')
+}
+
 function parseInlineStyle(styleValue: string): Record<string, string> {
   const styleMap: Record<string, string> = {}
   for (const segment of styleValue.split(';')) {
@@ -529,7 +612,7 @@ function measureContentBounds(
   }
 }
 
-function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
+function buildRenderSnapshot(doc: Document, root: HTMLElement, additionalCss: string): RenderSnapshot {
   if (typeof document === 'undefined' || !document.body) {
     return {
       root: null,
@@ -552,6 +635,9 @@ function buildRenderSnapshot(doc: Document, root: HTMLElement): RenderSnapshot {
   const styleChunks = Array.from(doc.querySelectorAll('style'))
     .map((styleEl) => styleEl.textContent || '')
     .filter(Boolean)
+  if (additionalCss) {
+    styleChunks.push(additionalCss)
+  }
   if (styleChunks.length > 0) {
     const styleEl = document.createElement('style')
     styleEl.textContent = styleChunks.join('\n')
@@ -639,7 +725,7 @@ function shouldImportFlowNode(
   return false
 }
 
-export function convertHtmlToSlideComponents(html: string): SlideImportResult {
+export async function convertHtmlToSlideComponents(html: string): Promise<SlideImportResult> {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
   const root = getCanvasRoot(doc)
@@ -659,16 +745,7 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
   }
 
   const warnings: string[] = []
-  const stylesheetLinks = Array.from(doc.querySelectorAll('link[rel~="stylesheet"][href]'))
-  if (stylesheetLinks.length > 0) {
-    warnings.push(
-      'Detected ' +
-      stylesheetLinks.length +
-      ' linked stylesheet reference' +
-      (stylesheetLinks.length === 1 ? '' : 's') +
-      '; unresolved external stylesheets may reduce import fidelity.',
-    )
-  }
+  const inlinedStyles = await inlineExternalStylesheets(doc, warnings)
   const styleSources = Array.from(doc.querySelectorAll('style'))
     .map((styleNode) => styleNode.textContent || '')
     .filter(Boolean)
@@ -686,7 +763,7 @@ export function convertHtmlToSlideComponents(html: string): SlideImportResult {
   if (root.querySelector('video')) {
     warnings.push('Detected video elements; video playback layers are not imported as editable slide components.')
   }
-  const renderSnapshot = buildRenderSnapshot(doc, root)
+  const renderSnapshot = buildRenderSnapshot(doc, root, inlinedStyles)
 
   try {
     const rootStyle = parseInlineStyle(root.getAttribute('style') || '')
