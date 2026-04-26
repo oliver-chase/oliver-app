@@ -154,6 +154,13 @@ Acceptance Criteria:
 
 #### Epic CMP-E14B: Visual Planning Surfaces and Focus Operations
 
+Execution status (2026-04-26):
+- Delivered on current branch, scoped to existing stack only.
+- Frontend delivery: planning board and focus-item workspace added within `/campaigns/automation`.
+- Persistence delivery: planning snapshots and focus item artifacts stored in `campaigns.cadence_rule` without dropping journey graph metadata.
+- Validation delivery: active focus items require domain allowlist and valid active window ordering.
+- QA delivery: e2e coverage added for planning persistence and focus allowlist enforcement, plus targeted campaigns regression slice (18 tests) passing.
+
 **Story US-CMP-FE-1903: Add campaign planning board with objective and channel blocks**
 As a campaign manager, I want a planning board view so I can align objective, audience, channels, and offers before execution.
 

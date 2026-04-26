@@ -398,6 +398,249 @@ test.describe('campaign module report and automation flows', () => {
     await expect(page.getByText('missing required config.action_key')).toBeVisible()
   })
 
+  test('planning board save persists planning snapshot without dropping journey graph metadata', async ({ page }) => {
+    const campaignPatchBodies: Record<string, unknown>[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+      if (method === 'PATCH') {
+        const body = request.postDataJSON() as Record<string, unknown>
+        campaignPatchBodies.push(body)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            id: 'campaign-planning-1',
+            name: 'Planning Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: body.cadence_rule || null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          }]),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-planning-1',
+            name: 'Planning Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: {
+              preset: 'weekly',
+              posts_per_week: 3,
+              journey_graph: {
+                version: 2,
+                published_at: '2026-04-20T12:00:00.000Z',
+                published_by: 'qa-admin-user',
+                nodes: [
+                  {
+                    id: 'node-action-1',
+                    type: 'action',
+                    title: 'Send intro',
+                    config: { action_key: 'send-intro' },
+                    next_node_ids: [],
+                  },
+                ],
+              },
+            },
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+    const automation = page.locator('#campaigns-automation')
+    await automation.getByLabel('Objective').fill('Increase demo pipeline')
+    await automation.getByLabel('Target Audience').fill('Operations leaders')
+    await automation.getByLabel('Channel Mix').fill('linkedin,email')
+    await automation.getByLabel('CTA').fill('Book demo')
+    await automation.getByLabel('Success Metrics').fill('CTR>2%')
+    await automation.getByRole('button', { name: 'Save Planning Board' }).click()
+
+    await expect.poll(() => campaignPatchBodies.length).toBeGreaterThan(0)
+    const latestPatch = campaignPatchBodies.at(-1) || {}
+    const cadenceRule = (latestPatch.cadence_rule || {}) as Record<string, unknown>
+    const planningBoard = (cadenceRule.planning_board || {}) as Record<string, unknown>
+    const journeyGraph = (cadenceRule.journey_graph || {}) as Record<string, unknown>
+    expect(planningBoard.objective).toBe('Increase demo pipeline')
+    expect(journeyGraph.version).toBe(2)
+  })
+
+  test('focus item workspace enforces allowlist for active focus items', async ({ page }) => {
+    const campaignPatchBodies: Record<string, unknown>[] = []
+
+    await page.route('**/rest/v1/campaigns*', async route => {
+      const request = route.request()
+      const method = request.method().toUpperCase()
+      if (method === 'PATCH') {
+        const body = request.postDataJSON() as Record<string, unknown>
+        campaignPatchBodies.push(body)
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([{
+            id: 'campaign-focus-1',
+            name: 'Focus Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: body.cadence_rule || null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          }]),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'campaign-focus-1',
+            name: 'Focus Campaign',
+            description: '',
+            offer_definition: '',
+            target_audience: '',
+            primary_cta: '',
+            keywords: [],
+            start_date: null,
+            end_date: null,
+            cadence_rule: null,
+            status: 'active',
+            created_by: 'qa-admin-user',
+            created_at: '2026-04-01T00:00:00.000Z',
+            updated_at: '2026-04-01T00:00:00.000Z',
+          },
+        ]),
+      })
+    })
+
+    await page.route('**/api/campaigns**', async route => {
+      const request = route.request()
+      if (request.method() === 'GET') {
+        const url = new URL(request.url())
+        if (url.searchParams.get('resource') === 'exports') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [] }),
+          })
+          return
+        }
+      }
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON() as CampaignApiBody
+        if (body.action === 'get-report-summary') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(metricsResponse(1)),
+          })
+          return
+        }
+        if (body.action === 'get-journey-timeline') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ ok: true, items: [], hasMore: false, generatedAt: '2026-04-26T12:00:01.000Z' }),
+          })
+          return
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, items: [] }),
+      })
+    })
+
+    await gotoAndSettle(page, '/campaigns/automation')
+    const automation = page.locator('#campaigns-automation')
+    const focusWorkspace = automation.locator('article').filter({ hasText: 'Focus Item Workspace' }).first()
+    await focusWorkspace.getByLabel('Title').fill('Footer Notice')
+    await focusWorkspace.getByLabel('Message').fill('Register for webinar')
+    await focusWorkspace.getByLabel('Status').selectOption('active')
+    await focusWorkspace.getByRole('button', { name: 'Create Focus Item' }).click()
+    await expect(page.getByText('Domain allowlist is required before enabling a focus item.')).toBeVisible()
+
+    await focusWorkspace.getByLabel('Domain Allowlist (comma-separated)').fill('app.oliver.com')
+    await focusWorkspace.getByRole('button', { name: 'Create Focus Item' }).click()
+    await expect.poll(() => campaignPatchBodies.length).toBeGreaterThan(0)
+    const latestPatch = campaignPatchBodies.at(-1) || {}
+    const cadenceRule = (latestPatch.cadence_rule || {}) as Record<string, unknown>
+    const focusList = Array.isArray(cadenceRule.focus_items) ? cadenceRule.focus_items : []
+    expect(focusList.length).toBeGreaterThan(0)
+  })
+
   test('report filters apply and request server summary with selected filters', async ({ page }) => {
     const campaignApiBodies: CampaignApiBody[] = []
 
@@ -446,7 +689,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/reports')
 
     const reports = page.locator('#campaigns-reports')
     await expect(reports.getByText('Report Filters')).toBeVisible()
@@ -576,7 +819,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     await expect(contentSection.getByRole('heading', { name: 'Fallback Draft' })).toBeVisible()
     await expect(page.getByText('Campaign schema is not migrated yet.')).toHaveCount(0)
@@ -715,7 +958,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
 
     await expect(contentSection.getByText('Showing 3 of 3 items.')).toBeVisible()
@@ -1020,7 +1263,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     const createForm = contentSection.locator('form').filter({ hasText: 'Create Content Draft' }).first()
 
@@ -1179,7 +1422,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
 
     await expect(contentSection.getByRole('button', { name: 'Action Queue', exact: true })).toHaveClass(/campaign-chip-active/)
@@ -1315,7 +1558,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
 
     await contentSection.getByLabel('Filter status').selectOption('needs_review')
@@ -1440,7 +1683,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     const conflictCard = contentSection.locator('article').filter({ hasText: 'Conflict Draft' }).first()
     await conflictCard.getByRole('button', { name: 'Submit for Review' }).click()
@@ -1564,7 +1807,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     const unclaimedCard = contentSection.locator('article').filter({ hasText: 'Permission Unclaimed' }).first()
     await unclaimedCard.getByRole('button', { name: 'Submit for Review' }).click()
@@ -1686,7 +1929,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     const missingCard = contentSection.locator('article').filter({ hasText: 'Missing Draft' }).first()
     await missingCard.getByRole('button', { name: 'Submit for Review' }).click()
@@ -1808,7 +2051,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
     const contentSection = page.locator('#campaigns-content')
     const validationCard = contentSection.locator('article').filter({ hasText: 'Validation Draft' }).first()
     await validationCard.getByRole('button', { name: 'Submit for Review' }).click()
@@ -1948,7 +2191,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/content')
 
     const contentSection = page.locator('#campaigns-content')
     const card = contentSection.locator('article').filter({ hasText: 'Admin Override Item' }).first()
@@ -2586,7 +2829,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/reports')
 
     const reports = page.locator('#campaigns-reports')
     await expect(reports.getByText('Automation Jobs')).toBeVisible()
@@ -2734,10 +2977,10 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/review-queue')
 
     const reviewSection = page.locator('#campaigns-review')
-    await expect(reviewSection.getByText('Review Queue Controls')).toBeVisible()
+    await expect(reviewSection.getByRole('heading', { name: 'Queue Controls' })).toBeVisible()
 
     const reviewItems = reviewSection.locator('article').filter({ hasText: 'needs_review' })
     await expect(reviewItems).toHaveCount(2)
@@ -2890,7 +3133,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/review-queue')
 
     const reviewSection = page.locator('#campaigns-review')
     await reviewSection.getByLabel('Select Reject me one').check()
@@ -3026,7 +3269,7 @@ test.describe('campaign module report and automation flows', () => {
       })
     })
 
-    await gotoAndSettle(page, '/campaigns')
+    await gotoAndSettle(page, '/campaigns/review-queue')
     const reviewSection = page.locator('#campaigns-review')
 
     const reviewCard = reviewSection.locator('article').filter({ hasText: 'Single reject item' })
